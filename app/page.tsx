@@ -54,6 +54,13 @@ interface MatchingResponse {
   match_count: number
 }
 
+interface MeterLogsResponse {
+  message: string
+  service_date: string
+  driver_count: number
+  total_rows_read: number
+}
+
 // --- Auto-run pipeline ---
 
 type StepKey = 'driverLogs' | 'callcardMbti' | 'driverMbti' | 'matching'
@@ -181,6 +188,7 @@ export default function Home() {
 
   const callcardRef = useRef<HTMLInputElement>(null)
   const remappedRef = useRef<HTMLInputElement>(null)
+  const meterRef = useRef<HTMLInputElement>(null)
 
   // Auto-run state
   const [autoRunning, setAutoRunning] = useState(false)
@@ -212,6 +220,11 @@ export default function Home() {
   const [matchingLoading, setMatchingLoading] = useState(false)
   const [matchingResult, setMatchingResult] = useState<MatchingResponse | null>(null)
   const [matchingError, setMatchingError] = useState<string | null>(null)
+
+  const [meterFile, setMeterFile] = useState<File | null>(null)
+  const [meterLoading, setMeterLoading] = useState(false)
+  const [meterResult, setMeterResult] = useState<MeterLogsResponse | null>(null)
+  const [meterError, setMeterError] = useState<string | null>(null)
 
   // callcard_eta 선택 시 파일명에서 날짜 추출
   function handleCallcardChange(file: File | null) {
@@ -437,10 +450,26 @@ export default function Home() {
     finally { setMatchingLoading(false) }
   }
 
+  async function handleMeterLogs() {
+    if (!meterFile) return
+    setMeterLoading(true)
+    setMeterError(null)
+    setMeterResult(null)
+    try {
+      const form = new FormData()
+      form.append('file', meterFile)
+      const res = await fetch('/api/meter-logs', { method: 'POST', body: form })
+      const json = await res.json()
+      if (!res.ok) setMeterError(json.error ?? '알 수 없는 오류')
+      else setMeterResult(json as MeterLogsResponse)
+    } catch { setMeterError('서버 연결에 실패했습니다.') }
+    finally { setMeterLoading(false) }
+  }
+
   const filesReady = !!(callcardFile && remappedFile)
   const dateReady = !!extractedDate
   const anyRunning = autoRunning || analyzeLoading || driverLoading ||
-    callcardMbtiLoading || callcardProfileLoading || driverMbtiLoading || matchingLoading
+    callcardMbtiLoading || callcardProfileLoading || driverMbtiLoading || matchingLoading || meterLoading
 
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4">
@@ -506,6 +535,42 @@ export default function Home() {
             {autoRunning
               ? '실행 중…'
               : `자동 실행${extractedDate ? ` (${extractedDate})` : ''}`}
+          </button>
+        </div>
+
+        {/* 미터기 데이터 적재 */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-4">
+          <div>
+            <h2 className="font-semibold text-gray-900">미터기 데이터 적재 (천안)</h2>
+            <p className="text-xs text-gray-500 mt-0.5">통계_천안_날짜.xlsx → meter_daily_logs</p>
+          </div>
+
+          <FileInput
+            label="미터기 통계 파일"
+            icon="🚖"
+            file={meterFile}
+            inputRef={meterRef}
+            onChange={setMeterFile}
+            onClear={() => { setMeterFile(null); setMeterResult(null); setMeterError(null) }}
+          />
+
+          {meterError && (
+            <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+              {meterError}
+            </div>
+          )}
+          {meterResult && (
+            <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
+              처리 완료: {meterResult.driver_count}명 기사 적재됨 ({meterResult.service_date})
+            </div>
+          )}
+
+          <button
+            onClick={handleMeterLogs}
+            disabled={meterLoading || !meterFile || anyRunning}
+            className="w-full py-2.5 px-4 bg-amber-500 text-white font-semibold rounded-lg hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
+          >
+            {meterLoading ? '적재 중…' : '미터기 적재'}
           </button>
         </div>
 
