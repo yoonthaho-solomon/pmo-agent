@@ -458,7 +458,7 @@ export default function Home() {
     try {
       const form = new FormData()
       form.append('file', meterFile)
-      const res = await fetch('/api/meter-logs', { method: 'POST', body: form })
+      const res = await fetch('/api/meter-excel', { method: 'POST', body: form })
       const json = await res.json()
       if (!res.ok) setMeterError(json.error ?? '알 수 없는 오류')
       else setMeterResult(json as MeterLogsResponse)
