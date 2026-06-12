@@ -76,7 +76,7 @@ async function fetchAllRows(aspId?: number): Promise<CallcardRow[]> {
     if (error) throw error
     if (!data || data.length === 0) break
 
-    all.push(...(data as CallcardRow[]))
+    all.push(...(data as unknown as CallcardRow[]))
     if (data.length < PAGE) break
     offset += PAGE
   }

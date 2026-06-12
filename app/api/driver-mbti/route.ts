@@ -92,7 +92,7 @@ async function fetchAllLogs(aspId?: number): Promise<DailyLog[]> {
     if (error) throw error
     if (!data || data.length === 0) break
 
-    all.push(...(data as DailyLog[]))
+    all.push(...(data as unknown as DailyLog[]))
     if (data.length < PAGE) break
     offset += PAGE
   }

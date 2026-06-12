@@ -67,7 +67,7 @@ async function fetchDriversByAsp(aspId: number): Promise<DriverRow[]> {
       .range(offset, offset + PAGE - 1)
     if (error) throw error
     if (!data || data.length === 0) break
-    all.push(...(data as DriverRow[]))
+    all.push(...(data as unknown as DriverRow[]))
     if (data.length < PAGE) break
     offset += PAGE
   }

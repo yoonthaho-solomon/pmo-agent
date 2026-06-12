@@ -87,7 +87,7 @@ function FileInput({
   label: string
   icon: string
   file: File | null
-  inputRef: React.RefObject<HTMLInputElement>
+  inputRef: React.RefObject<HTMLInputElement | null>
   onChange: (f: File | null) => void
   onClear: () => void
 }) {
@@ -190,12 +190,12 @@ export default function Home() {
   const [analyzeLoading, setAnalyzeLoading] = useState(false)
   const [analyzeResult, setAnalyzeResult] = useState<AnalyzeResponse | null>(null)
   const [analyzeError, setAnalyzeError] = useState<string | null>(null)
-  const [analyzeDebug, setAnalyzeDebug] = useState<unknown>(null)
+  const [analyzeDebug, setAnalyzeDebug] = useState<object | null>(null)
 
   const [driverLoading, setDriverLoading] = useState(false)
   const [driverResult, setDriverResult] = useState<DriverLogsResponse | null>(null)
   const [driverError, setDriverError] = useState<string | null>(null)
-  const [driverDebug, setDriverDebug] = useState<unknown>(null)
+  const [driverDebug, setDriverDebug] = useState<object | null>(null)
 
   const [callcardMbtiLoading, setCallcardMbtiLoading] = useState(false)
   const [callcardMbtiResult, setCallcardMbtiResult] = useState<CallcardMbtiResponse | null>(null)
