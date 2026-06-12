@@ -36,6 +36,12 @@ yarn-error.log*
 # vercel
 .vercel
 
+# local files
+0
+0)
+test-analyze.mjs
+happycall-pmo/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
