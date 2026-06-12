@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import * as XLSX from 'xlsx'
+import { logAgentRun } from '@/lib/agent-logger'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -361,6 +362,8 @@ function aggregateDriverLogs(
 }
 
 export async function POST(request: NextRequest) {
+  const startedAt = Date.now()
+  let inputRows = 0
   let formData: FormData
   try {
     formData = await request.formData()
@@ -370,7 +373,6 @@ export async function POST(request: NextRequest) {
 
   const callcardFile = formData.get('callcard_eta') as File | null
   const remappedFile = formData.get('remapped') as File | null
-  const serviceDate = formData.get('service_date') as string | null
 
   if (!callcardFile || !remappedFile) {
     return NextResponse.json(
@@ -379,12 +381,14 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  if (!serviceDate) {
+  const dateMatch = callcardFile.name.match(/^(\d{4})(\d{2})(\d{2})/)
+  if (!dateMatch) {
     return NextResponse.json(
-      { error: 'service_date(YYYY-MM-DD) 필드가 필요합니다.' },
+      { error: '파일명에서 날짜를 추출할 수 없습니다. 파일명 패턴: YYYYMMDD_*.xlsx' },
       { status: 400 }
     )
   }
+  const serviceDate = `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`
 
   const [callcardBuffer, remappedBuffer] = await Promise.all([
     callcardFile.arrayBuffer(),
@@ -403,10 +407,12 @@ export async function POST(request: NextRequest) {
     )
   }
 
-const logs = aggregateDriverLogs(callcardRows, remappedRows, serviceDate)
+  inputRows = callcardRows.length
+  const logs = aggregateDriverLogs(callcardRows, remappedRows, serviceDate)
 
   if (logs.length === 0) {
     const sample = callcardRows[0] ?? null
+    await logAgentRun({ run_date: new Date().toISOString().slice(0, 10), agent_name: 'driver-logs', input_rows: inputRows, status: 'failed', duration_ms: Date.now() - startedAt, error_msg: '집계 결과 없음' })
     return NextResponse.json(
       {
         error: '집계 결과가 없습니다. 컬럼명을 확인하세요.',
@@ -426,7 +432,7 @@ const logs = aggregateDriverLogs(callcardRows, remappedRows, serviceDate)
   for (let i = 0; i < logs.length; i += BATCH) {
     const chunk = logs.slice(i, i + BATCH)
 
-const { error } = await supabase
+    const { error } = await supabase
       .from('driver_daily_logs')
       .upsert(chunk, { onConflict: 'driver_id,service_date' })
 
@@ -439,6 +445,7 @@ const { error } = await supabase
         batch_index: i,
         batch_size: chunk.length,
       })
+      await logAgentRun({ run_date: new Date().toISOString().slice(0, 10), agent_name: 'driver-logs', input_rows: inputRows, status: 'failed', duration_ms: Date.now() - startedAt, error_msg: error.message })
       return NextResponse.json(
         {
           error: 'Supabase 저장 실패',
@@ -451,6 +458,7 @@ const { error } = await supabase
     }
   }
 
+  await logAgentRun({ run_date: new Date().toISOString().slice(0, 10), agent_name: 'driver-logs', input_rows: inputRows, status: 'success', duration_ms: Date.now() - startedAt })
   return NextResponse.json({
     message: '기사 로그 집계 완료',
     service_date: serviceDate,

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import * as XLSX from 'xlsx'
 import Anthropic from '@anthropic-ai/sdk'
+import { logAgentRun } from '@/lib/agent-logger'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -172,6 +173,8 @@ ${kpiJson}`,
 }
 
 export async function POST(request: NextRequest) {
+  const startedAt = Date.now()
+  let inputRows = 0
   let formData: FormData
   try {
     formData = await request.formData()
@@ -215,9 +218,11 @@ export async function POST(request: NextRequest) {
     )
   }
 
+  inputRows = remappedRows.length
   const kpis = computeKpis(remappedRows, callcardRows)
 
   if (kpis.length === 0) {
+    await logAgentRun({ run_date: new Date().toISOString().slice(0, 10), agent_name: 'analyze', input_rows: inputRows, status: 'failed', duration_ms: Date.now() - startedAt, error_msg: 'KPI 계산 결과 없음' })
     return NextResponse.json(
       {
         error: 'KPI 계산 결과가 없습니다.',
@@ -252,9 +257,11 @@ export async function POST(request: NextRequest) {
     .upsert(records, { onConflict: 'asp_id,service_date' })
 
   if (error) {
+    await logAgentRun({ run_date: new Date().toISOString().slice(0, 10), agent_name: 'analyze', input_rows: inputRows, status: 'failed', duration_ms: Date.now() - startedAt, error_msg: error.message })
     return NextResponse.json({ error: 'Supabase 저장 실패', detail: error.message }, { status: 500 })
   }
 
+  await logAgentRun({ run_date: new Date().toISOString().slice(0, 10), agent_name: 'analyze', input_rows: inputRows, status: 'success', duration_ms: Date.now() - startedAt })
   return NextResponse.json({
     message: '분석 완료',
     service_date: serviceDate,
