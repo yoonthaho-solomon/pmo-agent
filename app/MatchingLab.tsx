@@ -1,6 +1,6 @@
 ﻿'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@supabase/supabase-js'
 import { callToVector, cosineSimilarity, driverToVector as sharedDriverToVector, etaToNear as sharedEtaToNear, scoreDriverForCall, type CallVectorInput } from '@/lib/matching-vector'
@@ -17,18 +17,8 @@ interface TableStat {
   table: string
   label: string
   count: number | null
-  error?: string
-}
-
-interface UploadResult {
-  message?: string
-  service_date?: string
-  driver_count?: number
-  callcard_count?: number
-  data_rows_read?: number
-  match_count?: number
-  call_count?: number
-  total_rows_read?: number
+  minDate?: string | null
+  maxDate?: string | null
   error?: string
 }
 
@@ -305,68 +295,40 @@ function VectorBars({ values }: { values: number[] }) {
   )
 }
 
-function FilePicker({
-  label,
-  file,
-  onChange,
-}: {
-  label: string
-  file: File | null
-  onChange: (file: File | null) => void
-}) {
-  const ref = useRef<HTMLInputElement>(null)
-  return (
-    <div>
-      <div style={{ fontSize: 14, color: C.muted, fontWeight: 800, marginBottom: 8 }}>{label}</div>
-      <button
-        onClick={() => ref.current?.click()}
-        style={{
-          width: '100%',
-          border: `1px dashed ${file ? C.green : C.border2}`,
-          background: '#0B1222',
-          color: file ? C.text : C.sub,
-          borderRadius: 8,
-          height: 44,
-          textAlign: 'left',
-          padding: '0 14px',
-          cursor: 'pointer',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-        }}
-      >
-        {file ? file.name : 'xlsx 파일 선택'}
-      </button>
-      <input ref={ref} type="file" accept=".xlsx,.xls" hidden onChange={(e) => onChange(e.target.files?.[0] ?? null)} />
-    </div>
-  )
-}
-
 function DataLoadTab() {
   const [stats, setStats] = useState<TableStat[]>([])
   const [loading, setLoading] = useState(true)
-  const [callcardFile, setCallcardFile] = useState<File | null>(null)
-  const [remappedFile, setRemappedFile] = useState<File | null>(null)
-  const [meterFile, setMeterFile] = useState<File | null>(null)
-  const [running, setRunning] = useState<string | null>(null)
-  const [result, setResult] = useState<UploadResult | null>(null)
+
+  async function tableStatus(table: string, label: string, dateColumn?: string): Promise<TableStat> {
+    const { count, error } = await supabase.from(table).select('*', { count: 'exact', head: true })
+    let minDate: string | null = null
+    let maxDate: string | null = null
+    let rangeError: string | undefined
+
+    if (dateColumn && !error) {
+      const [minRes, maxRes] = await Promise.all([
+        supabase.from(table).select(dateColumn).order(dateColumn, { ascending: true }).limit(1),
+        supabase.from(table).select(dateColumn).order(dateColumn, { ascending: false }).limit(1),
+      ])
+      minDate = (minRes.data?.[0] as Record<string, string> | undefined)?.[dateColumn] ?? null
+      maxDate = (maxRes.data?.[0] as Record<string, string> | undefined)?.[dateColumn] ?? null
+      rangeError = minRes.error?.message ?? maxRes.error?.message
+    }
+
+    return { table, label, count: count ?? null, minDate, maxDate, error: error?.message ?? rangeError }
+  }
 
   async function refresh() {
     setLoading(true)
-    const tableList = [
-      ['callcard_mbti', '호출데이터'],
-      ['meter_daily_logs', '앱미터데이터'],
-      ['driver_daily_logs', '기사 일일 로그'],
-      ['driver_mbti', '기사 22D 벡터'],
-      ['callcard_profile', '콜카드 프로필'],
-      ['matching_scores', '매칭 결과'],
-      ['agent_logs', '실행 로그'],
-    ] as const
-    const next: TableStat[] = []
-    for (const [table, label] of tableList) {
-      const { count, error } = await supabase.from(table).select('*', { count: 'exact', head: true })
-      next.push({ table, label, count: count ?? null, error: error?.message })
-    }
+    const next = await Promise.all([
+      tableStatus('callcard_mbti', '호출데이터', 'call_date'),
+      tableStatus('meter_daily_logs', '앱미터데이터', 'service_date'),
+      tableStatus('driver_daily_logs', '기사 일일 로그', 'service_date'),
+      tableStatus('driver_mbti', '기사 22D 벡터'),
+      tableStatus('callcard_profile', '콜카드 프로필'),
+      tableStatus('matching_scores', '매칭 결과', 'match_date'),
+      tableStatus('agent_logs', '실행 로그', 'run_date'),
+    ])
     setStats(next)
     setLoading(false)
   }
@@ -375,145 +337,67 @@ function DataLoadTab() {
     refresh()
   }, [])
 
-  async function postForm(endpoint: string, form: FormData, name: string) {
-    setRunning(name)
-    setResult(null)
-    const res = await fetch(endpoint, { method: 'POST', body: form })
-    const json = await res.json()
-    setResult(json)
-    setRunning(null)
-    refresh()
-  }
-
-  async function runJson(endpoint: string, body: object, name: string) {
-    setRunning(name)
-    setResult(null)
-    const res = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
-    const json = await res.json()
-    setResult(json)
-    setRunning(null)
-    refresh()
-  }
-
-  const callDate = callcardFile?.name.match(/^(\d{4})(\d{2})(\d{2})/)
-  const serviceDate = callDate ? `${callDate[1]}-${callDate[2]}-${callDate[3]}` : ''
-  const callCount = stats.find((s) => s.table === 'callcard_mbti')?.count ?? 0
-  const driverDaily = stats.find((s) => s.table === 'driver_daily_logs')?.count ?? 0
-  const driverVectors = stats.find((s) => s.table === 'driver_mbti')?.count ?? 0
-  const matchingCount = stats.find((s) => s.table === 'matching_scores')?.count ?? null
-  const vectorRate = driverDaily ? Math.min(1, driverVectors / driverDaily) : 0
+  const call = stats.find((item) => item.table === 'callcard_mbti')
+  const meter = stats.find((item) => item.table === 'meter_daily_logs')
+  const driverDaily = stats.find((item) => item.table === 'driver_daily_logs')
+  const driverVectors = stats.find((item) => item.table === 'driver_mbti')
+  const matching = stats.find((item) => item.table === 'matching_scores')
+  const vectorRate = driverDaily?.count ? Math.min(1, (driverVectors?.count ?? 0) / driverDaily.count) : 0
 
   return (
     <div style={{ display: 'grid', gap: 18 }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>
-        <Stat label="호출데이터 저장" value={loading ? '...' : fmt(callCount)} tone={callCount ? 'good' : 'warn'} />
-        <Stat label="앱미터 저장" value={loading ? '...' : fmt(stats.find((s) => s.table === 'meter_daily_logs')?.count)} tone="neutral" />
-        <Stat label="기사 ID 연결률" value="정책 필요" tone="warn" />
-        <Stat label="기사 벡터 생성률" value={driverDaily ? pct(vectorRate) : '-'} tone={driverVectors ? 'good' : 'warn'} />
-        <Stat label="매칭 결과" value={matchingCount == null ? '권한 확인' : fmt(matchingCount)} tone={matchingCount ? 'good' : 'warn'} />
+        <Stat label="호출데이터 저장" value={loading ? '...' : fmt(call?.count)} tone={call?.count ? 'good' : 'warn'} />
+        <Stat label="앱미터 저장" value={loading ? '...' : meter?.error ? '테이블 미확인' : fmt(meter?.count)} tone={meter?.error ? 'warn' : meter?.count ? 'good' : 'neutral'} />
+        <Stat label="기사 로그" value={loading ? '...' : fmt(driverDaily?.count)} tone={driverDaily?.count ? 'good' : 'warn'} />
+        <Stat label="기사 벡터 생성률" value={driverDaily?.count ? pct(vectorRate) : '-'} tone={driverVectors?.count ? 'good' : 'warn'} />
+        <Stat label="매칭 결과" value={loading ? '...' : fmt(matching?.count)} tone={matching?.count ? 'good' : 'warn'} />
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 18 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1.1fr .9fr', gap: 18 }}>
         <Panel>
           <SectionHeader
-            title="데이터 적재"
-            desc="기존 업로드 API를 그대로 사용합니다. Supabase 테이블과 환경변수는 변경하지 않습니다."
+            title="데이터 적재 현황"
+            desc="이 화면은 읽기 전용입니다. 파일 업로드와 재처리는 별도 적재 관리 화면에서만 실행합니다."
           />
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <FilePicker label="callcard_eta" file={callcardFile} onChange={setCallcardFile} />
-            <FilePicker label="remapped" file={remappedFile} onChange={setRemappedFile} />
-          </div>
-          <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
-            <Button
-              disabled={!callcardFile || !remappedFile || running != null}
-              onClick={() => {
-                if (!callcardFile || !remappedFile) return
-                const form = new FormData()
-                form.append('callcard_eta', callcardFile)
-                form.append('remapped', remappedFile)
-                postForm('/api/callcard-mbti', form, 'callcard')
-              }}
-            >
-              호출데이터 적재
-            </Button>
-            <Button
-              tone="green"
-              disabled={!callcardFile || !remappedFile || running != null}
-              onClick={() => {
-                if (!callcardFile || !remappedFile) return
-                const form = new FormData()
-                form.append('callcard_eta', callcardFile)
-                form.append('remapped', remappedFile)
-                postForm('/api/driver-logs', form, 'driver-logs')
-              }}
-            >
-              기사 로그 생성
-            </Button>
-            <Button tone="purple" disabled={running != null} onClick={() => runJson('/api/driver-mbti', {}, 'driver-mbti')}>
-              기사 벡터 생성
-            </Button>
-            <Button
-              tone="orange"
-              disabled={!serviceDate || running != null}
-              onClick={() => runJson('/api/matching', { call_date: serviceDate }, 'matching')}
-            >
-              매칭 계산
-            </Button>
-          </div>
-          <div style={{ marginTop: 18 }}>
-            <FilePicker label="앱미터 엑셀" file={meterFile} onChange={setMeterFile} />
-            <div style={{ marginTop: 10 }}>
-              <Button
-                tone="orange"
-                disabled={!meterFile || running != null}
-                onClick={() => {
-                  if (!meterFile) return
-                  const form = new FormData()
-                  form.append('file', meterFile)
-                  postForm('/api/meter-excel', form, 'meter')
-                }}
-              >
-                앱미터데이터 적재
-              </Button>
-            </div>
-          </div>
-          {running && <p style={{ marginTop: 14, color: C.cyan, fontWeight: 700 }}>실행 중: {running}</p>}
-          {result && (
-            <pre style={{ marginTop: 14, maxHeight: 180, overflow: 'auto', color: result.error ? C.red : C.green, background: '#08101E', border: `1px solid ${C.border}`, borderRadius: 8, padding: 12, fontSize: 14 }}>
-              {JSON.stringify(result, null, 2)}
-            </pre>
-          )}
-        </Panel>
-
-        <Panel>
-          <SectionHeader title="Supabase 저장 상태" desc="오류와 누락은 읽기 전용 상태 진단입니다." />
           <div style={{ display: 'grid', gap: 8 }}>
-            {stats.map((s) => (
-              <div key={s.table} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 12, padding: '10px 0', borderBottom: `1px solid ${C.border}` }}>
+            {stats.map((item) => (
+              <div key={item.table} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 12, padding: '12px 0', borderBottom: `1px solid ${C.border}` }}>
                 <div>
-                  <div style={{ fontWeight: 800 }}>{s.label}</div>
-                  <div style={{ color: C.muted, fontSize: 14 }}>{s.table}</div>
+                  <div style={{ fontWeight: 850 }}>{item.label}</div>
+                  <div style={{ color: C.muted, fontSize: 14 }}>{item.table}</div>
+                  {(item.minDate || item.maxDate) && <div style={{ color: C.sub, marginTop: 4 }}>{item.minDate ?? '-'} ~ {item.maxDate ?? '-'}</div>}
                 </div>
                 <div style={{ textAlign: 'right' }}>
-                  <div style={{ color: s.error ? C.red : C.text, fontWeight: 850 }}>{s.error ? '오류' : fmt(s.count)}</div>
-                  {s.error && <div style={{ maxWidth: 180, color: C.red, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.error}</div>}
+                  <div style={{ color: item.error ? C.yellow : C.text, fontWeight: 900 }}>{item.error ? '확인 필요' : fmt(item.count)}</div>
+                  {item.error && <div style={{ maxWidth: 260, color: C.yellow, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.error}</div>}
                 </div>
               </div>
             ))}
           </div>
-          <div style={{ marginTop: 14, padding: 12, borderRadius: 8, background: 'rgba(245,158,11,.08)', border: `1px solid rgba(245,158,11,.25)`, color: C.yellow, fontSize: 14, lineHeight: 1.5 }}>
-            실시간 기사 위치, 온라인 상태, 공차 상태는 아직 원천 테이블이 없습니다. 매칭 시뮬레이션에서는 별도 표시된 시뮬레이션 값을 사용합니다.
+        </Panel>
+
+        <Panel>
+          <SectionHeader title="운영 메모" desc="현재 연결된 Supabase/Vercel 기준 상태입니다." />
+          <div style={{ display: 'grid', gap: 12, lineHeight: 1.55, color: C.sub }}>
+            <div style={{ padding: 12, borderRadius: 8, background: '#0B1222', border: `1px solid ${C.border}` }}>
+              호출데이터는 실제 Supabase의 <strong style={{ color: C.text }}>callcard_mbti</strong>를 읽고 있습니다. 현재 표시 범위는 {call?.minDate ?? '-'} ~ {call?.maxDate ?? '-'}입니다.
+            </div>
+            <div style={{ padding: 12, borderRadius: 8, background: '#0B1222', border: `1px solid ${C.border}` }}>
+              기사 프로필/벡터는 <strong style={{ color: C.text }}>driver_daily_logs</strong>와 <strong style={{ color: C.text }}>driver_mbti</strong> 기준으로 확인합니다.
+            </div>
+            <div style={{ padding: 12, borderRadius: 8, background: 'rgba(245,158,11,.08)', border: `1px solid rgba(245,158,11,.25)`, color: C.yellow }}>
+              앱미터 테이블은 현재 코드 기준 <strong>meter_daily_logs</strong>를 조회하지만 Supabase 스키마에서 확인되지 않습니다. 테이블명 또는 적재 경로 확인이 필요합니다.
+            </div>
+            <Link href="/ingest" style={{ color: C.cyan, textDecoration: 'none', border: `1px solid ${C.cyan}`, borderRadius: 8, padding: '10px 12px', fontWeight: 850, textAlign: 'center' }}>
+              적재 관리 화면으로 이동
+            </Link>
           </div>
         </Panel>
       </div>
     </div>
   )
 }
-
 function EntitiesTab() {
   const [calls, setCalls] = useState<CallcardRow[]>([])
   const [drivers, setDrivers] = useState<DriverRow[]>([])
@@ -1000,6 +884,7 @@ export default function MatchingLab({ initialTab = 'load' }: { initialTab?: TabK
         <nav style={{ display: 'flex', gap: 8 }}>
           <Link href="/dashboard" style={{ color: C.sub, textDecoration: 'none', border: `1px solid ${C.border}`, borderRadius: 8, padding: '7px 10px', fontSize: 14 }}>대시보드</Link>
           <Link href="/simulator" style={{ color: C.sub, textDecoration: 'none', border: `1px solid ${C.border}`, borderRadius: 8, padding: '7px 10px', fontSize: 14 }}>시뮬레이터</Link>
+          <Link href="/ingest" style={{ color: C.sub, textDecoration: 'none', border: `1px solid ${C.border}`, borderRadius: 8, padding: '7px 10px', fontSize: 14 }}>적재 관리</Link>
         </nav>
       </header>
 

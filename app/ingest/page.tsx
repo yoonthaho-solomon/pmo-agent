@@ -1,0 +1,208 @@
+﻿'use client'
+
+import { useState } from 'react'
+import Link from 'next/link'
+
+type UploadResult = {
+  message?: string
+  service_date?: string
+  driver_count?: number
+  callcard_count?: number
+  data_rows_read?: number
+  match_count?: number
+  call_count?: number
+  total_rows_read?: number
+  error?: string
+}
+
+const C = {
+  bg: '#080C18',
+  panel: '#0F1628',
+  border: '#1E2D4A',
+  border2: '#2D4470',
+  text: '#F1F5F9',
+  sub: '#94A3B8',
+  muted: '#4E6080',
+  cyan: '#22D3EE',
+  purple: '#8B5CF6',
+  green: '#10B981',
+  red: '#F43F5E',
+  yellow: '#F59E0B',
+  orange: '#FB923C',
+}
+
+function Button({ children, onClick, disabled, tone = 'cyan' }: { children: React.ReactNode; onClick?: () => void; disabled?: boolean; tone?: 'cyan' | 'purple' | 'green' | 'orange' }) {
+  const color = tone === 'purple' ? C.purple : tone === 'green' ? C.green : tone === 'orange' ? C.orange : C.cyan
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      style={{
+        height: 40,
+        borderRadius: 8,
+        border: `1px solid ${disabled ? C.border : color}`,
+        background: disabled ? 'transparent' : `${color}22`,
+        color: disabled ? C.muted : color,
+        padding: '0 14px',
+        fontWeight: 850,
+        cursor: disabled ? 'not-allowed' : 'pointer',
+      }}
+    >
+      {children}
+    </button>
+  )
+}
+
+function FilePicker({ label, file, onChange }: { label: string; file: File | null; onChange: (file: File | null) => void }) {
+  return (
+    <label style={{ display: 'grid', gap: 8, color: C.sub, fontWeight: 850 }}>
+      {label}
+      <input
+        type="file"
+        accept=".xlsx,.xls"
+        onChange={(event) => onChange(event.target.files?.[0] ?? null)}
+        style={{
+          width: '100%',
+          border: `1px dashed ${file ? C.green : C.border2}`,
+          background: '#0B1222',
+          color: file ? C.text : C.sub,
+          borderRadius: 8,
+          minHeight: 44,
+          padding: 10,
+          fontSize: 14,
+        }}
+      />
+    </label>
+  )
+}
+
+export default function IngestPage() {
+  const [callcardFile, setCallcardFile] = useState<File | null>(null)
+  const [remappedFile, setRemappedFile] = useState<File | null>(null)
+  const [meterFile, setMeterFile] = useState<File | null>(null)
+  const [running, setRunning] = useState<string | null>(null)
+  const [result, setResult] = useState<UploadResult | null>(null)
+
+  const callDate = callcardFile?.name.match(/^(\d{4})(\d{2})(\d{2})/)
+  const serviceDate = callDate ? `${callDate[1]}-${callDate[2]}-${callDate[3]}` : ''
+
+  async function postForm(endpoint: string, form: FormData, name: string) {
+    setRunning(name)
+    setResult(null)
+    const res = await fetch(endpoint, { method: 'POST', body: form })
+    const json = await res.json()
+    setResult(json)
+    setRunning(null)
+  }
+
+  async function runJson(endpoint: string, body: object, name: string) {
+    setRunning(name)
+    setResult(null)
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    const json = await res.json()
+    setResult(json)
+    setRunning(null)
+  }
+
+  return (
+    <div style={{ minHeight: '100vh', background: C.bg, color: C.text, fontFamily: 'Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}>
+      <header style={{ height: 56, borderBottom: `1px solid ${C.border}`, background: 'rgba(8,12,24,.95)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px', position: 'sticky', top: 0, zIndex: 10 }}>
+        <div>
+          <div style={{ fontSize: 16, fontWeight: 900 }}>PMO Ingest Control</div>
+          <div style={{ color: C.muted, fontSize: 14 }}>파일 적재와 재처리 전용 화면</div>
+        </div>
+        <nav style={{ display: 'flex', gap: 8 }}>
+          <Link href="/dashboard" style={{ color: C.sub, textDecoration: 'none', border: `1px solid ${C.border}`, borderRadius: 8, padding: '7px 10px', fontSize: 14 }}>대시보드</Link>
+          <Link href="/simulator" style={{ color: C.sub, textDecoration: 'none', border: `1px solid ${C.border}`, borderRadius: 8, padding: '7px 10px', fontSize: 14 }}>시뮬레이터</Link>
+        </nav>
+      </header>
+
+      <main style={{ maxWidth: 1120, margin: '0 auto', padding: 24, display: 'grid', gap: 18 }}>
+        <section>
+          <h1 style={{ fontSize: 28, margin: 0 }}>적재 관리</h1>
+          <p style={{ color: C.sub, lineHeight: 1.55 }}>이 화면은 Supabase 데이터를 변경할 수 있는 관리용 화면입니다. 운영 대시보드와 시뮬레이터는 읽기 전용으로 분리했습니다.</p>
+        </section>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1.2fr .8fr', gap: 18 }}>
+          <section style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 8, padding: 20 }}>
+            <h2 style={{ fontSize: 20, margin: '0 0 14px' }}>호출데이터 / 기사 로그</h2>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <FilePicker label="callcard_eta" file={callcardFile} onChange={setCallcardFile} />
+              <FilePicker label="remapped" file={remappedFile} onChange={setRemappedFile} />
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
+              <Button
+                disabled={!callcardFile || !remappedFile || running != null}
+                onClick={() => {
+                  if (!callcardFile || !remappedFile) return
+                  const form = new FormData()
+                  form.append('callcard_eta', callcardFile)
+                  form.append('remapped', remappedFile)
+                  postForm('/api/callcard-mbti', form, 'callcard')
+                }}
+              >
+                호출데이터 적재
+              </Button>
+              <Button
+                tone="green"
+                disabled={!callcardFile || !remappedFile || running != null}
+                onClick={() => {
+                  if (!callcardFile || !remappedFile) return
+                  const form = new FormData()
+                  form.append('callcard_eta', callcardFile)
+                  form.append('remapped', remappedFile)
+                  postForm('/api/driver-logs', form, 'driver-logs')
+                }}
+              >
+                기사 로그 생성
+              </Button>
+              <Button tone="purple" disabled={running != null} onClick={() => runJson('/api/driver-mbti', {}, 'driver-mbti')}>
+                기사 벡터 생성
+              </Button>
+              <Button tone="orange" disabled={!serviceDate || running != null} onClick={() => runJson('/api/matching', { call_date: serviceDate }, 'matching')}>
+                매칭 계산
+              </Button>
+            </div>
+          </section>
+
+          <section style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 8, padding: 20 }}>
+            <h2 style={{ fontSize: 20, margin: '0 0 14px' }}>앱미터데이터</h2>
+            <FilePicker label="앱미터 엑셀" file={meterFile} onChange={setMeterFile} />
+            <div style={{ marginTop: 14 }}>
+              <Button
+                tone="orange"
+                disabled={!meterFile || running != null}
+                onClick={() => {
+                  if (!meterFile) return
+                  const form = new FormData()
+                  form.append('file', meterFile)
+                  postForm('/api/meter-excel', form, 'meter')
+                }}
+              >
+                앱미터데이터 적재
+              </Button>
+            </div>
+            <div style={{ marginTop: 14, padding: 12, borderRadius: 8, background: 'rgba(245,158,11,.08)', border: `1px solid rgba(245,158,11,.25)`, color: C.yellow, lineHeight: 1.55 }}>
+              현재 대시보드 조회 기준 테이블인 meter_daily_logs는 Supabase에서 확인되지 않았습니다. 적재 API의 실제 저장 테이블 확인이 필요합니다.
+            </div>
+          </section>
+        </div>
+
+        {(running || result) && (
+          <section style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 8, padding: 20 }}>
+            {running && <p style={{ margin: 0, color: C.cyan, fontWeight: 850 }}>실행 중: {running}</p>}
+            {result && (
+              <pre style={{ marginTop: 14, maxHeight: 260, overflow: 'auto', color: result.error ? C.red : C.green, background: '#08101E', border: `1px solid ${C.border}`, borderRadius: 8, padding: 12, fontSize: 14 }}>
+                {JSON.stringify(result, null, 2)}
+              </pre>
+            )}
+          </section>
+        )}
+      </main>
+    </div>
+  )
+}
