@@ -130,7 +130,7 @@ function cosineSimilarity(
   let dot = 0, normA = 0, normB = 0;
   for (const k of keys) {
     const a = callVec[k] ?? 0;
-    const b = (driver as Record<string, number>)[k] ?? 0;
+    const b = (driver as unknown as Record<string, number>)[k] ?? 0;
     dot   += a * b;
     normA += a * a;
     normB += b * b;
@@ -629,8 +629,8 @@ export default function SimulatorPage() {
                     const rankColor = idx === 0 ? '#FBBF24' : idx === 1 ? '#94A3B8' : idx === 2 ? '#FB923C' : '#22D3EE';
                     // 기사 강점 요인 추출
                     const strengths = FACTORS
-                      .filter(f => (driver as Record<string, number>)[f.key] > 0.5 && callVec[f.key] > 0)
-                      .sort((a, b) => (driver as Record<string, number>)[b.key] - (driver as Record<string, number>)[a.key])
+                      .filter(f => (driver as unknown as Record<string, number>)[f.key] > 0.5 && callVec[f.key] > 0)
+                      .sort((a, b) => (driver as unknown as Record<string, number>)[b.key] - (driver as unknown as Record<string, number>)[a.key])
                       .slice(0, 3);
 
                     return (
