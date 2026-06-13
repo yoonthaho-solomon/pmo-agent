@@ -22,6 +22,13 @@ interface TableStat {
   error?: string
 }
 
+interface DateCountRow {
+  date: string
+  callcards: number | null
+  driverLogs: number | null
+  matches: number | null
+}
+
 interface CallcardRow {
   callcard_id: string
   asp_id: number
@@ -297,6 +304,7 @@ function VectorBars({ values }: { values: number[] }) {
 
 function DataLoadTab() {
   const [stats, setStats] = useState<TableStat[]>([])
+  const [dateCounts, setDateCounts] = useState<DateCountRow[]>([])
   const [loading, setLoading] = useState(true)
 
   async function tableStatus(table: string, label: string, dateColumn?: string): Promise<TableStat> {
@@ -318,6 +326,23 @@ function DataLoadTab() {
     return { table, label, count: count ?? null, minDate, maxDate, error: error?.message ?? rangeError }
   }
 
+  async function countByDate(table: string, column: string, date: string): Promise<number | null> {
+    const { count, error } = await supabase.from(table).select('*', { count: 'exact', head: true }).eq(column, date)
+    return error ? null : count ?? 0
+  }
+
+  async function loadDateCounts(statsRows: TableStat[]) {
+    const callRange = statsRows.find((item) => item.table === 'callcard_mbti')
+    const dates = Array.from(new Set(['2026-05-22', '2026-05-23', callRange?.maxDate].filter(Boolean) as string[]))
+    const rows = await Promise.all(dates.map(async (date) => ({
+      date,
+      callcards: await countByDate('callcard_mbti', 'call_date', date),
+      driverLogs: await countByDate('driver_daily_logs', 'service_date', date),
+      matches: await countByDate('matching_scores', 'match_date', date),
+    })))
+    setDateCounts(rows)
+  }
+
   async function refresh() {
     setLoading(true)
     const next = await Promise.all([
@@ -332,6 +357,7 @@ function DataLoadTab() {
       tableStatus('agent_logs', '실행 로그', 'run_date'),
     ])
     setStats(next)
+    await loadDateCounts(next)
     setLoading(false)
   }
 
@@ -357,6 +383,31 @@ function DataLoadTab() {
         <Stat label="기사 벡터 생성률" value={driverDaily?.count ? pct(vectorRate) : '-'} tone={driverVectors?.count ? 'good' : 'warn'} />
         <Stat label="매칭 결과" value={loading ? '...' : fmt(matching?.count)} tone={matching?.count ? 'good' : 'warn'} />
       </div>
+
+      <Panel>
+        <SectionHeader title="주요 날짜 적재 확인" desc="2026-05-23 호출데이터 파일이 이미 Supabase에 있는지 빠르게 확인합니다." />
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+            <thead>
+              <tr>
+                {['날짜', '호출데이터', '기사 로그', '매칭 Top10'].map((head) => (
+                  <th key={head} style={{ textAlign: 'left', color: C.muted, borderBottom: `1px solid ${C.border}`, padding: '10px 8px' }}>{head}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {dateCounts.map((row) => (
+                <tr key={row.date}>
+                  <td style={tdStyle()}>{row.date}</td>
+                  <td style={tdStyle(row.callcards ? C.green : C.yellow)}>{fmt(row.callcards)}</td>
+                  <td style={tdStyle(row.driverLogs ? C.green : C.yellow)}>{fmt(row.driverLogs)}</td>
+                  <td style={tdStyle(row.matches ? C.green : C.yellow)}>{fmt(row.matches)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Panel>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1.1fr .9fr', gap: 18 }}>
         <Panel>
@@ -385,7 +436,7 @@ function DataLoadTab() {
           <SectionHeader title="운영 메모" desc="현재 연결된 Supabase/Vercel 기준 상태입니다." />
           <div style={{ display: 'grid', gap: 12, lineHeight: 1.55, color: C.sub }}>
             <div style={{ padding: 12, borderRadius: 8, background: '#0B1222', border: `1px solid ${C.border}` }}>
-              호출데이터는 실제 Supabase의 <strong style={{ color: C.text }}>callcard_mbti</strong>를 읽고 있습니다. 현재 표시 범위는 {call?.minDate ?? '-'} ~ {call?.maxDate ?? '-'}입니다.
+              호출데이터는 실제 Supabase의 <strong style={{ color: C.text }}>callcard_mbti</strong>를 읽고 있습니다. 현재 표시 범위는 {call?.minDate ?? '-'} ~ {call?.maxDate ?? '-'}이며, 2026-05-23 데이터도 이미 적재되어 있습니다.
             </div>
             <div style={{ padding: 12, borderRadius: 8, background: '#0B1222', border: `1px solid ${C.border}` }}>
               기사 프로필/벡터는 <strong style={{ color: C.text }}>driver_daily_logs</strong>와 <strong style={{ color: C.text }}>driver_mbti</strong> 기준으로 확인합니다.
