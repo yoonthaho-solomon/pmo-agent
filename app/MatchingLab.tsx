@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@supabase/supabase-js'
+import { callToVector, cosineSimilarity, driverToVector as sharedDriverToVector, etaToNear as sharedEtaToNear, scoreDriverForCall, type CallVectorInput } from '@/lib/matching-vector'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -100,6 +101,20 @@ interface RankedCandidate {
   finalPreview: number
 }
 
+interface RecommendedDriver {
+  driver_id: string
+  cosine_score: number
+  rank: number
+  match_reason: string
+}
+
+interface RecommendResult {
+  asp_id?: number
+  driver_pool_size?: number
+  recommended_drivers?: RecommendedDriver[]
+  error?: string
+}
+
 const C = {
   bg: '#080C18',
   panel: '#0F1628',
@@ -173,65 +188,19 @@ function hashNumber(input: string, salt = 0) {
 }
 
 function etaToNear(eta: number | null | undefined) {
-  if (eta == null || eta <= 0) return 0
-  if (eta <= 150) return 1
-  if (eta >= 600) return 0
-  return 1 - (eta - 150) / 450
+  return sharedEtaToNear(eta)
 }
 
 function cosine(a: number[], b: number[]) {
-  let dot = 0
-  let ma = 0
-  let mb = 0
-  for (let i = 0; i < a.length; i++) {
-    dot += a[i] * b[i]
-    ma += a[i] * a[i]
-    mb += b[i] * b[i]
-  }
-  return ma && mb ? dot / (Math.sqrt(ma) * Math.sqrt(mb)) : 0
+  return cosineSimilarity(a, b)
 }
 
 function driverVector(d: DriverRow) {
-  return FACTORS.map((f) => Number(d[f.key] ?? 0))
+  return sharedDriverToVector(d)
 }
 
-function callVector(input: {
-  hour_slot: number
-  weekday: number
-  expected_distance: number
-  expected_fare: number
-  is_paid: boolean
-  is_surge: boolean
-  eta_distance?: number | null
-}) {
-  const h = input.hour_slot
-  const wd = input.weekday
-  const dist = input.expected_distance
-  const fare = input.expected_fare
-  return [
-    h <= 5 ? 1 : 0,
-    h >= 6 && h <= 11 ? 1 : 0,
-    h >= 12 && h <= 17 ? 1 : 0,
-    h >= 18 ? 1 : 0,
-    wd === 0 ? 1 : 0,
-    wd === 1 ? 1 : 0,
-    wd === 2 ? 1 : 0,
-    wd === 3 ? 1 : 0,
-    wd === 4 ? 1 : 0,
-    wd === 5 ? 1 : 0,
-    wd === 6 ? 1 : 0,
-    dist > 0 && dist <= 3000 ? 1 : 0,
-    dist > 3000 && dist <= 8000 ? 1 : 0,
-    dist > 8000 ? 1 : 0,
-    fare > 0 && fare <= 10000 ? 1 : 0,
-    fare > 10000 && fare <= 20000 ? 1 : 0,
-    fare > 20000 ? 1 : 0,
-    input.is_paid ? 1 : 0,
-    input.is_paid ? 0 : 1,
-    input.is_surge ? 1 : 0,
-    input.is_surge ? 0 : 1,
-    etaToNear(input.eta_distance ?? null),
-  ]
+function callVector(input: CallVectorInput) {
+  return callToVector(input)
 }
 
 function simulatedState(driverId: string): CandidateState {
@@ -690,6 +659,10 @@ function SimulationTab() {
   const [eta, setEta] = useState<number | ''>('')
   const [baseRadius, setBaseRadius] = useState(3)
   const [drivers, setDrivers] = useState<DriverRow[]>([])
+  const [actualCalls, setActualCalls] = useState<CallcardRow[]>([])
+  const [selectedCallId, setSelectedCallId] = useState('')
+  const [recommendResult, setRecommendResult] = useState<RecommendResult | null>(null)
+  const [recommendLoading, setRecommendLoading] = useState(false)
   const [loading, setLoading] = useState(false)
 
   async function loadDrivers() {
@@ -699,9 +672,24 @@ function SimulationTab() {
     setLoading(false)
   }
 
+  async function loadActualCalls() {
+    const { data } = await supabase
+      .from('callcard_mbti')
+      .select('callcard_id,asp_id,call_date,hour_slot,weekday,s_hexagon,d_hexagon,expected_distance,expected_fare,is_paid,is_surge,eta_distance,product_type')
+      .eq('asp_id', aspId)
+      .order('call_date', { ascending: false })
+      .limit(80)
+    setActualCalls((data ?? []) as CallcardRow[])
+    setSelectedCallId('')
+    setRecommendResult(null)
+  }
+
   useEffect(() => {
     loadDrivers()
+    loadActualCalls()
   }, [aspId])
+
+  const selectedActualCall = useMemo(() => actualCalls.find((c) => c.callcard_id === selectedCallId) ?? null, [actualCalls, selectedCallId])
 
   const call = useMemo(() => ({
     hour_slot: hour,
@@ -711,7 +699,36 @@ function SimulationTab() {
     is_paid: isPaid,
     is_surge: isSurge,
     eta_distance: eta === '' ? null : eta,
-  }), [hour, weekday, distance, fare, isPaid, isSurge, eta])
+    s_hexagon: selectedActualCall?.s_hexagon ?? null,
+    d_hexagon: selectedActualCall?.d_hexagon ?? null,
+  }), [hour, weekday, distance, fare, isPaid, isSurge, eta, selectedActualCall])
+
+  function applyActualCall(callcardId: string) {
+    const row = actualCalls.find((c) => c.callcard_id === callcardId)
+    setSelectedCallId(callcardId)
+    setRecommendResult(null)
+    if (!row) return
+    setHour(row.hour_slot)
+    setWeekday(row.weekday)
+    setDistance(row.expected_distance ?? 0)
+    setFare(row.expected_fare ?? 0)
+    setIsPaid(Boolean(row.is_paid))
+    setIsSurge(Boolean(row.is_surge))
+    setEta(row.eta_distance ?? '')
+  }
+
+  async function runRecommendCompare() {
+    setRecommendLoading(true)
+    setRecommendResult(null)
+    const res = await fetch('/api/recommend', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ asp_id: aspId, ...call }),
+    })
+    const json = await res.json()
+    setRecommendResult(json)
+    setRecommendLoading(false)
+  }
 
   const cv = useMemo(() => callVector(call), [call])
 
@@ -746,6 +763,15 @@ function SimulationTab() {
   const firstRoundWithCandidates = rounds.find((r) => r.available.length > 0) ?? rounds[rounds.length - 1]
   const similarityTop = [...firstRoundWithCandidates.available].sort((a, b) => b.cosine - a.cosine).slice(0, 10)
   const distanceTop = [...firstRoundWithCandidates.available].sort((a, b) => a.state.distanceKm - b.state.distanceKm).slice(0, 10)
+  const apiComparableTop = useMemo(() => {
+    return drivers
+      .map((driver) => ({ driver, score: scoreDriverForCall(call, driver) }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 10)
+  }, [drivers, call])
+  const apiIds = recommendResult?.recommended_drivers?.map((r) => r.driver_id) ?? []
+  const localApiIds = apiComparableTop.map((r) => r.driver.driver_id)
+  const top10Overlap = apiIds.filter((id) => localApiIds.includes(id)).length
 
   return (
     <div style={{ display: 'grid', gap: 18 }}>
@@ -759,6 +785,20 @@ function SimulationTab() {
                 {ASP_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </label>
+            <label style={labelStyle()}>
+              실제 콜카드 선택
+              <select value={selectedCallId} onChange={(e) => applyActualCall(e.target.value)} style={inputStyle()}>
+                <option value="">직접 입력</option>
+                {actualCalls.map((c) => (
+                  <option key={c.callcard_id} value={c.callcard_id}>{c.call_date} · {c.callcard_id}</option>
+                ))}
+              </select>
+            </label>
+            {selectedActualCall && (
+              <div style={{ padding: 12, borderRadius: 8, background: 'rgba(34,211,238,.08)', border: `1px solid rgba(34,211,238,.25)`, color: C.sub, lineHeight: 1.5 }}>
+                실제 콜카드 {selectedActualCall.callcard_id} 기준 입력입니다. 출발/도착 H3와 ETA near까지 API 비교에 포함됩니다.
+              </div>
+            )}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <label style={labelStyle()}>시간<input style={inputStyle()} type="number" min={0} max={23} value={hour} onChange={(e) => setHour(Number(e.target.value))} /></label>
               <label style={labelStyle()}>요일<select style={inputStyle()} value={weekday} onChange={(e) => setWeekday(Number(e.target.value))}>{WEEKDAYS.map((d, i) => <option key={d} value={i}>{d}</option>)}</select></label>
@@ -775,6 +815,7 @@ function SimulationTab() {
               <Button tone={isPaid ? 'purple' : 'cyan'} onClick={() => setIsPaid(!isPaid)}>{isPaid ? '유료콜' : '무료콜'}</Button>
               <Button tone={isSurge ? 'orange' : 'cyan'} onClick={() => setIsSurge(!isSurge)}>{isSurge ? '탄력요금' : '일반요금'}</Button>
               <Button tone="green" onClick={loadDrivers}>{loading ? '조회 중' : '기사 새로고침'}</Button>
+              <Button tone="purple" onClick={runRecommendCompare} disabled={recommendLoading}>{recommendLoading ? '비교 중' : '/api/recommend 비교'}</Button>
             </div>
           </div>
         </Panel>
@@ -802,6 +843,44 @@ function SimulationTab() {
         </Panel>
       </div>
 
+      <Panel>
+        <SectionHeader title="실제 콜카드 API 추천 검증" desc="같은 공통 22D 계산 모듈로 화면 Top 10과 /api/recommend Top 10을 비교합니다. 반경/온라인 시뮬레이션 필터는 제외합니다." />
+        <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr 1fr', gap: 14, alignItems: 'start' }}>
+          <div style={{ ...cardStyle, padding: 14, background: '#0B1222' }}>
+            <div style={{ color: C.muted, fontWeight: 800, marginBottom: 8 }}>Top 10 일치</div>
+            <div style={{ fontSize: 28, fontWeight: 900, color: recommendResult?.error ? C.red : C.green }}>
+              {recommendResult ? `${top10Overlap}/10` : '-'}
+            </div>
+            <div style={{ color: C.muted, marginTop: 8 }}>기사 풀 {recommendResult?.driver_pool_size?.toLocaleString() ?? drivers.length.toLocaleString()}명</div>
+          </div>
+          <div>
+            <div style={{ color: C.cyan, fontWeight: 900, marginBottom: 8 }}>화면 공통 계산 Top 10</div>
+            <div style={{ display: 'grid', gap: 6 }}>
+              {apiComparableTop.map((r, i) => (
+                <div key={r.driver.driver_id} style={{ display: 'grid', gridTemplateColumns: '32px 1fr 70px', gap: 8, padding: '8px 10px', border: `1px solid ${C.border}`, borderRadius: 8, background: '#0B1222' }}>
+                  <strong style={{ color: i < 3 ? C.yellow : C.sub }}>{i + 1}</strong>
+                  <span style={{ fontFamily: 'monospace' }}>{r.driver.driver_id}</span>
+                  <span style={{ color: C.cyan }}>{pct(r.score)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div>
+            <div style={{ color: C.purple, fontWeight: 900, marginBottom: 8 }}>/api/recommend Top 10</div>
+            <div style={{ display: 'grid', gap: 6 }}>
+              {recommendResult?.error && <div style={{ color: C.red }}>{recommendResult.error}</div>}
+              {!recommendResult && <div style={{ color: C.muted }}>비교 버튼을 누르면 실제 API 결과가 표시됩니다.</div>}
+              {recommendResult?.recommended_drivers?.map((r) => (
+                <div key={r.driver_id} style={{ display: 'grid', gridTemplateColumns: '32px 1fr 70px', gap: 8, padding: '8px 10px', border: `1px solid ${localApiIds.includes(r.driver_id) ? C.green : C.border}`, borderRadius: 8, background: '#0B1222' }}>
+                  <strong style={{ color: r.rank <= 3 ? C.yellow : C.sub }}>{r.rank}</strong>
+                  <span style={{ fontFamily: 'monospace' }}>{r.driver_id}</span>
+                  <span style={{ color: C.purple }}>{pct(r.cosine_score)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </Panel>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
         <Panel>
           <SectionHeader title="기존 거리순 결과" desc="주변 후보를 가까운 거리 기준으로 정렬한 비교군입니다." />
@@ -960,6 +1039,17 @@ export default function MatchingLab({ initialTab = 'load' }: { initialTab?: TabK
     </div>
   )
 }
+
+
+
+
+
+
+
+
+
+
+
 
 
 

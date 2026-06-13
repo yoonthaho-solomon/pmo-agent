@@ -1,48 +1,19 @@
-import { NextRequest, NextResponse } from 'next/server'
+﻿import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { scoreDriverForCall, type CallVectorInput, type DriverVectorRow } from '@/lib/matching-vector'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
-interface CallInput {
-  s_hexagon: string
-  d_hexagon: string
-  hour_slot: number
-  weekday: number
-  expected_distance: number
-  expected_fare: number
-  is_paid: boolean
-  is_surge: boolean
+interface CallInput extends CallVectorInput {
   asp_id: number
 }
 
-interface DriverRow {
+interface DriverRow extends DriverVectorRow {
   driver_id: string
   asp_id: number
-  score_dawn: number
-  score_morning: number
-  score_daytime: number
-  score_night: number
-  score_mon: number
-  score_tue: number
-  score_wed: number
-  score_thu: number
-  score_fri: number
-  score_sat: number
-  score_sun: number
-  score_short: number
-  score_medium: number
-  score_long: number
-  score_low_fare: number
-  score_mid_fare: number
-  score_high_fare: number
-  score_paid: number
-  score_free: number
-  score_surge: number
-  score_normal: number
-  score_near: number
   pref_s_hexagons: string[]
   pref_d_hexagons: string[]
 }
@@ -78,58 +49,6 @@ async function fetchDriversByAsp(aspId: number): Promise<DriverRow[]> {
   return all
 }
 
-// 22차원 벡터: /api/matching의 callcardToVector, driverToVector와 같은 순서
-function callToVector(call: CallInput): number[] {
-  const h = call.hour_slot
-  const dist = call.expected_distance ?? 0
-  const fare = call.expected_fare ?? 0
-  const wd = call.weekday  // 0=월~6=일
-
-  const wdVec = [0, 0, 0, 0, 0, 0, 0]
-  if (wd >= 0 && wd <= 6) wdVec[wd] = 1
-
-  return [
-    h <= 5 ? 1 : 0,
-    h >= 6 && h <= 11 ? 1 : 0,
-    h >= 12 && h <= 17 ? 1 : 0,
-    h >= 18 ? 1 : 0,
-    ...wdVec,
-    dist > 0 && dist <= 3000 ? 1 : 0,
-    dist > 3000 && dist <= 8000 ? 1 : 0,
-    dist > 8000 ? 1 : 0,
-    fare > 0 && fare <= 10000 ? 1 : 0,
-    fare > 10000 && fare <= 20000 ? 1 : 0,
-    fare > 20000 ? 1 : 0,
-    call.is_paid ? 1 : 0,
-    call.is_paid ? 0 : 1,
-    call.is_surge ? 1 : 0,
-    call.is_surge ? 0 : 1,
-    0,  // near: 실시간 콜이므로 ETA 미상 → 0
-  ]
-}
-
-function driverToVector(d: DriverRow): number[] {
-  return [
-    d.score_dawn, d.score_morning, d.score_daytime, d.score_night,
-    d.score_mon, d.score_tue, d.score_wed, d.score_thu, d.score_fri, d.score_sat, d.score_sun,
-    d.score_short, d.score_medium, d.score_long,
-    d.score_low_fare, d.score_mid_fare, d.score_high_fare,
-    d.score_paid, d.score_free,
-    d.score_surge, d.score_normal,
-    d.score_near,
-  ]
-}
-
-function cosine(a: number[], b: number[]): number {
-  let dot = 0, magA = 0, magB = 0
-  for (let i = 0; i < a.length; i++) {
-    dot  += a[i] * b[i]
-    magA += a[i] * a[i]
-    magB += b[i] * b[i]
-  }
-  const denom = Math.sqrt(magA) * Math.sqrt(magB)
-  return denom === 0 ? 0 : dot / denom
-}
 
 const WD_LABELS = ['월요일', '화요일', '수요일', '목요일', '금요일', '토요일', '일요일']
 
@@ -260,14 +179,7 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const callVec = callToVector(call)
-
-  const scored = drivers.map((d) => {
-    const cos = cosine(callVec, driverToVector(d))
-    const bonus = d.pref_s_hexagons?.includes(call.s_hexagon) ? 0.1 : 0
-    const score = Math.min(cos + bonus, 1.0)
-    return { driver: d, score }
-  })
+  const scored = drivers.map((d) => ({ driver: d, score: scoreDriverForCall(call, d) }))
 
   scored.sort((a, b) => b.score - a.score)
 
@@ -284,3 +196,5 @@ export async function POST(request: NextRequest) {
     recommended_drivers,
   })
 }
+
+
