@@ -227,9 +227,13 @@ function computeMbti(logs: DailyLog[]): DriverMbti[] {
     const totalHours = (a.dawn + a.morning + a.daytime + a.night) || 1
     const totalWd = a.wd.reduce((s, v) => s + v, 0) || 1
 
+    // driver_daily_logs.asp_id는 단축형(137)으로 저장됨.
+    // callcard_mbti는 장형(137000000000)을 사용하므로 매칭 일치를 위해 변환.
+    const aspId = a.asp_id < 10_000 ? a.asp_id * 1_000_000_000 : a.asp_id
+
     results.push({
       driver_id,
-      asp_id: a.asp_id,
+      asp_id: aspId,
       score_dawn:      r4(a.dawn / totalHours),
       score_morning:   r4(a.morning / totalHours),
       score_daytime:   r4(a.daytime / totalHours),
