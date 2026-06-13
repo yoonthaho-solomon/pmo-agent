@@ -253,7 +253,7 @@ function ActionCard({
   children?: React.ReactNode
 }) {
   return (
-    <div className="h-card" style={{ ...CARD, padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <div className="h-card" style={{ ...CARD, padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
       <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: accentColor, opacity: 0.7 }} />
       <div>
         <p style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 4 }}>{title}</p>
@@ -534,6 +534,7 @@ export default function Home() {
           background: #080C18;
           font-family: 'Pretendard', -apple-system, sans-serif;
           -webkit-font-smoothing: antialiased;
+          font-size: 14px;
         }
         body::before {
           content: '';
@@ -626,12 +627,12 @@ export default function Home() {
         </div>
 
         {/* Content */}
-        <div style={{ maxWidth: 960, margin: '0 auto', padding: '48px 40px', display: 'flex', flexDirection: 'column', gap: 40 }}>
+        <div style={{ maxWidth: 860, margin: '0 auto', padding: '32px 32px', display: 'flex', flexDirection: 'column', gap: 28 }}>
 
           {/* 파일 업로드 */}
           <section>
             <div className="section-title"><h2>파일 업로드</h2></div>
-            <div className="h-card" style={{ ...CARD, padding: '28px 32px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+            <div className="h-card" style={{ ...CARD, padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, ${C.cyan}, ${C.purple})` }} />
               <FileInput
                 label="callcard_eta 파일"
@@ -675,13 +676,13 @@ export default function Home() {
           {/* 자동 실행 */}
           <section>
             <div className="section-title"><h2>자동 실행</h2></div>
-            <div className="h-card" style={{ ...CARD, padding: '28px 32px', border: `1px solid rgba(139,92,246,.3)` }}>
+            <div className="h-card" style={{ ...CARD, padding: '20px 24px', border: `1px solid rgba(139,92,246,.3)` }}>
               <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, ${C.purple}, ${C.cyan})` }} />
-              <div style={{ marginBottom: 20 }}>
-                <p style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 4 }}>파이프라인 자동 실행</p>
-                <p style={{ fontSize: 12, color: C.muted }}>4단계를 순서대로 자동 실행합니다</p>
+              <div style={{ marginBottom: 14 }}>
+                <p style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 2 }}>파이프라인 자동 실행</p>
+                <p style={{ fontSize: 11, color: C.muted }}>4단계를 순서대로 자동 실행합니다</p>
               </div>
-              <div style={{ marginBottom: 24 }}>
+              <div style={{ marginBottom: 16 }}>
                 {STEP_META.map(({ key, label }, i) => (
                   <StepRow key={key} index={i + 1} label={label} state={steps[key]} />
                 ))}
@@ -709,11 +710,11 @@ export default function Home() {
           {/* 미터기 */}
           <section>
             <div className="section-title"><h2>미터기 데이터 (천안)</h2></div>
-            <div className="h-card" style={{ ...CARD, padding: '28px 32px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div className="h-card" style={{ ...CARD, padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: C.yellow, opacity: 0.7 }} />
               <div>
-                <p style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 4 }}>미터기 데이터 적재</p>
-                <p style={{ fontSize: 12, color: C.muted }}>통계_천안_날짜.xlsx → meter_daily_logs</p>
+                <p style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 2 }}>미터기 데이터 적재</p>
+                <p style={{ fontSize: 11, color: C.muted }}>통계_천안_날짜.xlsx → meter_daily_logs</p>
               </div>
               <FileInput
                 label="미터기 통계 파일"
