@@ -70,28 +70,33 @@ interface RecommendedDriver {
 // ─── Design System ────────────────────────────────────────────────────────────
 
 const C = {
-  bg: '#0b0b0f',
-  bgCard: '#13131a',
-  border: '#2a2a30',
-  borderHover: '#3a3a40',
-  cyan: '#8eeaff',
-  red: '#e8271e',
-  yellow: '#ffa602',
-  green: '#00c49a',
-  text: '#e5e7eb',
-  sub: '#9ca3af',
-  muted: '#888',
+  bg: '#080C18',
+  bgCard: '#0F1628',
+  bgCardHover: '#131D35',
+  border: '#1E2D4A',
+  borderHover: '#2D4470',
+  cyan: '#22D3EE',
+  red: '#F43F5E',
+  yellow: '#F59E0B',
+  green: '#10B981',
+  purple: '#8B5CF6',
+  text: '#F1F5F9',
+  sub: '#94A3B8',
+  muted: '#4E6080',
 }
 
 const CARD: React.CSSProperties = {
   background: C.bgCard,
   border: `1px solid ${C.border}`,
   borderRadius: 16,
+  position: 'relative',
+  overflow: 'hidden',
+  transition: 'all 200ms cubic-bezier(.22,1,.36,1)',
 }
 
 const TOOLTIP_STYLE = {
   contentStyle: {
-    background: 'rgba(19,19,26,0.98)',
+    background: 'rgba(15,22,40,0.98)',
     border: `1px solid ${C.border}`,
     borderRadius: 12,
     fontSize: 13,
@@ -167,15 +172,25 @@ function toRadarData(d: DriverMbtiRow) {
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
-    <h2 style={{ fontSize: 22, fontWeight: 800, color: C.text, letterSpacing: '-0.02em', marginBottom: 20 }}>
-      {children}
-    </h2>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 24 }}>
+      <h2 style={{
+        fontSize: 12,
+        fontWeight: 700,
+        letterSpacing: '0.1em',
+        textTransform: 'uppercase',
+        color: C.sub,
+        whiteSpace: 'nowrap',
+      }}>
+        {children}
+      </h2>
+      <div style={{ flex: 1, height: 1, background: C.border }} />
+    </div>
   )
 }
 
 function Label({ children, color }: { children: React.ReactNode; color?: string }) {
   return (
-    <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: color ?? C.muted, marginBottom: 12 }}>
+    <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: color ?? C.muted, marginBottom: 10 }}>
       {children}
     </p>
   )
@@ -234,10 +249,12 @@ function StatusBar() {
   const val = (v: string | null) => loading ? '…' : (v ?? '—')
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 16 }}>
-      <div style={{ ...CARD, padding: '32px 36px', gridColumn: 'span 2' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 14 }}>
+      {/* 적재 기간 */}
+      <div className="h-card" style={{ ...CARD, padding: '28px 32px', gridColumn: 'span 2' }}>
+        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, ${C.cyan}, ${C.purple})` }} />
         <Label color={C.cyan}>적재 기간</Label>
-        <p style={{ fontSize: 22, fontWeight: 800, color: C.text, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums' }}>
+        <p style={{ fontSize: 20, fontWeight: 800, color: C.text, letterSpacing: '-0.03em', fontVariantNumeric: 'tabular-nums', lineHeight: 1.2 }}>
           {loading ? '…' : (s.minDate && s.maxDate
             ? <>{s.minDate} <span style={{ color: C.muted }}>~</span> {s.maxDate}</>
             : '—'
@@ -264,10 +281,11 @@ function BigStatCard({
   small?: boolean
 }) {
   return (
-    <div style={{ ...CARD, padding: '32px 36px' }}>
+    <div className="h-card" style={{ ...CARD, padding: '28px 32px' }}>
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: color, opacity: 0.7 }} />
       <Label>{label}</Label>
       <p style={{
-        fontSize: small ? 18 : 52,
+        fontSize: small ? 18 : value && value.length > 6 ? 44 : value && value.length > 4 ? 54 : 64,
         fontWeight: 800,
         color: loading || !value ? C.muted : color,
         letterSpacing: small ? '-0.01em' : '-0.05em',
@@ -276,7 +294,7 @@ function BigStatCard({
       }}>
         {loading ? '…' : (value ?? '—')}
         {!loading && value && unit && (
-          <span style={{ fontSize: small ? 14 : 22, fontWeight: 600, color: C.sub, marginLeft: 6 }}>{unit}</span>
+          <span style={{ fontSize: small ? 13 : 22, fontWeight: 600, color: C.muted, marginLeft: 6 }}>{unit}</span>
         )}
       </p>
     </div>
@@ -325,22 +343,22 @@ function KpiSection() {
 
   return (
     <section>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <SectionTitle>KPI 추이</SectionTitle>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 6, marginBottom: 24 }}>
           {ASP_OPTS.map(o => (
             <button
               key={o.value}
               onClick={() => setAsp(o.value)}
               style={{
-                padding: '6px 16px',
+                padding: '6px 14px',
                 borderRadius: 8,
                 fontSize: 13,
                 fontWeight: 600,
                 cursor: 'pointer',
-                transition: 'all 200ms',
-                border: asp === o.value ? `1px solid rgba(142,234,255,0.5)` : `1px solid ${C.border}`,
-                background: asp === o.value ? 'rgba(142,234,255,0.12)' : 'transparent',
+                transition: 'all 200ms cubic-bezier(.22,1,.36,1)',
+                border: asp === o.value ? `1px solid rgba(34,211,238,0.4)` : `1px solid ${C.border}`,
+                background: asp === o.value ? 'rgba(34,211,238,0.1)' : 'transparent',
                 color: asp === o.value ? C.cyan : C.sub,
               }}
             >
@@ -350,7 +368,8 @@ function KpiSection() {
         </div>
       </div>
 
-      <div style={{ ...CARD, padding: '36px 40px' }}>
+      <div className="h-card" style={{ ...CARD, padding: '36px 40px' }}>
+        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, ${C.cyan}, ${C.red})`, opacity: 0.5 }} />
         {loading ? (
           <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.muted, fontSize: 15 }}>불러오는 중…</div>
         ) : chartData.length === 0 ? (
@@ -358,12 +377,12 @@ function KpiSection() {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 48 }}>
             <div>
-              <p style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.muted, marginBottom: 20 }}>
+              <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: C.muted, marginBottom: 20 }}>
                 수락률 · EXPIRED율 (%)
               </p>
               <ResponsiveContainer width="100%" height={220}>
                 <LineChart data={chartData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(42,42,48,0.6)" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(30,45,74,0.6)" />
                   <XAxis dataKey="date" tick={{ fill: C.muted, fontSize: 12 }} />
                   <YAxis tick={{ fill: C.muted, fontSize: 12 }} unit="%" domain={[0, 100]} />
                   <Tooltip {...TOOLTIP_STYLE} />
@@ -374,12 +393,12 @@ function KpiSection() {
               </ResponsiveContainer>
             </div>
             <div>
-              <p style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.muted, marginBottom: 20 }}>
+              <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: C.muted, marginBottom: 20 }}>
                 호출수
               </p>
               <ResponsiveContainer width="100%" height={160}>
                 <LineChart data={chartData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(42,42,48,0.6)" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(30,45,74,0.6)" />
                   <XAxis dataKey="date" tick={{ fill: C.muted, fontSize: 12 }} />
                   <YAxis tick={{ fill: C.muted, fontSize: 12 }} />
                   <Tooltip {...TOOLTIP_STYLE} />
@@ -458,12 +477,14 @@ function MbtiSection() {
     color: C.text,
     outline: 'none',
     width: '100%',
+    transition: 'border-color 200ms',
   }
 
   return (
     <section>
       <SectionTitle>기사 MBTI 검색</SectionTitle>
-      <div style={{ ...CARD, padding: '36px 40px' }}>
+      <div className="h-card" style={{ ...CARD, padding: '36px 40px' }}>
+        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: C.purple, opacity: 0.6 }} />
         <div style={{ display: 'flex', gap: 12, marginBottom: 32 }}>
           <input
             type="text"
@@ -486,16 +507,17 @@ function MbtiSection() {
             disabled={loading || (!query && !aspFilter)}
             style={{
               padding: '12px 28px',
-              background: loading || (!query && !aspFilter) ? C.bgCard : C.cyan,
-              color: loading || (!query && !aspFilter) ? C.muted : '#0b0b0f',
+              background: loading || (!query && !aspFilter) ? 'transparent' : `linear-gradient(135deg, ${C.purple}, #5b21b6)`,
+              color: loading || (!query && !aspFilter) ? C.muted : '#fff',
               fontSize: 14,
               fontWeight: 700,
               borderRadius: 10,
-              border: `1px solid ${loading || (!query && !aspFilter) ? C.border : C.cyan}`,
+              border: `1px solid ${loading || (!query && !aspFilter) ? C.border : 'transparent'}`,
               cursor: loading || (!query && !aspFilter) ? 'not-allowed' : 'pointer',
               opacity: loading || (!query && !aspFilter) ? 0.5 : 1,
               whiteSpace: 'nowrap',
-              transition: 'all 200ms',
+              transition: 'all 200ms cubic-bezier(.22,1,.36,1)',
+              boxShadow: !loading && (query || aspFilter) ? `0 4px 20px rgba(139,92,246,.35)` : 'none',
             }}
           >
             {loading ? '검색 중…' : '검색'}
@@ -517,6 +539,7 @@ function MbtiSection() {
                   border: `1px solid ${C.border}`,
                   borderRadius: 14,
                   padding: '24px 28px',
+                  transition: 'all 200ms cubic-bezier(.22,1,.36,1)',
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
                     <div>
@@ -525,9 +548,9 @@ function MbtiSection() {
                     </div>
                     <span style={{
                       fontSize: 12, fontWeight: 700,
-                      background: 'rgba(142,234,255,0.1)',
+                      background: 'rgba(34,211,238,0.1)',
                       color: C.cyan,
-                      border: `1px solid rgba(142,234,255,0.25)`,
+                      border: `1px solid rgba(34,211,238,0.25)`,
                       borderRadius: 20,
                       padding: '4px 12px',
                     }}>
@@ -541,7 +564,7 @@ function MbtiSection() {
                         <PolarGrid stroke={C.border} />
                         <PolarAngleAxis dataKey="subject" tick={{ fill: C.muted, fontSize: 9 }} />
                         <PolarRadiusAxis angle={90} domain={[0, 100]} tick={false} axisLine={false} />
-                        <Radar dataKey="value" stroke={C.cyan} fill={C.cyan} fillOpacity={0.15} strokeWidth={1.5} />
+                        <Radar dataKey="value" stroke={C.cyan} fill={C.cyan} fillOpacity={0.12} strokeWidth={1.5} />
                       </RadarChart>
                     </div>
 
@@ -649,6 +672,7 @@ function SimulatorSection() {
     fontSize: 14,
     color: C.text,
     outline: 'none',
+    transition: 'border-color 200ms',
   }
 
   const labelStyle: React.CSSProperties = {
@@ -664,7 +688,8 @@ function SimulatorSection() {
   return (
     <section>
       <SectionTitle>매칭 시뮬레이터</SectionTitle>
-      <div style={{ ...CARD, padding: '36px 40px' }}>
+      <div className="h-card" style={{ ...CARD, padding: '36px 40px' }}>
+        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: C.green, opacity: 0.6 }} />
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 20, marginBottom: 28 }}>
           <div>
             <label style={labelStyle}>ASP ID *</label>
@@ -714,21 +739,22 @@ function SimulatorSection() {
           style={{
             width: '100%',
             padding: '16px',
-            background: loading ? C.bgCard : C.green,
-            color: loading ? C.muted : '#0b0b0f',
+            background: loading ? 'transparent' : `linear-gradient(135deg, ${C.green}, #059669)`,
+            color: loading ? C.muted : '#fff',
             fontSize: 15,
             fontWeight: 700,
             borderRadius: 12,
-            border: loading ? `1px solid ${C.border}` : `1px solid ${C.green}`,
+            border: loading ? `1px solid ${C.border}` : '1px solid transparent',
             cursor: loading ? 'not-allowed' : 'pointer',
-            transition: 'all 200ms',
+            transition: 'all 200ms cubic-bezier(.22,1,.36,1)',
+            boxShadow: !loading ? `0 4px 20px rgba(16,185,129,.3)` : 'none',
           }}
         >
           {loading ? '추천 중…' : '추천 기사 조회'}
         </button>
 
         {error && (
-          <p style={{ marginTop: 16, fontSize: 13, color: C.red, background: 'rgba(232,39,30,0.08)', border: `1px solid rgba(232,39,30,0.25)`, borderRadius: 10, padding: '12px 16px' }}>
+          <p style={{ marginTop: 16, fontSize: 13, color: C.red, background: 'rgba(244,63,94,0.08)', border: `1px solid rgba(244,63,94,0.25)`, borderRadius: 10, padding: '12px 16px' }}>
             {error}
           </p>
         )}
@@ -748,14 +774,15 @@ function SimulatorSection() {
                   border: `1px solid ${C.border}`,
                   borderRadius: 10,
                   padding: '14px 20px',
+                  transition: 'all 200ms cubic-bezier(.22,1,.36,1)',
                 }}>
                   <span style={{
                     width: 28, height: 28, borderRadius: '50%',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     fontSize: 12, fontWeight: 800, flexShrink: 0,
-                    background: d.rank <= 3 ? 'rgba(255,166,2,0.2)' : 'rgba(42,42,48,0.5)',
+                    background: d.rank <= 3 ? 'rgba(245,158,11,0.18)' : `rgba(30,45,74,0.5)`,
                     color: d.rank <= 3 ? C.yellow : C.muted,
-                    border: `1px solid ${d.rank <= 3 ? 'rgba(255,166,2,0.35)' : C.border}`,
+                    border: `1px solid ${d.rank <= 3 ? 'rgba(245,158,11,0.35)' : C.border}`,
                   }}>
                     {d.rank}
                   </span>
@@ -793,7 +820,7 @@ function LogsSection() {
   return (
     <section>
       <SectionTitle>실행 로그</SectionTitle>
-      <div style={{ ...CARD, overflow: 'hidden' }}>
+      <div className="h-card" style={{ ...CARD, overflow: 'hidden' }}>
         {loading ? (
           <div style={{ height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.muted, fontSize: 15 }}>불러오는 중…</div>
         ) : logs.length === 0 ? (
@@ -830,9 +857,9 @@ function LogsSection() {
                         padding: '4px 12px',
                         borderRadius: 20,
                         whiteSpace: 'nowrap',
-                        background: log.status === 'success' ? 'rgba(0,196,154,0.12)' : 'rgba(232,39,30,0.12)',
+                        background: log.status === 'success' ? 'rgba(16,185,129,0.12)' : 'rgba(244,63,94,0.12)',
                         color: log.status === 'success' ? C.green : C.red,
-                        border: `1px solid ${log.status === 'success' ? 'rgba(0,196,154,0.3)' : 'rgba(232,39,30,0.3)'}`,
+                        border: `1px solid ${log.status === 'success' ? 'rgba(16,185,129,0.3)' : 'rgba(244,63,94,0.3)'}`,
                       }}>
                         {log.status === 'success' ? '성공' : '실패'}
                       </span>
@@ -857,18 +884,65 @@ export default function DashboardPage() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600;700;800&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { background: #0b0b0f; font-family: 'Pretendard', -apple-system, sans-serif; -webkit-font-smoothing: antialiased; }
+        body {
+          background: #080C18;
+          font-family: 'Pretendard', -apple-system, sans-serif;
+          -webkit-font-smoothing: antialiased;
+        }
+        body::before {
+          content: '';
+          position: fixed;
+          top: -20%;
+          left: -10%;
+          width: 700px;
+          height: 700px;
+          background: radial-gradient(circle, rgba(34,211,238,.07), transparent 70%);
+          pointer-events: none;
+          z-index: 0;
+        }
+        body::after {
+          content: '';
+          position: fixed;
+          bottom: -20%;
+          right: -10%;
+          width: 600px;
+          height: 600px;
+          background: radial-gradient(circle, rgba(139,92,246,.06), transparent 70%);
+          pointer-events: none;
+          z-index: 0;
+        }
         input, select, button, textarea { font-family: inherit; }
-        input::placeholder { color: #888; }
-        select option { background: #13131a; color: #e5e7eb; }
+        input::placeholder { color: #4E6080; }
+        select option { background: #0F1628; color: #F1F5F9; }
+        @keyframes cardReveal {
+          0% { opacity: 0; transform: translateY(20px) scale(.97); filter: blur(4px); }
+          100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+        }
+        .h-card {
+          animation: cardReveal .65s cubic-bezier(.22,1,.36,1) forwards;
+          opacity: 0;
+        }
+        .h-card:hover {
+          transform: translateY(-2px);
+          border-color: #2D4470 !important;
+          box-shadow: 0 12px 32px rgba(0,0,0,.4);
+        }
+        .h-card:nth-child(1) { animation-delay: .05s; }
+        .h-card:nth-child(2) { animation-delay: .11s; }
+        .h-card:nth-child(3) { animation-delay: .17s; }
+        .h-card:nth-child(4) { animation-delay: .23s; }
+        .h-card:nth-child(5) { animation-delay: .29s; }
+        .h-card:nth-child(6) { animation-delay: .35s; }
       `}</style>
 
-      <div style={{ minHeight: '100vh', background: C.bg, color: C.text }}>
+      <div style={{ minHeight: '100vh', background: '#080C18', color: '#F1F5F9', position: 'relative', zIndex: 1 }}>
         {/* Header */}
         <div style={{
           position: 'sticky', top: 0, zIndex: 50,
-          background: C.bg,
-          borderBottom: `1px solid ${C.border}`,
+          background: 'rgba(8,12,24,.95)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+          borderBottom: `1px solid #1E2D4A`,
           padding: '0 40px',
           height: 56,
           display: 'flex',
@@ -878,28 +952,36 @@ export default function DashboardPage() {
           <Link href="/" style={{
             fontSize: 13,
             fontWeight: 600,
-            color: C.sub,
+            color: '#94A3B8',
             textDecoration: 'none',
             background: 'transparent',
-            border: `1px solid ${C.border}`,
+            border: `1px solid #1E2D4A`,
             borderRadius: 8,
             padding: '5px 12px',
-            transition: 'all 200ms',
+            transition: 'all 200ms cubic-bezier(.22,1,.36,1)',
             whiteSpace: 'nowrap',
           }}
-            onMouseOver={e => { (e.target as HTMLElement).style.color = C.text; (e.target as HTMLElement).style.borderColor = C.borderHover }}
-            onMouseOut={e => { (e.target as HTMLElement).style.color = C.sub; (e.target as HTMLElement).style.borderColor = C.border }}
+            onMouseOver={e => { (e.target as HTMLElement).style.color = '#F1F5F9'; (e.target as HTMLElement).style.borderColor = '#2D4470' }}
+            onMouseOut={e => { (e.target as HTMLElement).style.color = '#94A3B8'; (e.target as HTMLElement).style.borderColor = '#1E2D4A' }}
           >
             ← 일일 대시보드
           </Link>
-          <div style={{ width: 1, height: 18, background: C.border }} />
-          <h1 style={{ fontSize: 15, fontWeight: 800, letterSpacing: '-0.02em', color: C.text }}>
+          <div style={{ width: 1, height: 18, background: '#1E2D4A' }} />
+          <h1 style={{
+            fontSize: 15,
+            fontWeight: 800,
+            letterSpacing: '-0.02em',
+            background: 'linear-gradient(135deg, #22D3EE, #8B5CF6)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text',
+          }}>
             누적 분석 대시보드
           </h1>
         </div>
 
         {/* Content */}
-        <div style={{ maxWidth: 1400, margin: '0 auto', padding: '48px 40px', display: 'flex', flexDirection: 'column', gap: 48 }}>
+        <div style={{ maxWidth: 1400, margin: '0 auto', padding: '48px 40px', display: 'flex', flexDirection: 'column', gap: 52 }}>
           <StatusBar />
           <KpiSection />
           <MbtiSection />
