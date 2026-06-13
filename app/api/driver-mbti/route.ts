@@ -194,8 +194,8 @@ function computeMbti(logs: DailyLog[]): DriverMbti[] {
       else if (h >= 18 && h <= 23) a.night += w
     }
 
-    const wd = log.weekday
-    if (wd >= 0 && wd <= 6) a.wd[wd] += (log.total_accepted ?? 0) * w
+    const kwd = ((log.weekday ?? 0) + 6) % 7  // JS getDay(sun=0) → 한국(mon=0)
+    a.wd[kwd] += (log.total_accepted ?? 0) * w
 
     a.short    += (log.short_cnt    ?? 0) * w
     a.medium   += (log.medium_cnt   ?? 0) * w
@@ -234,13 +234,13 @@ function computeMbti(logs: DailyLog[]): DriverMbti[] {
       score_morning:   r4(a.morning / totalHours),
       score_daytime:   r4(a.daytime / totalHours),
       score_night:     r4(a.night / totalHours),
-      score_sun: r4(a.wd[0] / totalWd),
-      score_mon: r4(a.wd[1] / totalWd),
-      score_tue: r4(a.wd[2] / totalWd),
-      score_wed: r4(a.wd[3] / totalWd),
-      score_thu: r4(a.wd[4] / totalWd),
-      score_fri: r4(a.wd[5] / totalWd),
-      score_sat: r4(a.wd[6] / totalWd),
+      score_mon: r4(a.wd[0] / totalWd),
+      score_tue: r4(a.wd[1] / totalWd),
+      score_wed: r4(a.wd[2] / totalWd),
+      score_thu: r4(a.wd[3] / totalWd),
+      score_fri: r4(a.wd[4] / totalWd),
+      score_sat: r4(a.wd[5] / totalWd),
+      score_sun: r4(a.wd[6] / totalWd),
       score_short:     r4(a.short / ta),
       score_medium:    r4(a.medium / ta),
       score_long:      r4(a.long / ta),

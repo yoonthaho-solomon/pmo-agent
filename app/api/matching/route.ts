@@ -12,6 +12,7 @@ interface CallcardRow {
   asp_id: number
   call_date: string
   hour_slot: number
+  weekday: number
   expected_distance: number
   expected_fare: number
   is_paid: boolean
@@ -27,6 +28,13 @@ interface DriverRow {
   score_morning: number
   score_daytime: number
   score_night: number
+  score_mon: number
+  score_tue: number
+  score_wed: number
+  score_thu: number
+  score_fri: number
+  score_sat: number
+  score_sun: number
   score_short: number
   score_medium: number
   score_long: number
@@ -34,7 +42,9 @@ interface DriverRow {
   score_mid_fare: number
   score_high_fare: number
   score_paid: number
+  score_free: number
   score_surge: number
+  score_normal: number
   score_near: number
   pref_s_hexagons: string[]
 }
@@ -52,16 +62,19 @@ interface MatchScore {
 
 const CALLCARD_COLS = [
   'callcard_id', 'asp_id', 'call_date',
-  'hour_slot', 'expected_distance', 'expected_fare',
+  'hour_slot', 'weekday', 'expected_distance', 'expected_fare',
   'is_paid', 'eta_distance', 'is_surge', 's_hexagon',
 ].join(',')
 
 const DRIVER_COLS = [
   'driver_id', 'asp_id',
   'score_dawn', 'score_morning', 'score_daytime', 'score_night',
+  'score_mon', 'score_tue', 'score_wed', 'score_thu', 'score_fri', 'score_sat', 'score_sun',
   'score_short', 'score_medium', 'score_long',
   'score_low_fare', 'score_mid_fare', 'score_high_fare',
-  'score_paid', 'score_surge', 'score_near',
+  'score_paid', 'score_free',
+  'score_surge', 'score_normal',
+  'score_near',
   'pref_s_hexagons',
 ].join(',')
 
@@ -111,6 +124,7 @@ function etaToNear(eta: number | null): number {
 
 function callcardToVector(row: CallcardRow): number[] {
   const h = row.hour_slot
+  const wd = row.weekday ?? -1  // 0=mon~6=sun (callcard_mbti 기준)
   const dist = row.expected_distance ?? 0
   const fare = row.expected_fare ?? 0
   return [
@@ -118,6 +132,13 @@ function callcardToVector(row: CallcardRow): number[] {
     h >= 6 && h <= 11 ? 1 : 0,               // morning
     h >= 12 && h <= 17 ? 1 : 0,              // daytime
     h >= 18 ? 1 : 0,                          // night
+    wd === 0 ? 1 : 0,                         // mon
+    wd === 1 ? 1 : 0,                         // tue
+    wd === 2 ? 1 : 0,                         // wed
+    wd === 3 ? 1 : 0,                         // thu
+    wd === 4 ? 1 : 0,                         // fri
+    wd === 5 ? 1 : 0,                         // sat
+    wd === 6 ? 1 : 0,                         // sun
     dist > 0 && dist <= 3000 ? 1 : 0,         // short
     dist > 3000 && dist <= 8000 ? 1 : 0,      // medium
     dist > 8000 ? 1 : 0,                      // long
@@ -125,18 +146,22 @@ function callcardToVector(row: CallcardRow): number[] {
     fare > 10000 && fare <= 20000 ? 1 : 0,    // mid_fare
     fare > 20000 ? 1 : 0,                     // high_fare
     row.is_paid ? 1 : 0,                      // paid
+    row.is_paid ? 0 : 1,                      // free
     row.is_surge ? 1 : 0,                     // surge
+    row.is_surge ? 0 : 1,                     // normal
     etaToNear(row.eta_distance),              // near
   ]
 }
 
 function driverToVector(row: DriverRow): number[] {
   return [
-    row.score_dawn,      row.score_morning, row.score_daytime, row.score_night,
-    row.score_short,     row.score_medium,  row.score_long,
-    row.score_low_fare,  row.score_mid_fare, row.score_high_fare,
-    row.score_paid,
-    row.score_surge,
+    row.score_dawn,    row.score_morning,  row.score_daytime, row.score_night,
+    row.score_mon,     row.score_tue,      row.score_wed,     row.score_thu,
+    row.score_fri,     row.score_sat,      row.score_sun,
+    row.score_short,   row.score_medium,   row.score_long,
+    row.score_low_fare, row.score_mid_fare, row.score_high_fare,
+    row.score_paid,    row.score_free,
+    row.score_surge,   row.score_normal,
     row.score_near,
   ]
 }
