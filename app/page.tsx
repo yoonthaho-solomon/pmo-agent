@@ -595,8 +595,8 @@ export default function Home() {
           backdropFilter: 'blur(20px)',
           WebkitBackdropFilter: 'blur(20px)',
           borderBottom: `1px solid ${C.border}`,
-          padding: '0 40px',
-          height: 56,
+          padding: '0 16px',
+          height: 48,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
@@ -610,27 +610,27 @@ export default function Home() {
           }}>
             PMO 콜 분석
           </h1>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <a href="https://yoonthaho-solomon.github.io/happycall-pmo/" target="_blank" style={{
               fontSize: 13, fontWeight: 600, color: C.sub, textDecoration: 'none',
               background: 'transparent', border: `1px solid ${C.border}`,
-              borderRadius: 8, padding: '5px 12px',
+              borderRadius: 8, padding: '4px 11px',
               transition: 'all 200ms cubic-bezier(.22,1,.36,1)', whiteSpace: 'nowrap',
             }}
               onMouseOver={e => { (e.currentTarget as HTMLElement).style.color = C.text; (e.currentTarget as HTMLElement).style.borderColor = C.borderHover }}
               onMouseOut={e => { (e.currentTarget as HTMLElement).style.color = C.sub; (e.currentTarget as HTMLElement).style.borderColor = C.border }}
             >
-              ← 일일 관제
+              ← 관제 지도
             </a>
             <Link href="/dashboard" style={{
-              fontSize: 13, fontWeight: 600, color: C.sub, textDecoration: 'none',
-              background: 'linear-gradient(135deg, rgba(34,211,238,.1), rgba(139,92,246,.08))',
-              border: `1px solid rgba(34,211,238,.25)`,
-              borderRadius: 8, padding: '5px 12px',
+              fontSize: 13, fontWeight: 600, color: C.cyan, textDecoration: 'none',
+              background: 'linear-gradient(135deg, rgba(34,211,238,.12), rgba(139,92,246,.1))',
+              border: `1px solid rgba(34,211,238,.3)`,
+              borderRadius: 8, padding: '4px 11px',
               transition: 'all 200ms cubic-bezier(.22,1,.36,1)', whiteSpace: 'nowrap',
             }}
-              onMouseOver={e => { (e.currentTarget as HTMLElement).style.color = C.cyan }}
-              onMouseOut={e => { (e.currentTarget as HTMLElement).style.color = C.sub }}
+              onMouseOver={e => { (e.currentTarget as HTMLElement).style.opacity = '0.85' }}
+              onMouseOut={e => { (e.currentTarget as HTMLElement).style.opacity = '1' }}
             >
               누적 분석 →
             </Link>
