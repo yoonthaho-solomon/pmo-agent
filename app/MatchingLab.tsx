@@ -322,7 +322,9 @@ function DataLoadTab() {
     setLoading(true)
     const next = await Promise.all([
       tableStatus('callcard_mbti', '호출데이터', 'call_date'),
-      tableStatus('meter_daily_logs', '앱미터데이터', 'service_date'),
+      tableStatus('meter_daily_logs', '앱미터 일별', 'service_date'),
+      tableStatus('meter_hourly_logs', '앱미터 시간대', 'log_date'),
+      tableStatus('meter_driver_logs', '앱미터 기사별', 'log_date'),
       tableStatus('driver_daily_logs', '기사 일일 로그', 'service_date'),
       tableStatus('driver_mbti', '기사 22D 벡터'),
       tableStatus('callcard_profile', '콜카드 프로필'),
@@ -338,7 +340,9 @@ function DataLoadTab() {
   }, [])
 
   const call = stats.find((item) => item.table === 'callcard_mbti')
-  const meter = stats.find((item) => item.table === 'meter_daily_logs')
+  const meterDaily = stats.find((item) => item.table === 'meter_daily_logs')
+  const meterHourly = stats.find((item) => item.table === 'meter_hourly_logs')
+  const meterDriver = stats.find((item) => item.table === 'meter_driver_logs')
   const driverDaily = stats.find((item) => item.table === 'driver_daily_logs')
   const driverVectors = stats.find((item) => item.table === 'driver_mbti')
   const matching = stats.find((item) => item.table === 'matching_scores')
@@ -348,7 +352,7 @@ function DataLoadTab() {
     <div style={{ display: 'grid', gap: 18 }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>
         <Stat label="호출데이터 저장" value={loading ? '...' : fmt(call?.count)} tone={call?.count ? 'good' : 'warn'} />
-        <Stat label="앱미터 저장" value={loading ? '...' : meter?.error ? '테이블 미확인' : fmt(meter?.count)} tone={meter?.error ? 'warn' : meter?.count ? 'good' : 'neutral'} />
+        <Stat label="앱미터 저장" value={loading ? '...' : meterDaily?.error ? `2시트 ${fmt(meterHourly?.count)}/${fmt(meterDriver?.count)}` : fmt(meterDaily?.count)} tone={meterDaily?.error ? 'warn' : meterDaily?.count ? 'good' : 'neutral'} />
         <Stat label="기사 로그" value={loading ? '...' : fmt(driverDaily?.count)} tone={driverDaily?.count ? 'good' : 'warn'} />
         <Stat label="기사 벡터 생성률" value={driverDaily?.count ? pct(vectorRate) : '-'} tone={driverVectors?.count ? 'good' : 'warn'} />
         <Stat label="매칭 결과" value={loading ? '...' : fmt(matching?.count)} tone={matching?.count ? 'good' : 'warn'} />
@@ -387,7 +391,7 @@ function DataLoadTab() {
               기사 프로필/벡터는 <strong style={{ color: C.text }}>driver_daily_logs</strong>와 <strong style={{ color: C.text }}>driver_mbti</strong> 기준으로 확인합니다.
             </div>
             <div style={{ padding: 12, borderRadius: 8, background: 'rgba(245,158,11,.08)', border: `1px solid rgba(245,158,11,.25)`, color: C.yellow }}>
-              앱미터 테이블은 현재 코드 기준 <strong>meter_daily_logs</strong>를 조회하지만 Supabase 스키마에서 확인되지 않습니다. 테이블명 또는 적재 경로 확인이 필요합니다.
+              앱미터는 현재 <strong>meter_daily_logs</strong> 일별 테이블이 schema cache에서 확인되지 않고, <strong>meter_hourly_logs</strong>/<strong>meter_driver_logs</strong>는 존재하지만 0건입니다. 일별 적재 테이블 생성/노출 여부와 2시트 적재 사용 여부를 확정해야 합니다.
             </div>
             <Link href="/ingest" style={{ color: C.cyan, textDecoration: 'none', border: `1px solid ${C.cyan}`, borderRadius: 8, padding: '10px 12px', fontWeight: 850, textAlign: 'center' }}>
               적재 관리 화면으로 이동
