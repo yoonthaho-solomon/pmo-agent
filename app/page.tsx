@@ -62,8 +62,6 @@ interface MeterLogsResponse {
   total_rows_read: number
 }
 
-// ─── Auto-run pipeline ────────────────────────────────────────────────────────
-
 type StepKey = 'driverLogs' | 'callcardMbti' | 'driverMbti' | 'matching'
 type StepStatus = 'idle' | 'running' | 'done' | 'error'
 
@@ -74,10 +72,10 @@ interface StepState {
 }
 
 const STEP_META: { key: StepKey; label: string }[] = [
-  { key: 'driverLogs',   label: '기사 로그 적재' },
-  { key: 'callcardMbti', label: '콜카드 MBTI 적재' },
-  { key: 'driverMbti',   label: '기사 MBTI 계산' },
-  { key: 'matching',     label: '매칭 계산' },
+  { key: 'driverLogs',   label: '① 기사 로그 적재' },
+  { key: 'callcardMbti', label: '② 콜카드 MBTI 적재' },
+  { key: 'driverMbti',   label: '③ 기사 MBTI 계산' },
+  { key: 'matching',     label: '④ 매칭 계산' },
 ]
 
 const IDLE_STEPS: Record<StepKey, StepState> = {
@@ -86,8 +84,6 @@ const IDLE_STEPS: Record<StepKey, StepState> = {
   driverMbti:   { status: 'idle' },
   matching:     { status: 'idle' },
 }
-
-// ─── Design System ────────────────────────────────────────────────────────────
 
 const C = {
   bg: '#080C18',
@@ -116,7 +112,19 @@ const CARD: React.CSSProperties = {
   transition: 'all 200ms cubic-bezier(.22,1,.36,1)',
 }
 
-// ─── FileInput ────────────────────────────────────────────────────────────────
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 24 }}>
+      <h2 style={{
+        fontSize: 14, fontWeight: 700, letterSpacing: '0.08em',
+        textTransform: 'uppercase', color: C.sub, whiteSpace: 'nowrap',
+      }}>
+        {children}
+      </h2>
+      <div style={{ flex: 1, height: 1, background: C.border }} />
+    </div>
+  )
+}
 
 function FileInput({
   label, icon, file, inputRef, onChange, onClear,
@@ -132,7 +140,7 @@ function FileInput({
 
   return (
     <div>
-      <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.muted, marginBottom: 10 }}>
+      <p style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: C.muted, marginBottom: 10 }}>
         {label} <span style={{ color: C.red }}>*</span>
       </p>
       <div
@@ -140,25 +148,17 @@ function FileInput({
         onMouseEnter={() => setHover(true)}
         onMouseLeave={() => setHover(false)}
         style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 14,
+          display: 'flex', alignItems: 'center', gap: 14,
           background: hover ? C.bgCardHover : 'rgba(255,255,255,.02)',
           border: `1px dashed ${file ? 'rgba(16,185,129,.4)' : hover ? C.borderHover : C.border}`,
-          borderRadius: 12,
-          padding: '14px 18px',
-          cursor: 'pointer',
-          transition: 'all 200ms cubic-bezier(.22,1,.36,1)',
+          borderRadius: 12, padding: '16px 20px',
+          cursor: 'pointer', transition: 'all 200ms cubic-bezier(.22,1,.36,1)',
         }}
       >
-        <span style={{ fontSize: 20, flexShrink: 0 }}>{icon}</span>
+        <span style={{ fontSize: 22, flexShrink: 0 }}>{icon}</span>
         <span style={{
-          fontSize: 13,
-          color: file ? C.text : C.muted,
-          flex: 1,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
+          fontSize: 16, color: file ? C.text : C.muted, flex: 1,
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           fontWeight: file ? 600 : 400,
         }}>
           {file ? file.name : '클릭해서 파일 선택 (.xlsx)'}
@@ -168,14 +168,9 @@ function FileInput({
             type="button"
             onClick={(e) => { e.stopPropagation(); onClear() }}
             style={{
-              fontSize: 12,
-              color: C.muted,
-              background: 'transparent',
-              border: 'none',
-              cursor: 'pointer',
-              padding: '2px 6px',
-              borderRadius: 4,
-              transition: 'color 150ms',
+              fontSize: 14, color: C.muted, background: 'transparent',
+              border: 'none', cursor: 'pointer', padding: '2px 8px',
+              borderRadius: 4, transition: 'color 150ms',
             }}
             onMouseOver={e => (e.currentTarget.style.color = C.red)}
             onMouseOut={e => (e.currentTarget.style.color = C.muted)}
@@ -195,16 +190,13 @@ function FileInput({
   )
 }
 
-// ─── StepRow ──────────────────────────────────────────────────────────────────
-
 function StepRow({ index, label, state }: { index: number; label: string; state: StepState }) {
   const { status, message, error } = state
 
   const circleColor =
     status === 'idle'    ? C.muted :
     status === 'running' ? C.cyan :
-    status === 'done'    ? C.green :
-                           C.red
+    status === 'done'    ? C.green : C.red
 
   const circleBg =
     status === 'idle'    ? 'rgba(78,96,128,.15)' :
@@ -215,28 +207,28 @@ function StepRow({ index, label, state }: { index: number; label: string; state:
   const detail =
     status === 'idle'    ? '대기 중' :
     status === 'running' ? '실행 중…' :
-    status === 'done'    ? (message ?? '완료') :
-                           (error ?? '오류')
+    status === 'done'    ? (message ?? '완료') : (error ?? '오류')
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 0', borderBottom: `1px solid ${C.border}` }}>
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 16,
+      padding: '14px 0', borderBottom: `1px solid ${C.border}`,
+    }}>
       <div style={{
-        width: 26, height: 26, borderRadius: '50%',
+        width: 32, height: 32, borderRadius: '50%',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: 11, fontWeight: 800, flexShrink: 0,
-        background: circleBg,
-        color: circleColor,
-        border: `1px solid ${circleColor}40`,
+        fontSize: 13, fontWeight: 800, flexShrink: 0,
+        background: circleBg, color: circleColor, border: `1px solid ${circleColor}40`,
       }}>
-        {status === 'running' ? <span style={{ display: 'inline-block', animation: 'spin 1s linear infinite' }}>↻</span> : index}
+        {status === 'running'
+          ? <span style={{ display: 'inline-block', animation: 'spin 1s linear infinite' }}>↻</span>
+          : index}
       </div>
-      <span style={{ fontSize: 13, fontWeight: 600, color: C.text, width: 140, flexShrink: 0 }}>{label}</span>
-      <span style={{ fontSize: 12, color: circleColor, flex: 1 }}>{detail}</span>
+      <span style={{ fontSize: 17, fontWeight: 600, color: C.text, width: 180, flexShrink: 0 }}>{label}</span>
+      <span style={{ fontSize: 15, color: circleColor, flex: 1 }}>{detail}</span>
     </div>
   )
 }
-
-// ─── ActionCard ───────────────────────────────────────────────────────────────
 
 function ActionCard({
   title, desc, accentColor, loading, disabled, onRun, btnLabel, result, error, children,
@@ -253,20 +245,20 @@ function ActionCard({
   children?: React.ReactNode
 }) {
   return (
-    <div className="h-card" style={{ ...CARD, padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: accentColor, opacity: 0.7 }} />
+    <div className="h-card" style={{ ...CARD, padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: accentColor, opacity: 0.8 }} />
       <div>
-        <p style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 4 }}>{title}</p>
-        <p style={{ fontSize: 11, color: C.muted }}>{desc}</p>
+        <p style={{ fontSize: 17, fontWeight: 700, color: C.text, marginBottom: 6 }}>{title}</p>
+        <p style={{ fontSize: 14, color: C.muted, lineHeight: 1.5 }}>{desc}</p>
       </div>
       {children}
       {error && (
-        <div style={{ fontSize: 12, color: C.red, background: 'rgba(244,63,94,.08)', border: `1px solid rgba(244,63,94,.2)`, borderRadius: 8, padding: '10px 12px' }}>
+        <div style={{ fontSize: 14, color: C.red, background: 'rgba(244,63,94,.08)', border: `1px solid rgba(244,63,94,.2)`, borderRadius: 8, padding: '12px 14px' }}>
           {error}
         </div>
       )}
       {result && (
-        <div style={{ fontSize: 12, color: C.green, background: 'rgba(16,185,129,.08)', border: `1px solid rgba(16,185,129,.2)`, borderRadius: 8, padding: '10px 12px' }}>
+        <div style={{ fontSize: 14, color: C.green, background: 'rgba(16,185,129,.08)', border: `1px solid rgba(16,185,129,.2)`, borderRadius: 8, padding: '12px 14px' }}>
           {result}
         </div>
       )}
@@ -274,14 +266,10 @@ function ActionCard({
         onClick={onRun}
         disabled={disabled}
         style={{
-          marginTop: 'auto',
-          width: '100%',
-          padding: '10px',
+          marginTop: 'auto', width: '100%', padding: '12px',
           background: disabled ? 'transparent' : accentColor,
           color: disabled ? C.muted : '#fff',
-          fontSize: 12,
-          fontWeight: 700,
-          borderRadius: 10,
+          fontSize: 15, fontWeight: 700, borderRadius: 10,
           border: `1px solid ${disabled ? C.border : 'transparent'}`,
           cursor: disabled ? 'not-allowed' : 'pointer',
           opacity: disabled ? 0.5 : 1,
@@ -295,15 +283,11 @@ function ActionCard({
   )
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
 function extractDateFromFilename(filename: string): string | null {
   const m = filename.match(/^(\d{4})(\d{2})(\d{2})/)
   if (!m) return null
   return `${m[1]}-${m[2]}-${m[3]}`
 }
-
-// ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function Home() {
   const [callcardFile, setCallcardFile] = useState<File | null>(null)
@@ -525,6 +509,14 @@ export default function Home() {
   const anyRunning = autoRunning || analyzeLoading || driverLoading ||
     callcardMbtiLoading || callcardProfileLoading || driverMbtiLoading || matchingLoading || meterLoading
 
+  const navBtn: React.CSSProperties = {
+    fontSize: 13, fontWeight: 600, color: C.sub, textDecoration: 'none',
+    background: 'transparent', border: `1px solid ${C.border}`,
+    borderRadius: 8, padding: '4px 11px',
+    transition: 'all 200ms cubic-bezier(.22,1,.36,1)', whiteSpace: 'nowrap',
+    cursor: 'pointer',
+  }
+
   return (
     <>
       <style>{`
@@ -534,26 +526,23 @@ export default function Home() {
           background: #080C18;
           font-family: 'Pretendard', -apple-system, sans-serif;
           -webkit-font-smoothing: antialiased;
-          font-size: 14px;
+          font-size: 18px;
         }
         body::before {
-          content: '';
-          position: fixed;
-          top: -20%; left: -10%;
+          content: ''; position: fixed; top: -20%; left: -10%;
           width: 700px; height: 700px;
-          background: radial-gradient(circle, rgba(34,211,238,.06), transparent 70%);
+          background: radial-gradient(circle, rgba(34,211,238,.07), transparent 70%);
           pointer-events: none; z-index: 0;
         }
         body::after {
-          content: '';
-          position: fixed;
-          bottom: -20%; right: -10%;
+          content: ''; position: fixed; bottom: -20%; right: -10%;
           width: 600px; height: 600px;
-          background: radial-gradient(circle, rgba(139,92,246,.05), transparent 70%);
+          background: radial-gradient(circle, rgba(139,92,246,.06), transparent 70%);
           pointer-events: none; z-index: 0;
         }
         input, select, button, textarea { font-family: inherit; }
         input::placeholder { color: #4E6080; }
+        select option { background: #0F1628; color: #F1F5F9; }
         @keyframes cardReveal {
           0% { opacity: 0; transform: translateY(20px) scale(.97); filter: blur(4px); }
           100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
@@ -574,62 +563,41 @@ export default function Home() {
         .h-card:nth-child(4) { animation-delay: .20s; }
         .h-card:nth-child(5) { animation-delay: .25s; }
         .h-card:nth-child(6) { animation-delay: .30s; }
-        .section-title {
-          display: flex; align-items: center; gap: 14px; margin-bottom: 20px;
-        }
-        .section-title h2 {
-          font-size: 12px; font-weight: 700; letter-spacing: .1em;
-          text-transform: uppercase; color: #94A3B8; white-space: nowrap;
-        }
-        .section-title::after {
-          content: ''; flex: 1; height: 1px; background: #1E2D4A;
-        }
       `}</style>
 
       <div style={{ minHeight: '100vh', background: C.bg, color: C.text, position: 'relative', zIndex: 1 }}>
 
-        {/* Header */}
+        {/* ── Header ── */}
         <div style={{
           position: 'sticky', top: 0, zIndex: 50,
           background: 'rgba(8,12,24,.95)',
-          backdropFilter: 'blur(20px)',
-          WebkitBackdropFilter: 'blur(20px)',
+          backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
           borderBottom: `1px solid ${C.border}`,
-          padding: '0 16px',
-          height: 48,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
+          padding: '0 16px', height: 48,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         }}>
-          <h1 style={{
-            fontSize: 15, fontWeight: 800, letterSpacing: '-0.02em',
-            background: 'linear-gradient(135deg, #22D3EE, #8B5CF6)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            backgroundClip: 'text',
-          }}>
-            PMO 콜 분석
-          </h1>
+          <span style={{ fontSize: 15, fontWeight: 800, letterSpacing: '-0.02em' }}>
+            코나모빌리티{' '}
+            <em style={{
+              fontStyle: 'normal',
+              background: 'linear-gradient(135deg, #22D3EE, #8B5CF6)',
+              WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+            }}>PMO</em>
+          </span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <a href="https://yoonthaho-solomon.github.io/happycall-pmo/" target="_blank" style={{
-              fontSize: 13, fontWeight: 600, color: C.sub, textDecoration: 'none',
-              background: 'transparent', border: `1px solid ${C.border}`,
-              borderRadius: 8, padding: '4px 11px',
-              transition: 'all 200ms cubic-bezier(.22,1,.36,1)', whiteSpace: 'nowrap',
-            }}
+            <a href="https://yoonthaho-solomon.github.io/happycall-pmo/" target="_blank" style={{ ...navBtn, display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}
               onMouseOver={e => { (e.currentTarget as HTMLElement).style.color = C.text; (e.currentTarget as HTMLElement).style.borderColor = C.borderHover }}
               onMouseOut={e => { (e.currentTarget as HTMLElement).style.color = C.sub; (e.currentTarget as HTMLElement).style.borderColor = C.border }}
             >
               ← 관제 지도
             </a>
             <Link href="/dashboard" style={{
-              fontSize: 13, fontWeight: 600, color: C.cyan, textDecoration: 'none',
+              ...navBtn,
+              display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'none',
               background: 'linear-gradient(135deg, rgba(34,211,238,.12), rgba(139,92,246,.1))',
-              border: `1px solid rgba(34,211,238,.3)`,
-              borderRadius: 8, padding: '4px 11px',
-              transition: 'all 200ms cubic-bezier(.22,1,.36,1)', whiteSpace: 'nowrap',
+              border: `1px solid rgba(34,211,238,.3)`, color: C.cyan,
             }}
-              onMouseOver={e => { (e.currentTarget as HTMLElement).style.opacity = '0.85' }}
+              onMouseOver={e => { (e.currentTarget as HTMLElement).style.opacity = '0.8' }}
               onMouseOut={e => { (e.currentTarget as HTMLElement).style.opacity = '1' }}
             >
               누적 분석 →
@@ -637,63 +605,111 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Content */}
-        <div style={{ maxWidth: 860, margin: '0 auto', padding: '32px 32px', display: 'flex', flexDirection: 'column', gap: 28 }}>
+        {/* ── Content ── */}
+        <div style={{ maxWidth: 1100, margin: '0 auto', padding: '40px 40px', display: 'flex', flexDirection: 'column', gap: 36 }}>
 
-          {/* 파일 업로드 */}
+          {/* ── Section 1: 호출 데이터 적재 (cyan) ── */}
           <section>
-            <div className="section-title"><h2>파일 업로드</h2></div>
-            <div className="h-card" style={{ ...CARD, padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, ${C.cyan}, ${C.purple})` }} />
-              <FileInput
-                label="callcard_eta 파일"
-                icon="📋"
-                file={callcardFile}
-                inputRef={callcardRef}
-                onChange={handleCallcardChange}
-                onClear={() => { setCallcardFile(null); setExtractedDate(null); setDateError(null) }}
-              />
-              <FileInput
-                label="remapped 파일"
-                icon="🗂️"
-                file={remappedFile}
-                inputRef={remappedRef}
-                onChange={setRemappedFile}
-                onClear={() => setRemappedFile(null)}
-              />
-              {extractedDate && (
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: 10,
-                  fontSize: 13, color: C.green,
-                  background: 'rgba(16,185,129,.08)', border: `1px solid rgba(16,185,129,.25)`,
-                  borderRadius: 10, padding: '10px 14px',
-                }}>
-                  <span style={{ fontWeight: 700 }}>서비스 날짜</span>
-                  <span style={{ fontVariantNumeric: 'tabular-nums' }}>{extractedDate}</span>
-                </div>
-              )}
-              {dateError && (
-                <div style={{
-                  fontSize: 12, color: C.yellow,
-                  background: 'rgba(245,158,11,.08)', border: `1px solid rgba(245,158,11,.2)`,
-                  borderRadius: 10, padding: '10px 14px',
-                }}>
-                  {dateError}
-                </div>
-              )}
+            <SectionTitle>호출 데이터 적재</SectionTitle>
+            <div className="h-card" style={{ ...CARD, padding: '32px' }}>
+              <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: C.cyan }} />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+                <FileInput
+                  label="callcard_eta 파일"
+                  icon="📋"
+                  file={callcardFile}
+                  inputRef={callcardRef}
+                  onChange={handleCallcardChange}
+                  onClear={() => { setCallcardFile(null); setExtractedDate(null); setDateError(null) }}
+                />
+                <FileInput
+                  label="remapped 파일"
+                  icon="🗂️"
+                  file={remappedFile}
+                  inputRef={remappedRef}
+                  onChange={setRemappedFile}
+                  onClear={() => setRemappedFile(null)}
+                />
+                {extractedDate && (
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 12,
+                    fontSize: 16, color: C.green,
+                    background: 'rgba(16,185,129,.08)', border: `1px solid rgba(16,185,129,.25)`,
+                    borderRadius: 10, padding: '12px 16px',
+                  }}>
+                    <span style={{ fontWeight: 700 }}>서비스 날짜</span>
+                    <span style={{ fontVariantNumeric: 'tabular-nums' }}>{extractedDate}</span>
+                  </div>
+                )}
+                {dateError && (
+                  <div style={{
+                    fontSize: 15, color: C.yellow,
+                    background: 'rgba(245,158,11,.08)', border: `1px solid rgba(245,158,11,.2)`,
+                    borderRadius: 10, padding: '12px 16px',
+                  }}>
+                    {dateError}
+                  </div>
+                )}
+              </div>
             </div>
           </section>
 
-          {/* 자동 실행 */}
+          {/* ── Section 2: 앱미터 데이터 적재 (orange) ── */}
           <section>
-            <div className="section-title"><h2>자동 실행</h2></div>
-            <div className="h-card" style={{ ...CARD, padding: '20px 24px', border: `1px solid rgba(139,92,246,.3)` }}>
-              <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, ${C.purple}, ${C.cyan})` }} />
-              <div style={{ marginBottom: 14 }}>
-                <p style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 2 }}>파이프라인 자동 실행</p>
-                <p style={{ fontSize: 11, color: C.muted }}>4단계를 순서대로 자동 실행합니다</p>
+            <SectionTitle>앱미터 데이터 적재</SectionTitle>
+            <div className="h-card" style={{ ...CARD, padding: '32px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: C.orange }} />
+              <div>
+                <p style={{ fontSize: 17, fontWeight: 700, color: C.text, marginBottom: 6 }}>미터기 데이터 적재</p>
+                <p style={{ fontSize: 15, color: C.muted }}>통계_천안_날짜.xlsx → meter_daily_logs</p>
               </div>
-              <div style={{ marginBottom: 16 }}>
+              <FileInput
+                label="미터기 통계 파일 (통계_천안)"
+                icon="🚖"
+                file={meterFile}
+                inputRef={meterRef}
+                onChange={setMeterFile}
+                onClear={() => { setMeterFile(null); setMeterResult(null); setMeterError(null) }}
+              />
+              {meterError && (
+                <div style={{ fontSize: 15, color: C.red, background: 'rgba(244,63,94,.08)', border: `1px solid rgba(244,63,94,.2)`, borderRadius: 8, padding: '12px 14px' }}>
+                  {meterError}
+                </div>
+              )}
+              {meterResult && (
+                <div style={{ fontSize: 15, color: C.green, background: 'rgba(16,185,129,.08)', border: `1px solid rgba(16,185,129,.2)`, borderRadius: 8, padding: '12px 14px' }}>
+                  처리 완료: {meterResult.driver_count}명 적재 ({meterResult.service_date})
+                </div>
+              )}
+              <button
+                onClick={handleMeterLogs}
+                disabled={meterLoading || !meterFile || anyRunning}
+                style={{
+                  width: '100%', padding: '14px',
+                  background: meterLoading || !meterFile || anyRunning ? 'transparent' : C.orange,
+                  color: meterLoading || !meterFile || anyRunning ? C.muted : '#0b0b0f',
+                  fontSize: 16, fontWeight: 700, borderRadius: 10,
+                  border: `1px solid ${meterLoading || !meterFile || anyRunning ? C.border : 'transparent'}`,
+                  cursor: meterLoading || !meterFile || anyRunning ? 'not-allowed' : 'pointer',
+                  opacity: meterLoading || !meterFile || anyRunning ? 0.5 : 1,
+                  transition: 'all 200ms cubic-bezier(.22,1,.36,1)',
+                }}
+              >
+                {meterLoading ? '적재 중…' : '미터기 데이터 적재'}
+              </button>
+            </div>
+          </section>
+
+          {/* ── Section 3: 파이프라인 자동실행 (purple) ── */}
+          <section>
+            <SectionTitle>파이프라인 자동실행</SectionTitle>
+            <div className="h-card" style={{ ...CARD, padding: '32px', border: `1px solid rgba(139,92,246,.3)` }}>
+              <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: C.purple }} />
+              <div style={{ marginBottom: 20 }}>
+                <p style={{ fontSize: 17, fontWeight: 700, color: C.text, marginBottom: 6 }}>4단계 순차 자동 실행</p>
+                <p style={{ fontSize: 15, color: C.muted }}>기사 로그 → 콜카드 MBTI → 기사 MBTI → 매칭 계산</p>
+              </div>
+              <div style={{ marginBottom: 24 }}>
                 {STEP_META.map(({ key, label }, i) => (
                   <StepRow key={key} index={i + 1} label={label} state={steps[key]} />
                 ))}
@@ -702,10 +718,10 @@ export default function Home() {
                 onClick={handleAutoRun}
                 disabled={autoRunning || !filesReady}
                 style={{
-                  width: '100%', padding: '14px',
+                  width: '100%', padding: '16px',
                   background: autoRunning || !filesReady ? 'transparent' : `linear-gradient(135deg, ${C.purple}, #5b21b6)`,
                   color: autoRunning || !filesReady ? C.muted : '#fff',
-                  fontSize: 14, fontWeight: 700, borderRadius: 12,
+                  fontSize: 17, fontWeight: 700, borderRadius: 12,
                   border: `1px solid ${autoRunning || !filesReady ? C.border : 'transparent'}`,
                   cursor: autoRunning || !filesReady ? 'not-allowed' : 'pointer',
                   opacity: autoRunning || !filesReady ? 0.6 : 1,
@@ -718,55 +734,9 @@ export default function Home() {
             </div>
           </section>
 
-          {/* 미터기 */}
+          {/* ── Section 4: 개별 실행 (green) ── */}
           <section>
-            <div className="section-title"><h2>미터기 데이터 (천안)</h2></div>
-            <div className="h-card" style={{ ...CARD, padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: C.yellow, opacity: 0.7 }} />
-              <div>
-                <p style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 2 }}>미터기 데이터 적재</p>
-                <p style={{ fontSize: 11, color: C.muted }}>통계_천안_날짜.xlsx → meter_daily_logs</p>
-              </div>
-              <FileInput
-                label="미터기 통계 파일"
-                icon="🚖"
-                file={meterFile}
-                inputRef={meterRef}
-                onChange={setMeterFile}
-                onClear={() => { setMeterFile(null); setMeterResult(null); setMeterError(null) }}
-              />
-              {meterError && (
-                <div style={{ fontSize: 12, color: C.red, background: 'rgba(244,63,94,.08)', border: `1px solid rgba(244,63,94,.2)`, borderRadius: 8, padding: '10px 12px' }}>
-                  {meterError}
-                </div>
-              )}
-              {meterResult && (
-                <div style={{ fontSize: 12, color: C.green, background: 'rgba(16,185,129,.08)', border: `1px solid rgba(16,185,129,.2)`, borderRadius: 8, padding: '10px 12px' }}>
-                  처리 완료: {meterResult.driver_count}명 적재 ({meterResult.service_date})
-                </div>
-              )}
-              <button
-                onClick={handleMeterLogs}
-                disabled={meterLoading || !meterFile || anyRunning}
-                style={{
-                  width: '100%', padding: '12px',
-                  background: meterLoading || !meterFile || anyRunning ? 'transparent' : C.yellow,
-                  color: meterLoading || !meterFile || anyRunning ? C.muted : '#0b0b0f',
-                  fontSize: 13, fontWeight: 700, borderRadius: 10,
-                  border: `1px solid ${meterLoading || !meterFile || anyRunning ? C.border : 'transparent'}`,
-                  cursor: meterLoading || !meterFile || anyRunning ? 'not-allowed' : 'pointer',
-                  opacity: meterLoading || !meterFile || anyRunning ? 0.5 : 1,
-                  transition: 'all 200ms cubic-bezier(.22,1,.36,1)',
-                }}
-              >
-                {meterLoading ? '적재 중…' : '미터기 적재'}
-              </button>
-            </div>
-          </section>
-
-          {/* 개별 실행 */}
-          <section>
-            <div className="section-title"><h2>개별 실행</h2></div>
+            <SectionTitle>개별 실행</SectionTitle>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
               <ActionCard
                 title="ASP 콜 분석"
@@ -780,7 +750,7 @@ export default function Home() {
                 result={analyzeResult ? `ASP ${analyzeResult.asp_count}개 · ${analyzeResult.total_rows_processed}건` : undefined}
               >
                 {analyzeDebug && (
-                  <pre style={{ fontSize: 11, color: C.muted, background: 'rgba(244,63,94,.05)', borderRadius: 6, padding: '8px', overflow: 'auto', maxHeight: 80 }}>
+                  <pre style={{ fontSize: 12, color: C.muted, background: 'rgba(244,63,94,.05)', borderRadius: 6, padding: '8px', overflow: 'auto', maxHeight: 80 }}>
                     {JSON.stringify(analyzeDebug, null, 2)}
                   </pre>
                 )}
@@ -798,7 +768,7 @@ export default function Home() {
                 result={driverResult ? `기사 ${driverResult.driver_count}명 적재됨` : undefined}
               >
                 {driverDebug && (
-                  <pre style={{ fontSize: 11, color: C.muted, background: 'rgba(244,63,94,.05)', borderRadius: 6, padding: '8px', overflow: 'auto', maxHeight: 80 }}>
+                  <pre style={{ fontSize: 12, color: C.muted, background: 'rgba(244,63,94,.05)', borderRadius: 6, padding: '8px', overflow: 'auto', maxHeight: 80 }}>
                     {JSON.stringify(driverDebug, null, 2)}
                   </pre>
                 )}
@@ -859,21 +829,18 @@ export default function Home() {
           {/* ASP 분석 상세 결과 */}
           {analyzeResult && (
             <section>
-              <div className="section-title">
-                <h2>분석 결과</h2>
-                <span style={{ fontSize: 12, color: C.muted }}>{analyzeResult.service_date} · ASP {analyzeResult.asp_count}개</span>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <SectionTitle>분석 결과</SectionTitle>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 {analyzeResult.results.map((row) => (
-                  <div key={row.asp_id} className="h-card" style={{ ...CARD, padding: '24px 28px' }}>
+                  <div key={row.asp_id} className="h-card" style={{ ...CARD, padding: '28px 32px' }}>
                     <div style={{
                       position: 'absolute', top: 0, left: 0, right: 0, height: 3,
                       background: row.success_rate >= 0.8 ? C.green : row.success_rate >= 0.5 ? C.yellow : C.red,
                     }} />
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-                      <span style={{ fontSize: 15, fontWeight: 700, color: C.text }}>ASP #{row.asp_id}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+                      <span style={{ fontSize: 18, fontWeight: 700, color: C.text }}>ASP #{row.asp_id}</span>
                       <span style={{
-                        fontSize: 12, fontWeight: 700, padding: '4px 12px', borderRadius: 20,
+                        fontSize: 14, fontWeight: 700, padding: '5px 14px', borderRadius: 20,
                         background: row.success_rate >= 0.8 ? 'rgba(16,185,129,.12)' : row.success_rate >= 0.5 ? 'rgba(245,158,11,.12)' : 'rgba(244,63,94,.12)',
                         color: row.success_rate >= 0.8 ? C.green : row.success_rate >= 0.5 ? C.yellow : C.red,
                         border: `1px solid ${row.success_rate >= 0.8 ? 'rgba(16,185,129,.3)' : row.success_rate >= 0.5 ? 'rgba(245,158,11,.3)' : 'rgba(244,63,94,.3)'}`,
@@ -881,7 +848,7 @@ export default function Home() {
                         수락률 {(row.success_rate * 100).toFixed(1)}%
                       </span>
                     </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8, marginBottom: row.ai_summary ? 16 : 0 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10, marginBottom: row.ai_summary ? 18 : 0 }}>
                       {[
                         { label: '총 콜', value: row.total_calls, color: C.text },
                         { label: '수락', value: row.success_count, color: C.green },
@@ -891,20 +858,20 @@ export default function Home() {
                       ].map(({ label, value, color }) => (
                         <div key={label} style={{
                           textAlign: 'center', background: 'rgba(255,255,255,.02)',
-                          border: `1px solid ${C.border}`, borderRadius: 10, padding: '12px 8px',
+                          border: `1px solid ${C.border}`, borderRadius: 10, padding: '14px 8px',
                         }}>
-                          <div style={{ fontSize: 20, fontWeight: 800, color, marginBottom: 4, fontVariantNumeric: 'tabular-nums' }}>{value.toLocaleString()}</div>
-                          <div style={{ fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</div>
+                          <div style={{ fontSize: 24, fontWeight: 800, color, marginBottom: 6, fontVariantNumeric: 'tabular-nums' }}>{value.toLocaleString()}</div>
+                          <div style={{ fontSize: 12, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</div>
                         </div>
                       ))}
                     </div>
                     {row.ai_summary && (
                       <div style={{
                         background: 'rgba(34,211,238,.06)', border: `1px solid rgba(34,211,238,.15)`,
-                        borderRadius: 10, padding: '14px 16px',
+                        borderRadius: 10, padding: '16px 18px',
                       }}>
-                        <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.cyan, display: 'block', marginBottom: 8 }}>AI 요약</span>
-                        <p style={{ fontSize: 13, color: C.sub, lineHeight: 1.7 }}>{row.ai_summary}</p>
+                        <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.cyan, display: 'block', marginBottom: 10 }}>AI 요약</span>
+                        <p style={{ fontSize: 16, color: C.sub, lineHeight: 1.7 }}>{row.ai_summary}</p>
                       </div>
                     )}
                   </div>

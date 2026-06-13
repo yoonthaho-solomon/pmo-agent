@@ -80,6 +80,8 @@ const C = {
   yellow: '#F59E0B',
   green: '#10B981',
   purple: '#8B5CF6',
+  orange: '#FB923C',
+  blue: '#3B82F6',
   text: '#F1F5F9',
   sub: '#94A3B8',
   muted: '#4E6080',
@@ -99,7 +101,7 @@ const TOOLTIP_STYLE = {
     background: 'rgba(15,22,40,0.98)',
     border: `1px solid ${C.border}`,
     borderRadius: 12,
-    fontSize: 13,
+    fontSize: 14,
   },
   labelStyle: { color: C.text, fontWeight: 700 },
   itemStyle: { color: C.sub },
@@ -174,9 +176,9 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 24 }}>
       <h2 style={{
-        fontSize: 12,
+        fontSize: 14,
         fontWeight: 700,
-        letterSpacing: '0.1em',
+        letterSpacing: '0.08em',
         textTransform: 'uppercase',
         color: C.sub,
         whiteSpace: 'nowrap',
@@ -190,13 +192,47 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 
 function Label({ children, color }: { children: React.ReactNode; color?: string }) {
   return (
-    <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: color ?? C.muted, marginBottom: 10 }}>
+    <p style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: color ?? C.muted, marginBottom: 12 }}>
       {children}
     </p>
   )
 }
 
-// ─── Section 0: 데이터 현황 ───────────────────────────────────────────────────
+// ─── Section 0: KPI 요약 카드 5개 ────────────────────────────────────────────
+
+function BigStatCard({
+  label, value, unit, loading, color,
+}: {
+  label: string
+  value: string | null
+  unit?: string
+  loading: boolean
+  color: string
+}) {
+  const numSize = value
+    ? value.length > 8 ? 48 : value.length > 6 ? 56 : 64
+    : 64
+
+  return (
+    <div className="h-card" style={{ ...CARD, padding: '32px 36px' }}>
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: color, opacity: 0.8 }} />
+      <Label>{label}</Label>
+      <p style={{
+        fontSize: numSize,
+        fontWeight: 800,
+        color: loading || !value ? C.muted : color,
+        letterSpacing: '-0.05em',
+        lineHeight: 1,
+        fontVariantNumeric: 'tabular-nums',
+      }}>
+        {loading ? '…' : (value ?? '—')}
+        {!loading && value && unit && (
+          <span style={{ fontSize: 22, fontWeight: 600, color: C.muted, marginLeft: 8 }}>{unit}</span>
+        )}
+      </p>
+    </div>
+  )
+}
 
 function StatusBar() {
   const [s, setS] = useState<{
@@ -206,22 +242,20 @@ function StatusBar() {
     driverCount: number | null
     callCount: number | null
     avgReliability: number | null
-    lastRun: string | null
   }>({
     minDate: null, maxDate: null, totalDays: null,
-    driverCount: null, callCount: null, avgReliability: null, lastRun: null,
+    driverCount: null, callCount: null, avgReliability: null,
   })
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     ;(async () => {
-      const [minRes, maxRes, driverRes, callRes, reliRes, logRes] = await Promise.all([
+      const [minRes, maxRes, driverRes, callRes, reliRes] = await Promise.all([
         supabase.from('driver_daily_logs').select('service_date').order('service_date', { ascending: true }).limit(1),
         supabase.from('driver_daily_logs').select('service_date').order('service_date', { ascending: false }).limit(1),
         supabase.from('driver_mbti').select('*', { count: 'exact', head: true }),
         supabase.from('callcard_mbti').select('*', { count: 'exact', head: true }),
         supabase.from('driver_mbti').select('reliability'),
-        supabase.from('agent_logs').select('run_date').order('run_date', { ascending: false }).limit(1),
       ])
 
       const minDate = (minRes.data as { service_date: string }[] | null)?.[0]?.service_date ?? null
@@ -230,78 +264,214 @@ function StatusBar() {
 
       const rels = (reliRes.data as { reliability: number }[] | null) ?? []
       const avgReliability = rels.length > 0
-        ? rels.reduce((s, r) => s + r.reliability, 0) / rels.length
+        ? rels.reduce((sum, r) => sum + r.reliability, 0) / rels.length
         : null
 
-      setS({
-        minDate,
-        maxDate,
-        totalDays,
-        driverCount: driverRes.count,
-        callCount: callRes.count,
-        avgReliability,
-        lastRun: (logRes.data as { run_date: string }[] | null)?.[0]?.run_date ?? null,
-      })
+      setS({ minDate, maxDate, totalDays, driverCount: driverRes.count, callCount: callRes.count, avgReliability })
       setLoading(false)
     })()
   }, [])
 
-  const val = (v: string | null) => loading ? '…' : (v ?? '—')
-
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 14 }}>
-      {/* 적재 기간 */}
-      <div className="h-card" style={{ ...CARD, padding: '28px 32px', gridColumn: 'span 2' }}>
-        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, ${C.cyan}, ${C.purple})` }} />
-        <Label color={C.cyan}>적재 기간</Label>
-        <p style={{ fontSize: 20, fontWeight: 800, color: C.text, letterSpacing: '-0.03em', fontVariantNumeric: 'tabular-nums', lineHeight: 1.2 }}>
-          {loading ? '…' : (s.minDate && s.maxDate
-            ? <>{s.minDate} <span style={{ color: C.muted }}>~</span> {s.maxDate}</>
-            : '—'
-          )}
-        </p>
+    <section>
+      <SectionTitle>KPI 요약</SectionTitle>
+      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr', gap: 14 }}>
+        {/* 적재 기간 */}
+        <div className="h-card" style={{ ...CARD, padding: '32px 36px' }}>
+          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, ${C.cyan}, ${C.purple})` }} />
+          <Label color={C.cyan}>적재 기간</Label>
+          <p style={{
+            fontSize: 22, fontWeight: 800, color: C.text,
+            letterSpacing: '-0.03em', fontVariantNumeric: 'tabular-nums', lineHeight: 1.3,
+          }}>
+            {loading ? '…' : (s.minDate && s.maxDate
+              ? <>{s.minDate}<br /><span style={{ color: C.muted, fontSize: 16, fontWeight: 600 }}>~</span><br />{s.maxDate}</>
+              : '—'
+            )}
+          </p>
+        </div>
+
+        <BigStatCard label="총 적재 일수" value={s.totalDays != null ? s.totalDays.toLocaleString() : null} unit="일" loading={loading} color={C.cyan} />
+        <BigStatCard label="총 기사 수" value={s.driverCount != null ? s.driverCount.toLocaleString() : null} unit="명" loading={loading} color={C.orange} />
+        <BigStatCard label="총 콜 수" value={s.callCount != null ? s.callCount.toLocaleString() : null} unit="건" loading={loading} color={C.cyan} />
+        <BigStatCard
+          label="평균 Reliability"
+          value={s.avgReliability != null ? pct(s.avgReliability) : null}
+          loading={loading}
+          color={C.green}
+        />
       </div>
-
-      <BigStatCard label="총 적재 일수" value={s.totalDays != null ? s.totalDays.toLocaleString() : null} unit="일" loading={loading} color={C.cyan} />
-      <BigStatCard label="총 기사 수" value={s.driverCount != null ? s.driverCount.toLocaleString() : null} unit="명" loading={loading} color={C.yellow} />
-      <BigStatCard label="총 콜 수" value={s.callCount != null ? s.callCount.toLocaleString() : null} unit="건" loading={loading} color={C.green} />
-      <BigStatCard label="마지막 실행" value={val(s.lastRun)} loading={false} color={C.sub} small />
-    </div>
+    </section>
   )
 }
 
-function BigStatCard({
-  label, value, unit, loading, color, small,
-}: {
-  label: string
-  value: string | null
-  unit?: string
-  loading: boolean
-  color: string
-  small?: boolean
-}) {
+// ─── Section 1: MBTI 매칭 프로세스 시각화 ────────────────────────────────────
+
+function MbtiProcessSection() {
+  const dimGroups = [
+    { label: '시간대', dims: ['새벽 (0-5시)', '오전 (6-11시)', '낮 (12-17시)', '야간 (18-23시)'], count: 4, color: C.cyan },
+    { label: '요일', dims: ['월', '화', '수', '목', '금', '토', '일'], count: 7, color: C.purple },
+    { label: '거리', dims: ['단거리 (≤3km)', '중거리 (3-8km)', '장거리 (>8km)'], count: 3, color: C.yellow },
+    { label: '요금대', dims: ['저요금 (≤1만원)', '중요금 (1-2만원)', '고요금 (>2만원)'], count: 3, color: C.orange },
+    { label: '유형', dims: ['유료콜', '무료콜', '서지콜', '일반콜'], count: 4, color: C.green },
+    { label: '배차 근접도', dims: ['ETA 거리 점수 (0~1)'], count: 1, color: C.blue },
+  ]
+
+  const colCard: React.CSSProperties = {
+    background: C.bgCard,
+    border: `1px solid ${C.border}`,
+    borderRadius: 16,
+    padding: '28px 24px',
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 16,
+    position: 'relative',
+    overflow: 'hidden',
+  }
+
   return (
-    <div className="h-card" style={{ ...CARD, padding: '28px 32px' }}>
-      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: color, opacity: 0.7 }} />
-      <Label>{label}</Label>
-      <p style={{
-        fontSize: small ? 18 : value && value.length > 6 ? 44 : value && value.length > 4 ? 54 : 64,
-        fontWeight: 800,
-        color: loading || !value ? C.muted : color,
-        letterSpacing: small ? '-0.01em' : '-0.05em',
-        lineHeight: 1,
-        fontVariantNumeric: 'tabular-nums',
-      }}>
-        {loading ? '…' : (value ?? '—')}
-        {!loading && value && unit && (
-          <span style={{ fontSize: small ? 13 : 22, fontWeight: 600, color: C.muted, marginLeft: 6 }}>{unit}</span>
-        )}
-      </p>
-    </div>
+    <section>
+      <SectionTitle>MBTI 매칭 프로세스</SectionTitle>
+      <div className="h-card" style={{ ...CARD, padding: '40px' }}>
+        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, ${C.cyan}, ${C.purple}, ${C.green})` }} />
+
+        {/* Top 3-column layout */}
+        <div style={{ display: 'flex', gap: 20, alignItems: 'stretch', marginBottom: 32 }}>
+
+          {/* Left: 콜카드 MBTI */}
+          <div style={{ ...colCard, border: `1px solid rgba(34,211,238,.3)` }}>
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: C.cyan }} />
+            <div style={{ textAlign: 'center', marginBottom: 8 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: C.cyan, marginBottom: 6 }}>콜카드 MBTI</div>
+              <div style={{ fontSize: 13, color: C.muted }}>22차원 one-hot 벡터</div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {dimGroups.map(g => (
+                <div key={g.label} style={{
+                  display: 'flex', alignItems: 'flex-start', gap: 10,
+                  background: 'rgba(255,255,255,.02)', borderRadius: 10,
+                  padding: '10px 14px', border: `1px solid rgba(255,255,255,.04)`,
+                }}>
+                  <span style={{
+                    fontSize: 12, fontWeight: 800,
+                    width: 22, height: 22, borderRadius: '50%',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    background: `${g.color}22`, color: g.color, flexShrink: 0,
+                  }}>{g.count}</span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: g.color, marginBottom: 3 }}>{g.label}</div>
+                    <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.5 }}>{g.dims.join(' · ')}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Center arrow + engine */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, minWidth: 180 }}>
+            <div style={{ fontSize: 28, color: C.muted }}>→</div>
+            <div style={{
+              background: 'rgba(139,92,246,.08)', border: `1px solid rgba(139,92,246,.35)`,
+              borderRadius: 16, padding: '24px 20px', textAlign: 'center', width: '100%',
+            }}>
+              <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: C.purple, marginBottom: 16 }}>코사인 유사도</div>
+              <div style={{
+                fontFamily: 'monospace', fontSize: 16, fontWeight: 700,
+                color: C.text, lineHeight: 1.7, marginBottom: 16,
+                textAlign: 'left',
+              }}>
+                <div style={{ color: C.cyan }}>Σ(aᵢ × bᵢ)</div>
+                <div style={{ borderTop: `1px solid ${C.border}`, margin: '8px 0', paddingTop: 8, color: C.cyan }}>
+                  √Σaᵢ² × √Σbᵢ²
+                </div>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {[
+                  { score: '0.9+', label: '매우 적합', color: C.green },
+                  { score: '0.6~', label: '적합', color: C.cyan },
+                  { score: '0.3~', label: '보통', color: C.yellow },
+                  { score: '~0.3', label: '부적합', color: C.red },
+                ].map(r => (
+                  <div key={r.score} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+                    <span style={{ fontSize: 14, fontWeight: 800, fontFamily: 'monospace', color: r.color }}>{r.score}</span>
+                    <span style={{ fontSize: 12, color: C.muted }}>{r.label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div style={{ fontSize: 28, color: C.muted }}>→</div>
+          </div>
+
+          {/* Right: 기사 MBTI */}
+          <div style={{ ...colCard, border: `1px solid rgba(16,185,129,.3)` }}>
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: C.green }} />
+            <div style={{ textAlign: 'center', marginBottom: 8 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: C.green, marginBottom: 6 }}>기사 MBTI</div>
+              <div style={{ fontSize: 13, color: C.muted }}>22차원 누적 확률 벡터</div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {dimGroups.map(g => (
+                <div key={g.label} style={{
+                  display: 'flex', alignItems: 'flex-start', gap: 10,
+                  background: 'rgba(255,255,255,.02)', borderRadius: 10,
+                  padding: '10px 14px', border: `1px solid rgba(255,255,255,.04)`,
+                }}>
+                  <span style={{
+                    fontSize: 12, fontWeight: 800,
+                    width: 22, height: 22, borderRadius: '50%',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    background: `${g.color}22`, color: g.color, flexShrink: 0,
+                  }}>{g.count}</span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: g.color, marginBottom: 3 }}>{g.label}</div>
+                    <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.5 }}>score_* 정규화 비율</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Bottom flow */}
+        <div style={{
+          borderTop: `1px solid ${C.border}`,
+          paddingTop: 28,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0,
+        }}>
+          {[
+            { label: '콜카드', sub: 'raw 데이터', color: C.cyan, accent: `rgba(34,211,238,.15)` },
+            { arrow: true },
+            { label: '22차원 인코딩', sub: 'one-hot 변환', color: C.purple, accent: `rgba(139,92,246,.15)` },
+            { arrow: true },
+            { label: '코사인 유사도', sub: '전체 기사 계산', color: C.yellow, accent: `rgba(245,158,11,.15)` },
+            { arrow: true },
+            { label: '추천기사 TOP 10', sub: '코사인 점수 정렬', color: C.green, accent: `rgba(16,185,129,.15)` },
+          ].map((item, i) => {
+            if ('arrow' in item) {
+              return (
+                <div key={i} style={{ fontSize: 24, color: C.muted, padding: '0 12px' }}>→</div>
+              )
+            }
+            return (
+              <div key={i} style={{
+                background: item.accent,
+                border: `1px solid ${item.color}44`,
+                borderRadius: 12, padding: '16px 20px', textAlign: 'center',
+                minWidth: 160,
+              }}>
+                <div style={{ fontSize: 16, fontWeight: 800, color: item.color, marginBottom: 4 }}>{item.label}</div>
+                <div style={{ fontSize: 13, color: C.muted }}>{item.sub}</div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </section>
   )
 }
 
-// ─── Section 1: KPI 추이 ─────────────────────────────────────────────────────
+// ─── Section 2: KPI 추이 ─────────────────────────────────────────────────────
 
 function KpiSection() {
   const [asp, setAsp] = useState(0)
@@ -351,9 +521,9 @@ function KpiSection() {
               key={o.value}
               onClick={() => setAsp(o.value)}
               style={{
-                padding: '6px 14px',
+                padding: '6px 16px',
                 borderRadius: 8,
-                fontSize: 13,
+                fontSize: 14,
                 fontWeight: 600,
                 cursor: 'pointer',
                 transition: 'all 200ms cubic-bezier(.22,1,.36,1)',
@@ -368,241 +538,44 @@ function KpiSection() {
         </div>
       </div>
 
-      <div className="h-card" style={{ ...CARD, padding: '36px 40px' }}>
+      <div className="h-card" style={{ ...CARD, padding: '40px' }}>
         <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, ${C.cyan}, ${C.red})`, opacity: 0.5 }} />
         {loading ? (
-          <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.muted, fontSize: 15 }}>불러오는 중…</div>
+          <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.muted, fontSize: 18 }}>불러오는 중…</div>
         ) : chartData.length === 0 ? (
-          <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.muted, fontSize: 15 }}>데이터가 없습니다</div>
+          <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.muted, fontSize: 18 }}>데이터가 없습니다</div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 48 }}>
             <div>
-              <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: C.muted, marginBottom: 20 }}>
+              <p style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.muted, marginBottom: 20 }}>
                 수락률 · EXPIRED율 (%)
               </p>
-              <ResponsiveContainer width="100%" height={220}>
+              <ResponsiveContainer width="100%" height={240}>
                 <LineChart data={chartData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(30,45,74,0.6)" />
-                  <XAxis dataKey="date" tick={{ fill: C.muted, fontSize: 12 }} />
-                  <YAxis tick={{ fill: C.muted, fontSize: 12 }} unit="%" domain={[0, 100]} />
+                  <XAxis dataKey="date" tick={{ fill: C.muted, fontSize: 13 }} />
+                  <YAxis tick={{ fill: C.muted, fontSize: 13 }} unit="%" domain={[0, 100]} />
                   <Tooltip {...TOOLTIP_STYLE} />
-                  <Legend wrapperStyle={{ fontSize: 13, color: C.sub }} />
+                  <Legend wrapperStyle={{ fontSize: 14, color: C.sub }} />
                   <Line type="monotone" dataKey="success_rate" name="수락률" stroke={C.cyan} strokeWidth={2.5} dot={false} />
                   <Line type="monotone" dataKey="expired_rate" name="EXPIRED율" stroke={C.red} strokeWidth={2.5} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
             <div>
-              <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: C.muted, marginBottom: 20 }}>
+              <p style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.muted, marginBottom: 20 }}>
                 호출수
               </p>
-              <ResponsiveContainer width="100%" height={160}>
+              <ResponsiveContainer width="100%" height={180}>
                 <LineChart data={chartData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(30,45,74,0.6)" />
-                  <XAxis dataKey="date" tick={{ fill: C.muted, fontSize: 12 }} />
-                  <YAxis tick={{ fill: C.muted, fontSize: 12 }} />
+                  <XAxis dataKey="date" tick={{ fill: C.muted, fontSize: 13 }} />
+                  <YAxis tick={{ fill: C.muted, fontSize: 13 }} />
                   <Tooltip {...TOOLTIP_STYLE} />
                   <Line type="monotone" dataKey="total_calls" name="호출수" stroke={C.yellow} strokeWidth={2.5} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
-          </div>
-        )}
-      </div>
-    </section>
-  )
-}
-
-// ─── Section 2: 기사 MBTI 검색 ────────────────────────────────────────────────
-
-function MbtiSection() {
-  const [query, setQuery] = useState('')
-  const [aspFilter, setAspFilter] = useState<number | ''>('')
-  const [drivers, setDrivers] = useState<DriverMbtiRow[]>([])
-  const [acceptRates, setAcceptRates] = useState<Map<string, AcceptRates>>(new Map())
-  const [loading, setLoading] = useState(false)
-  const [searched, setSearched] = useState(false)
-
-  async function search() {
-    if (!query && !aspFilter) return
-    setLoading(true)
-    setSearched(true)
-    setDrivers([])
-    setAcceptRates(new Map())
-
-    let q = supabase.from('driver_mbti').select('*')
-    if (query) q = q.ilike('driver_id', `%${query}%`)
-    if (aspFilter) q = q.eq('asp_id', aspFilter)
-    const { data } = await q.limit(10)
-    const results = (data ?? []) as DriverMbtiRow[]
-    setDrivers(results)
-
-    if (results.length > 0) {
-      const ids = results.map(r => r.driver_id)
-      const { data: logs } = await supabase
-        .from('driver_daily_logs')
-        .select('driver_id, service_date, total_accepted, total_received')
-        .in('driver_id', ids)
-        .gte('service_date', cutoffStr(30))
-
-      const d7 = cutoffStr(7)
-      const agg = new Map<string, { a7: number; r7: number; a30: number; r30: number }>()
-      for (const log of (logs ?? []) as { driver_id: string; service_date: string; total_accepted: number; total_received: number }[]) {
-        const e = agg.get(log.driver_id) ?? { a7: 0, r7: 0, a30: 0, r30: 0 }
-        e.a30 += log.total_accepted
-        e.r30 += log.total_received
-        if (log.service_date >= d7) { e.a7 += log.total_accepted; e.r7 += log.total_received }
-        agg.set(log.driver_id, e)
-      }
-
-      const rates = new Map<string, AcceptRates>()
-      for (const [id, e] of agg.entries()) {
-        rates.set(id, {
-          rate7: e.r7 > 0 ? e.a7 / e.r7 : null,
-          rate30: e.r30 > 0 ? e.a30 / e.r30 : null,
-        })
-      }
-      setAcceptRates(rates)
-    }
-
-    setLoading(false)
-  }
-
-  const inputStyle: React.CSSProperties = {
-    background: C.bgCard,
-    border: `1px solid ${C.border}`,
-    borderRadius: 10,
-    padding: '12px 16px',
-    fontSize: 14,
-    color: C.text,
-    outline: 'none',
-    width: '100%',
-    transition: 'border-color 200ms',
-  }
-
-  return (
-    <section>
-      <SectionTitle>기사 MBTI 검색</SectionTitle>
-      <div className="h-card" style={{ ...CARD, padding: '36px 40px' }}>
-        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: C.purple, opacity: 0.6 }} />
-        <div style={{ display: 'flex', gap: 12, marginBottom: 32 }}>
-          <input
-            type="text"
-            placeholder="driver_id 검색"
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && search()}
-            style={{ ...inputStyle, flex: 1 }}
-          />
-          <select
-            value={aspFilter}
-            onChange={e => setAspFilter(e.target.value === '' ? '' : Number(e.target.value))}
-            style={{ ...inputStyle, width: 140 }}
-          >
-            <option value="">ASP 전체</option>
-            {ASP_OPTS.slice(1).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
-          <button
-            onClick={search}
-            disabled={loading || (!query && !aspFilter)}
-            style={{
-              padding: '12px 28px',
-              background: loading || (!query && !aspFilter) ? 'transparent' : `linear-gradient(135deg, ${C.purple}, #5b21b6)`,
-              color: loading || (!query && !aspFilter) ? C.muted : '#fff',
-              fontSize: 14,
-              fontWeight: 700,
-              borderRadius: 10,
-              border: `1px solid ${loading || (!query && !aspFilter) ? C.border : 'transparent'}`,
-              cursor: loading || (!query && !aspFilter) ? 'not-allowed' : 'pointer',
-              opacity: loading || (!query && !aspFilter) ? 0.5 : 1,
-              whiteSpace: 'nowrap',
-              transition: 'all 200ms cubic-bezier(.22,1,.36,1)',
-              boxShadow: !loading && (query || aspFilter) ? `0 4px 20px rgba(139,92,246,.35)` : 'none',
-            }}
-          >
-            {loading ? '검색 중…' : '검색'}
-          </button>
-        </div>
-
-        {searched && !loading && drivers.length === 0 && (
-          <p style={{ textAlign: 'center', color: C.muted, fontSize: 15, padding: '32px 0' }}>검색 결과가 없습니다</p>
-        )}
-
-        {drivers.length > 0 && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: 16 }}>
-            {drivers.map(d => {
-              const { timeLabel, distLabel, prefArea } = driverSummary(d)
-              const rates = acceptRates.get(d.driver_id)
-              return (
-                <div key={d.driver_id} style={{
-                  background: C.bgCard,
-                  border: `1px solid ${C.border}`,
-                  borderRadius: 14,
-                  padding: '24px 28px',
-                  transition: 'all 200ms cubic-bezier(.22,1,.36,1)',
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
-                    <div>
-                      <p style={{ fontSize: 16, fontWeight: 700, fontFamily: 'monospace', color: C.text }}>{d.driver_id}</p>
-                      <p style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>ASP {d.asp_id}</p>
-                    </div>
-                    <span style={{
-                      fontSize: 12, fontWeight: 700,
-                      background: 'rgba(34,211,238,0.1)',
-                      color: C.cyan,
-                      border: `1px solid rgba(34,211,238,0.25)`,
-                      borderRadius: 20,
-                      padding: '4px 12px',
-                    }}>
-                      신뢰도 {pct(d.reliability)}
-                    </span>
-                  </div>
-
-                  <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
-                    <div style={{ flexShrink: 0 }}>
-                      <RadarChart width={160} height={160} data={toRadarData(d)} margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
-                        <PolarGrid stroke={C.border} />
-                        <PolarAngleAxis dataKey="subject" tick={{ fill: C.muted, fontSize: 9 }} />
-                        <PolarRadiusAxis angle={90} domain={[0, 100]} tick={false} axisLine={false} />
-                        <Radar dataKey="value" stroke={C.cyan} fill={C.cyan} fillOpacity={0.12} strokeWidth={1.5} />
-                      </RadarChart>
-                    </div>
-
-                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 12, paddingTop: 8 }}>
-                      <div>
-                        <span style={{ fontSize: 12, color: C.muted }}>유형 </span>
-                        <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{timeLabel} · {distLabel} 선호</span>
-                      </div>
-                      <div>
-                        <span style={{ fontSize: 12, color: C.muted }}>선호지역 </span>
-                        <span style={{ fontSize: 12, fontFamily: 'monospace', color: C.sub }}>{prefArea}</span>
-                      </div>
-                      <div>
-                        <span style={{ fontSize: 12, color: C.muted }}>데이터 </span>
-                        <span style={{ fontSize: 13, color: C.sub }}>{d.data_days}일치</span>
-                      </div>
-                      <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 12, marginTop: 4 }}>
-                        <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.muted, marginBottom: 10 }}>수락률</p>
-                        <div style={{ display: 'flex', gap: 24 }}>
-                          <div>
-                            <span style={{ fontSize: 12, color: C.muted }}>7일 </span>
-                            <span style={{ fontSize: 15, fontWeight: 700, color: rates?.rate7 != null ? C.cyan : C.muted }}>
-                              {rates?.rate7 != null ? pct(rates.rate7) : '—'}
-                            </span>
-                          </div>
-                          <div>
-                            <span style={{ fontSize: 12, color: C.muted }}>30일 </span>
-                            <span style={{ fontSize: 15, fontWeight: 700, color: rates?.rate30 != null ? C.cyan : C.muted }}>
-                              {rates?.rate30 != null ? pct(rates.rate30) : '—'}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
           </div>
         )}
       </div>
@@ -634,9 +607,7 @@ function SimulatorSection() {
 
   async function run() {
     if (!form.asp_id) { setError('asp_id를 입력하세요'); return }
-    setLoading(true)
-    setError(null)
-    setResult(null)
+    setLoading(true); setError(null); setResult(null)
     try {
       const res = await fetch('/api/recommend', {
         method: 'POST',
@@ -656,11 +627,8 @@ function SimulatorSection() {
       const json = await res.json()
       if (!res.ok) { setError(json.error ?? '오류 발생'); return }
       setResult(json)
-    } catch (e) {
-      setError(String(e))
-    } finally {
-      setLoading(false)
-    }
+    } catch (e) { setError(String(e)) }
+    finally { setLoading(false) }
   }
 
   const inputStyle: React.CSSProperties = {
@@ -668,8 +636,8 @@ function SimulatorSection() {
     background: C.bgCard,
     border: `1px solid ${C.border}`,
     borderRadius: 10,
-    padding: '12px 16px',
-    fontSize: 14,
+    padding: '14px 16px',
+    fontSize: 16,
     color: C.text,
     outline: 'none',
     transition: 'border-color 200ms',
@@ -677,18 +645,18 @@ function SimulatorSection() {
 
   const labelStyle: React.CSSProperties = {
     display: 'block',
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: 700,
     letterSpacing: '0.08em',
     textTransform: 'uppercase',
     color: C.muted,
-    marginBottom: 8,
+    marginBottom: 10,
   }
 
   return (
     <section>
       <SectionTitle>매칭 시뮬레이터</SectionTitle>
-      <div className="h-card" style={{ ...CARD, padding: '36px 40px' }}>
+      <div className="h-card" style={{ ...CARD, padding: '40px' }}>
         <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: C.green, opacity: 0.6 }} />
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 20, marginBottom: 28 }}>
           <div>
@@ -721,14 +689,14 @@ function SimulatorSection() {
             <label style={labelStyle}>예상 요금 (원)</label>
             <input type="number" value={form.expected_fare} onChange={e => setField('expected_fare', e.target.value)} style={inputStyle} />
           </div>
-          <div style={{ display: 'flex', gap: 24, alignItems: 'flex-end', paddingBottom: 4 }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-              <input type="checkbox" checked={form.is_paid} onChange={e => setField('is_paid', e.target.checked)} style={{ width: 16, height: 16, accentColor: C.cyan }} />
-              <span style={{ fontSize: 14, color: C.sub }}>유료콜</span>
+          <div style={{ display: 'flex', gap: 24, alignItems: 'flex-end', paddingBottom: 6 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+              <input type="checkbox" checked={form.is_paid} onChange={e => setField('is_paid', e.target.checked)} style={{ width: 18, height: 18, accentColor: C.cyan }} />
+              <span style={{ fontSize: 16, color: C.sub }}>유료콜</span>
             </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-              <input type="checkbox" checked={form.is_surge} onChange={e => setField('is_surge', e.target.checked)} style={{ width: 16, height: 16, accentColor: C.cyan }} />
-              <span style={{ fontSize: 14, color: C.sub }}>탄력요금</span>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+              <input type="checkbox" checked={form.is_surge} onChange={e => setField('is_surge', e.target.checked)} style={{ width: 18, height: 18, accentColor: C.cyan }} />
+              <span style={{ fontSize: 16, color: C.sub }}>탄력요금</span>
             </label>
           </div>
         </div>
@@ -737,13 +705,10 @@ function SimulatorSection() {
           onClick={run}
           disabled={loading}
           style={{
-            width: '100%',
-            padding: '16px',
+            width: '100%', padding: '18px',
             background: loading ? 'transparent' : `linear-gradient(135deg, ${C.green}, #059669)`,
             color: loading ? C.muted : '#fff',
-            fontSize: 15,
-            fontWeight: 700,
-            borderRadius: 12,
+            fontSize: 17, fontWeight: 700, borderRadius: 12,
             border: loading ? `1px solid ${C.border}` : '1px solid transparent',
             cursor: loading ? 'not-allowed' : 'pointer',
             transition: 'all 200ms cubic-bezier(.22,1,.36,1)',
@@ -754,41 +719,37 @@ function SimulatorSection() {
         </button>
 
         {error && (
-          <p style={{ marginTop: 16, fontSize: 13, color: C.red, background: 'rgba(244,63,94,0.08)', border: `1px solid rgba(244,63,94,0.25)`, borderRadius: 10, padding: '12px 16px' }}>
+          <p style={{ marginTop: 16, fontSize: 16, color: C.red, background: 'rgba(244,63,94,0.08)', border: `1px solid rgba(244,63,94,0.25)`, borderRadius: 10, padding: '14px 16px' }}>
             {error}
           </p>
         )}
 
         {result && (
           <div style={{ marginTop: 28 }}>
-            <p style={{ fontSize: 13, color: C.muted, marginBottom: 16 }}>
+            <p style={{ fontSize: 16, color: C.muted, marginBottom: 16 }}>
               기사 풀 <span style={{ color: C.text, fontWeight: 700 }}>{result.driver_pool_size.toLocaleString()}명</span> 중 TOP 10
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {result.recommended_drivers.map(d => (
                 <div key={d.driver_id} style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 16,
-                  background: C.bgCard,
-                  border: `1px solid ${C.border}`,
-                  borderRadius: 10,
-                  padding: '14px 20px',
+                  display: 'flex', alignItems: 'center', gap: 16,
+                  background: C.bgCard, border: `1px solid ${C.border}`,
+                  borderRadius: 10, padding: '16px 20px',
                   transition: 'all 200ms cubic-bezier(.22,1,.36,1)',
                 }}>
                   <span style={{
-                    width: 28, height: 28, borderRadius: '50%',
+                    width: 32, height: 32, borderRadius: '50%',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 12, fontWeight: 800, flexShrink: 0,
+                    fontSize: 13, fontWeight: 800, flexShrink: 0,
                     background: d.rank <= 3 ? 'rgba(245,158,11,0.18)' : `rgba(30,45,74,0.5)`,
                     color: d.rank <= 3 ? C.yellow : C.muted,
                     border: `1px solid ${d.rank <= 3 ? 'rgba(245,158,11,0.35)' : C.border}`,
                   }}>
                     {d.rank}
                   </span>
-                  <span style={{ fontFamily: 'monospace', fontSize: 14, color: C.text, width: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.driver_id}</span>
-                  <span style={{ fontSize: 14, fontWeight: 700, color: C.cyan, width: 52, textAlign: 'right' }}>{(d.cosine_score * 100).toFixed(1)}%</span>
-                  <span style={{ fontSize: 13, color: C.muted, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.match_reason}</span>
+                  <span style={{ fontFamily: 'monospace', fontSize: 15, color: C.text, width: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.driver_id}</span>
+                  <span style={{ fontSize: 16, fontWeight: 700, color: C.cyan, width: 58, textAlign: 'right' }}>{(d.cosine_score * 100).toFixed(1)}%</span>
+                  <span style={{ fontSize: 14, color: C.muted, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.match_reason}</span>
                 </div>
               ))}
             </div>
@@ -822,24 +783,19 @@ function LogsSection() {
       <SectionTitle>실행 로그</SectionTitle>
       <div className="h-card" style={{ ...CARD, overflow: 'hidden' }}>
         {loading ? (
-          <div style={{ height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.muted, fontSize: 15 }}>불러오는 중…</div>
+          <div style={{ height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.muted, fontSize: 18 }}>불러오는 중…</div>
         ) : logs.length === 0 ? (
-          <div style={{ height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.muted, fontSize: 15 }}>로그가 없습니다</div>
+          <div style={{ height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.muted, fontSize: 18 }}>로그가 없습니다</div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 16 }}>
               <thead>
                 <tr style={{ borderBottom: `1px solid ${C.border}` }}>
                   {['날짜', '에이전트', '처리 행수', '상태', '소요시간'].map(h => (
                     <th key={h} style={{
-                      textAlign: 'left',
-                      fontSize: 11,
-                      fontWeight: 700,
-                      letterSpacing: '0.08em',
-                      textTransform: 'uppercase',
-                      color: C.muted,
-                      padding: '20px 24px',
-                      whiteSpace: 'nowrap',
+                      textAlign: 'left', fontSize: 13, fontWeight: 700,
+                      letterSpacing: '0.08em', textTransform: 'uppercase',
+                      color: C.muted, padding: '22px 28px', whiteSpace: 'nowrap',
                     }}>{h}</th>
                   ))}
                 </tr>
@@ -847,16 +803,12 @@ function LogsSection() {
               <tbody>
                 {logs.map((log, i) => (
                   <tr key={i} style={{ borderBottom: `1px solid ${C.border}` }}>
-                    <td style={{ padding: '16px 24px', fontSize: 13, fontFamily: 'monospace', color: C.sub, whiteSpace: 'nowrap' }}>{log.run_date}</td>
-                    <td style={{ padding: '16px 24px', fontSize: 13, color: C.text, whiteSpace: 'nowrap', fontWeight: 600 }}>{log.agent_name}</td>
-                    <td style={{ padding: '16px 24px', fontSize: 13, color: C.sub, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{log.input_rows.toLocaleString()}</td>
-                    <td style={{ padding: '16px 24px' }}>
+                    <td style={{ padding: '18px 28px', fontSize: 14, fontFamily: 'monospace', color: C.sub, whiteSpace: 'nowrap' }}>{log.run_date}</td>
+                    <td style={{ padding: '18px 28px', fontSize: 15, color: C.text, whiteSpace: 'nowrap', fontWeight: 600 }}>{log.agent_name}</td>
+                    <td style={{ padding: '18px 28px', fontSize: 15, color: C.sub, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{log.input_rows.toLocaleString()}</td>
+                    <td style={{ padding: '18px 28px' }}>
                       <span style={{
-                        fontSize: 12,
-                        fontWeight: 700,
-                        padding: '4px 12px',
-                        borderRadius: 20,
-                        whiteSpace: 'nowrap',
+                        fontSize: 13, fontWeight: 700, padding: '5px 14px', borderRadius: 20, whiteSpace: 'nowrap',
                         background: log.status === 'success' ? 'rgba(16,185,129,0.12)' : 'rgba(244,63,94,0.12)',
                         color: log.status === 'success' ? C.green : C.red,
                         border: `1px solid ${log.status === 'success' ? 'rgba(16,185,129,0.3)' : 'rgba(244,63,94,0.3)'}`,
@@ -864,11 +816,181 @@ function LogsSection() {
                         {log.status === 'success' ? '성공' : '실패'}
                       </span>
                     </td>
-                    <td style={{ padding: '16px 24px', fontSize: 13, color: C.sub, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{secFmt(log.duration_ms)}</td>
+                    <td style={{ padding: '18px 28px', fontSize: 15, color: C.sub, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{secFmt(log.duration_ms)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+      </div>
+    </section>
+  )
+}
+
+// ─── Section 5: 기사 MBTI 검색 (보조) ────────────────────────────────────────
+
+function MbtiSection() {
+  const [query, setQuery] = useState('')
+  const [aspFilter, setAspFilter] = useState<number | ''>('')
+  const [drivers, setDrivers] = useState<DriverMbtiRow[]>([])
+  const [acceptRates, setAcceptRates] = useState<Map<string, AcceptRates>>(new Map())
+  const [loading, setLoading] = useState(false)
+  const [searched, setSearched] = useState(false)
+
+  async function search() {
+    if (!query && !aspFilter) return
+    setLoading(true); setSearched(true); setDrivers([]); setAcceptRates(new Map())
+
+    let q = supabase.from('driver_mbti').select('*')
+    if (query) q = q.ilike('driver_id', `%${query}%`)
+    if (aspFilter) q = q.eq('asp_id', aspFilter)
+    const { data } = await q.limit(10)
+    const results = (data ?? []) as DriverMbtiRow[]
+    setDrivers(results)
+
+    if (results.length > 0) {
+      const ids = results.map(r => r.driver_id)
+      const { data: logs } = await supabase
+        .from('driver_daily_logs')
+        .select('driver_id, service_date, total_accepted, total_received')
+        .in('driver_id', ids)
+        .gte('service_date', cutoffStr(30))
+
+      const d7 = cutoffStr(7)
+      const agg = new Map<string, { a7: number; r7: number; a30: number; r30: number }>()
+      for (const log of (logs ?? []) as { driver_id: string; service_date: string; total_accepted: number; total_received: number }[]) {
+        const e = agg.get(log.driver_id) ?? { a7: 0, r7: 0, a30: 0, r30: 0 }
+        e.a30 += log.total_accepted; e.r30 += log.total_received
+        if (log.service_date >= d7) { e.a7 += log.total_accepted; e.r7 += log.total_received }
+        agg.set(log.driver_id, e)
+      }
+
+      const rates = new Map<string, AcceptRates>()
+      for (const [id, e] of agg.entries()) {
+        rates.set(id, { rate7: e.r7 > 0 ? e.a7 / e.r7 : null, rate30: e.r30 > 0 ? e.a30 / e.r30 : null })
+      }
+      setAcceptRates(rates)
+    }
+
+    setLoading(false)
+  }
+
+  const inputStyle: React.CSSProperties = {
+    background: C.bgCard, border: `1px solid ${C.border}`,
+    borderRadius: 10, padding: '14px 16px',
+    fontSize: 16, color: C.text, outline: 'none',
+    width: '100%', transition: 'border-color 200ms',
+  }
+
+  return (
+    <section>
+      <SectionTitle>기사 MBTI 검색</SectionTitle>
+      <div className="h-card" style={{ ...CARD, padding: '40px' }}>
+        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: C.purple, opacity: 0.6 }} />
+        <div style={{ display: 'flex', gap: 12, marginBottom: 32 }}>
+          <input
+            type="text" placeholder="driver_id 검색"
+            value={query} onChange={e => setQuery(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && search()}
+            style={{ ...inputStyle, flex: 1 }}
+          />
+          <select value={aspFilter} onChange={e => setAspFilter(e.target.value === '' ? '' : Number(e.target.value))} style={{ ...inputStyle, width: 140 }}>
+            <option value="">ASP 전체</option>
+            {ASP_OPTS.slice(1).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+          <button
+            onClick={search} disabled={loading || (!query && !aspFilter)}
+            style={{
+              padding: '14px 28px',
+              background: loading || (!query && !aspFilter) ? 'transparent' : `linear-gradient(135deg, ${C.purple}, #5b21b6)`,
+              color: loading || (!query && !aspFilter) ? C.muted : '#fff',
+              fontSize: 16, fontWeight: 700, borderRadius: 10,
+              border: `1px solid ${loading || (!query && !aspFilter) ? C.border : 'transparent'}`,
+              cursor: loading || (!query && !aspFilter) ? 'not-allowed' : 'pointer',
+              opacity: loading || (!query && !aspFilter) ? 0.5 : 1,
+              whiteSpace: 'nowrap', transition: 'all 200ms cubic-bezier(.22,1,.36,1)',
+              boxShadow: !loading && (query || aspFilter) ? `0 4px 20px rgba(139,92,246,.35)` : 'none',
+            }}
+          >
+            {loading ? '검색 중…' : '검색'}
+          </button>
+        </div>
+
+        {searched && !loading && drivers.length === 0 && (
+          <p style={{ textAlign: 'center', color: C.muted, fontSize: 17, padding: '32px 0' }}>검색 결과가 없습니다</p>
+        )}
+
+        {drivers.length > 0 && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(440px, 1fr))', gap: 16 }}>
+            {drivers.map(d => {
+              const { timeLabel, distLabel, prefArea } = driverSummary(d)
+              const rates = acceptRates.get(d.driver_id)
+              return (
+                <div key={d.driver_id} style={{
+                  background: C.bgCard, border: `1px solid ${C.border}`,
+                  borderRadius: 14, padding: '28px',
+                  transition: 'all 200ms cubic-bezier(.22,1,.36,1)',
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
+                    <div>
+                      <p style={{ fontSize: 17, fontWeight: 700, fontFamily: 'monospace', color: C.text }}>{d.driver_id}</p>
+                      <p style={{ fontSize: 14, color: C.muted, marginTop: 4 }}>ASP {d.asp_id}</p>
+                    </div>
+                    <span style={{
+                      fontSize: 13, fontWeight: 700,
+                      background: 'rgba(34,211,238,0.1)', color: C.cyan,
+                      border: `1px solid rgba(34,211,238,0.25)`, borderRadius: 20, padding: '5px 14px',
+                    }}>
+                      신뢰도 {pct(d.reliability)}
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
+                    <div style={{ flexShrink: 0 }}>
+                      <RadarChart width={170} height={170} data={toRadarData(d)} margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
+                        <PolarGrid stroke={C.border} />
+                        <PolarAngleAxis dataKey="subject" tick={{ fill: C.muted, fontSize: 10 }} />
+                        <PolarRadiusAxis angle={90} domain={[0, 100]} tick={false} axisLine={false} />
+                        <Radar dataKey="value" stroke={C.cyan} fill={C.cyan} fillOpacity={0.12} strokeWidth={1.5} />
+                      </RadarChart>
+                    </div>
+
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 14, paddingTop: 8 }}>
+                      <div>
+                        <span style={{ fontSize: 14, color: C.muted }}>유형 </span>
+                        <span style={{ fontSize: 15, fontWeight: 600, color: C.text }}>{timeLabel} · {distLabel} 선호</span>
+                      </div>
+                      <div>
+                        <span style={{ fontSize: 14, color: C.muted }}>선호지역 </span>
+                        <span style={{ fontSize: 14, fontFamily: 'monospace', color: C.sub }}>{prefArea}</span>
+                      </div>
+                      <div>
+                        <span style={{ fontSize: 14, color: C.muted }}>데이터 </span>
+                        <span style={{ fontSize: 14, color: C.sub }}>{d.data_days}일치</span>
+                      </div>
+                      <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 14, marginTop: 4 }}>
+                        <p style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.muted, marginBottom: 10 }}>수락률</p>
+                        <div style={{ display: 'flex', gap: 28 }}>
+                          <div>
+                            <span style={{ fontSize: 14, color: C.muted }}>7일 </span>
+                            <span style={{ fontSize: 17, fontWeight: 700, color: rates?.rate7 != null ? C.cyan : C.muted }}>
+                              {rates?.rate7 != null ? pct(rates.rate7) : '—'}
+                            </span>
+                          </div>
+                          <div>
+                            <span style={{ fontSize: 14, color: C.muted }}>30일 </span>
+                            <span style={{ fontSize: 17, fontWeight: 700, color: rates?.rate30 != null ? C.cyan : C.muted }}>
+                              {rates?.rate30 != null ? pct(rates.rate30) : '—'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
           </div>
         )}
       </div>
@@ -888,28 +1010,19 @@ export default function DashboardPage() {
           background: #080C18;
           font-family: 'Pretendard', -apple-system, sans-serif;
           -webkit-font-smoothing: antialiased;
+          font-size: 18px;
         }
         body::before {
-          content: '';
-          position: fixed;
-          top: -20%;
-          left: -10%;
-          width: 700px;
-          height: 700px;
+          content: ''; position: fixed; top: -20%; left: -10%;
+          width: 700px; height: 700px;
           background: radial-gradient(circle, rgba(34,211,238,.07), transparent 70%);
-          pointer-events: none;
-          z-index: 0;
+          pointer-events: none; z-index: 0;
         }
         body::after {
-          content: '';
-          position: fixed;
-          bottom: -20%;
-          right: -10%;
-          width: 600px;
-          height: 600px;
+          content: ''; position: fixed; bottom: -20%; right: -10%;
+          width: 600px; height: 600px;
           background: radial-gradient(circle, rgba(139,92,246,.06), transparent 70%);
-          pointer-events: none;
-          z-index: 0;
+          pointer-events: none; z-index: 0;
         }
         input, select, button, textarea { font-family: inherit; }
         input::placeholder { color: #4E6080; }
@@ -936,25 +1049,20 @@ export default function DashboardPage() {
       `}</style>
 
       <div style={{ minHeight: '100vh', background: '#080C18', color: '#F1F5F9', position: 'relative', zIndex: 1 }}>
+
         {/* Header */}
         <div style={{
           position: 'sticky', top: 0, zIndex: 50,
           background: 'rgba(8,12,24,.95)',
-          backdropFilter: 'blur(20px)',
-          WebkitBackdropFilter: 'blur(20px)',
+          backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
           borderBottom: '1px solid #1E2D4A',
-          padding: '0 16px',
-          height: 48,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
+          padding: '0 16px', height: 48,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         }}>
           <h1 style={{
             fontSize: 15, fontWeight: 800, letterSpacing: '-0.02em',
             background: 'linear-gradient(135deg, #22D3EE, #8B5CF6)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            backgroundClip: 'text',
+            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
           }}>
             누적 분석 대시보드
           </h1>
@@ -982,13 +1090,14 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Content */}
+        {/* Content — spec: [1]KPI → [2]MBTI 프로세스 → [3]KPI 추이 → [4]시뮬레이터 → [5]로그 */}
         <div style={{ maxWidth: 1400, margin: '0 auto', padding: '48px 40px', display: 'flex', flexDirection: 'column', gap: 52 }}>
           <StatusBar />
+          <MbtiProcessSection />
           <KpiSection />
-          <MbtiSection />
           <SimulatorSection />
           <LogsSection />
+          <MbtiSection />
         </div>
       </div>
     </>
