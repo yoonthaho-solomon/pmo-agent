@@ -273,7 +273,7 @@ function Panel({ children, style }: { children: React.ReactNode; style?: React.C
 function Stat({ label, value, tone = 'neutral' }: { label: string; value: React.ReactNode; tone?: StatusTone }) {
   return (
     <Panel style={{ minHeight: 92 }}>
-      <div style={{ fontSize: 12, color: C.muted, marginBottom: 10, fontWeight: 700 }}>{label}</div>
+      <div style={{ fontSize: 14, color: C.muted, marginBottom: 10, fontWeight: 700 }}>{label}</div>
       <div style={{ fontSize: 26, fontWeight: 800, color: toneColor(tone), fontVariantNumeric: 'tabular-nums' }}>{value}</div>
     </Panel>
   )
@@ -325,11 +325,11 @@ function VectorBars({ values }: { values: number[] }) {
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8 }}>
       {FACTORS.map((f, i) => (
         <div key={String(f.key)} style={{ display: 'grid', gridTemplateColumns: '64px 1fr 44px', gap: 8, alignItems: 'center' }}>
-          <span style={{ fontSize: 12, color: C.sub }}>{f.label}</span>
+          <span style={{ fontSize: 14, color: C.sub }}>{f.label}</span>
           <div style={{ height: 7, background: '#19243A', borderRadius: 999, overflow: 'hidden' }}>
             <div style={{ width: `${Math.min(1, values[i] ?? 0) * 100}%`, height: '100%', background: f.color }} />
           </div>
-          <span style={{ fontSize: 12, color: C.muted, textAlign: 'right' }}>{((values[i] ?? 0) * 100).toFixed(0)}%</span>
+          <span style={{ fontSize: 14, color: C.muted, textAlign: 'right' }}>{((values[i] ?? 0) * 100).toFixed(0)}%</span>
         </div>
       ))}
     </div>
@@ -348,7 +348,7 @@ function FilePicker({
   const ref = useRef<HTMLInputElement>(null)
   return (
     <div>
-      <div style={{ fontSize: 12, color: C.muted, fontWeight: 800, marginBottom: 8 }}>{label}</div>
+      <div style={{ fontSize: 14, color: C.muted, fontWeight: 800, marginBottom: 8 }}>{label}</div>
       <button
         onClick={() => ref.current?.click()}
         style={{
@@ -514,7 +514,7 @@ function DataLoadTab() {
           </div>
           {running && <p style={{ marginTop: 14, color: C.cyan, fontWeight: 700 }}>실행 중: {running}</p>}
           {result && (
-            <pre style={{ marginTop: 14, maxHeight: 180, overflow: 'auto', color: result.error ? C.red : C.green, background: '#08101E', border: `1px solid ${C.border}`, borderRadius: 8, padding: 12, fontSize: 12 }}>
+            <pre style={{ marginTop: 14, maxHeight: 180, overflow: 'auto', color: result.error ? C.red : C.green, background: '#08101E', border: `1px solid ${C.border}`, borderRadius: 8, padding: 12, fontSize: 14 }}>
               {JSON.stringify(result, null, 2)}
             </pre>
           )}
@@ -527,16 +527,16 @@ function DataLoadTab() {
               <div key={s.table} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 12, padding: '10px 0', borderBottom: `1px solid ${C.border}` }}>
                 <div>
                   <div style={{ fontWeight: 800 }}>{s.label}</div>
-                  <div style={{ color: C.muted, fontSize: 12 }}>{s.table}</div>
+                  <div style={{ color: C.muted, fontSize: 14 }}>{s.table}</div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
                   <div style={{ color: s.error ? C.red : C.text, fontWeight: 850 }}>{s.error ? '오류' : fmt(s.count)}</div>
-                  {s.error && <div style={{ maxWidth: 180, color: C.red, fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.error}</div>}
+                  {s.error && <div style={{ maxWidth: 180, color: C.red, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.error}</div>}
                 </div>
               </div>
             ))}
           </div>
-          <div style={{ marginTop: 14, padding: 12, borderRadius: 8, background: 'rgba(245,158,11,.08)', border: `1px solid rgba(245,158,11,.25)`, color: C.yellow, fontSize: 13, lineHeight: 1.5 }}>
+          <div style={{ marginTop: 14, padding: 12, borderRadius: 8, background: 'rgba(245,158,11,.08)', border: `1px solid rgba(245,158,11,.25)`, color: C.yellow, fontSize: 14, lineHeight: 1.5 }}>
             실시간 기사 위치, 온라인 상태, 공차 상태는 아직 원천 테이블이 없습니다. 매칭 시뮬레이션에서는 별도 표시된 시뮬레이션 값을 사용합니다.
           </div>
         </Panel>
@@ -614,7 +614,7 @@ function EntitiesTab() {
                     <strong style={{ fontFamily: 'monospace' }}>{c.callcard_id}</strong>
                     <span style={{ color: C.sub }}>{c.call_date} {c.hour_slot}시</span>
                   </div>
-                  <div style={{ color: C.muted, marginTop: 6, fontSize: 12 }}>
+                  <div style={{ color: C.muted, marginTop: 6, fontSize: 14 }}>
                     {fmt(c.expected_distance)}m · {fmt(c.expected_fare)}원 · {c.is_paid ? '유료' : '무료'} · {c.is_surge ? '탄력' : '일반'}
                   </div>
                 </button>
@@ -641,7 +641,7 @@ function EntitiesTab() {
                     <strong style={{ fontFamily: 'monospace' }}>{d.driver_id}</strong>
                     <span style={{ color: d.reliability >= 0.3 ? C.green : C.yellow }}>신뢰도 {pct(d.reliability)}</span>
                   </div>
-                  <div style={{ color: C.muted, marginTop: 6, fontSize: 12 }}>
+                  <div style={{ color: C.muted, marginTop: 6, fontSize: 14 }}>
                     데이터 {d.data_days}일 · 선호 출발 {d.pref_s_hexagons?.[0] ?? '-'} · 선호 도착 {d.pref_d_hexagons?.[0] ?? '-'}
                   </div>
                 </button>
@@ -656,7 +656,7 @@ function EntitiesTab() {
           <SectionHeader title="콜카드 22차원 벡터" />
           {selectedCall ? (
             <>
-              <div style={{ marginBottom: 12, color: C.sub, fontSize: 13 }}>
+              <div style={{ marginBottom: 12, color: C.sub, fontSize: 14 }}>
                 {selectedCall.callcard_id} · ETA near {etaToNear(selectedCall.eta_distance).toFixed(2)}
               </div>
               <VectorBars values={callVec} />
@@ -667,7 +667,7 @@ function EntitiesTab() {
           <SectionHeader title="기사 22차원 벡터" />
           {selectedDriver ? (
             <>
-              <div style={{ marginBottom: 12, color: C.sub, fontSize: 13 }}>
+              <div style={{ marginBottom: 12, color: C.sub, fontSize: 14 }}>
                 {selectedDriver.driver_id} · 데이터 {selectedDriver.data_days}일 · 신뢰도 {pct(selectedDriver.reliability)}
               </div>
               <VectorBars values={driverVec} />
@@ -753,7 +753,7 @@ function SimulationTab() {
         <Panel>
           <SectionHeader title="콜카드 조건 입력" desc="22D 벡터와 반경 탐색 조건을 조합합니다." />
           <div style={{ display: 'grid', gap: 12 }}>
-            <label style={{ display: 'grid', gap: 6, color: C.sub, fontSize: 12, fontWeight: 800 }}>
+            <label style={{ display: 'grid', gap: 6, color: C.sub, fontSize: 14, fontWeight: 800 }}>
               ASP
               <select value={aspId} onChange={(e) => setAspId(Number(e.target.value))} style={inputStyle()}>
                 {ASP_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -796,7 +796,7 @@ function SimulationTab() {
               </div>
             ))}
           </div>
-          <div style={{ marginTop: 14, padding: 12, borderRadius: 8, background: 'rgba(34,211,238,.08)', border: `1px solid rgba(34,211,238,.25)`, color: C.cyan, fontSize: 13, lineHeight: 1.5 }}>
+          <div style={{ marginTop: 14, padding: 12, borderRadius: 8, background: 'rgba(34,211,238,.08)', border: `1px solid rgba(34,211,238,.25)`, color: C.cyan, fontSize: 14, lineHeight: 1.5 }}>
             실제 배차 API 계약 전까지 거리, ETA, 온라인, 공차, 위치 최신성은 배차 로직에 저장하거나 전송하지 않습니다. 이 화면은 정책 비교용 Matching Lab입니다.
           </div>
         </Panel>
@@ -816,7 +816,7 @@ function SimulationTab() {
       <Panel>
         <SectionHeader title="점수 구성요소 매트릭스" desc="최종 배차점수는 아직 정책 확정 전이므로 preview로만 표시합니다." />
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
             <thead>
               <tr>
                 {['기사', '거리', 'ETA', 'cosine', 'ETA 점수', '예상 수락확률', '신뢰도', '도착지역 가치', '배차 균형', 'preview'].map((h) => (
@@ -849,7 +849,7 @@ function SimulationTab() {
 
 function MiniMetric({ label, value }: { label: string; value: number }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', color: C.sub, fontSize: 13 }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', color: C.sub, fontSize: 14 }}>
       <span>{label}</span>
       <strong style={{ color: C.text }}>{value.toLocaleString()}</strong>
     </div>
@@ -864,7 +864,7 @@ function CandidateTable({ rows, mode }: { rows: RankedCandidate[]; mode: 'distan
           <strong style={{ color: i < 3 ? C.yellow : C.sub }}>{i + 1}</strong>
           <div>
             <div style={{ fontFamily: 'monospace', fontWeight: 800 }}>{r.driver.driver_id}</div>
-            <div style={{ fontSize: 11, color: C.muted }}>online {r.state.online ? 'Y' : 'N'} · empty {r.state.empty ? 'Y' : 'N'} · fresh {r.state.fresh ? 'Y' : 'N'}</div>
+            <div style={{ fontSize: 14, color: C.muted }}>online {r.state.online ? 'Y' : 'N'} · empty {r.state.empty ? 'Y' : 'N'} · fresh {r.state.fresh ? 'Y' : 'N'}</div>
           </div>
           <span style={{ color: C.sub }}>{r.state.distanceKm}km</span>
           <span style={{ color: C.blue }}>{r.state.etaMin}분</span>
@@ -889,7 +889,7 @@ function inputStyle(): React.CSSProperties {
 }
 
 function labelStyle(): React.CSSProperties {
-  return { display: 'grid', gap: 6, color: C.sub, fontSize: 12, fontWeight: 800 }
+  return { display: 'grid', gap: 6, color: C.sub, fontSize: 14, fontWeight: 800 }
 }
 
 function tdStyle(color = C.text): React.CSSProperties {
@@ -916,11 +916,11 @@ export default function MatchingLab({ initialTab = 'load' }: { initialTab?: TabK
       <header style={{ height: 56, borderBottom: `1px solid ${C.border}`, background: 'rgba(8,12,24,.95)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px', position: 'sticky', top: 0, zIndex: 10 }}>
         <div>
           <div style={{ fontSize: 15, fontWeight: 900 }}>PMO Matching Lab</div>
-          <div style={{ color: C.muted, fontSize: 12 }}>Grab × Uber × DiDi 운영 검증 콘솔</div>
+          <div style={{ color: C.muted, fontSize: 14 }}>Grab × Uber × DiDi 운영 검증 콘솔</div>
         </div>
         <nav style={{ display: 'flex', gap: 8 }}>
-          <Link href="/dashboard" style={{ color: C.sub, textDecoration: 'none', border: `1px solid ${C.border}`, borderRadius: 8, padding: '7px 10px', fontSize: 13 }}>대시보드</Link>
-          <Link href="/simulator" style={{ color: C.sub, textDecoration: 'none', border: `1px solid ${C.border}`, borderRadius: 8, padding: '7px 10px', fontSize: 13 }}>시뮬레이터</Link>
+          <Link href="/dashboard" style={{ color: C.sub, textDecoration: 'none', border: `1px solid ${C.border}`, borderRadius: 8, padding: '7px 10px', fontSize: 14 }}>대시보드</Link>
+          <Link href="/simulator" style={{ color: C.sub, textDecoration: 'none', border: `1px solid ${C.border}`, borderRadius: 8, padding: '7px 10px', fontSize: 14 }}>시뮬레이터</Link>
         </nav>
       </header>
 
@@ -948,7 +948,7 @@ export default function MatchingLab({ initialTab = 'load' }: { initialTab?: TabK
               }}
             >
               <div style={{ fontWeight: 900 }}>{t.label}</div>
-              <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>{t.desc}</div>
+              <div style={{ fontSize: 14, color: C.muted, marginTop: 4 }}>{t.desc}</div>
             </button>
           ))}
         </div>
@@ -960,5 +960,6 @@ export default function MatchingLab({ initialTab = 'load' }: { initialTab?: TabK
     </div>
   )
 }
+
 
 
