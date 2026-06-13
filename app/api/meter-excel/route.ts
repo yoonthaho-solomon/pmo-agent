@@ -23,12 +23,15 @@ function toPct(val: unknown): number | null {
 
 export async function POST(req: NextRequest) {
   const startTime = Date.now()
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!  // service role key 사용 (RLS 우회)
-  )
-
   try {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+    if (!supabaseUrl || !supabaseKey) {
+      return NextResponse.json({ error: 'Supabase 환경변수가 설정되지 않았습니다.' }, { status: 500 })
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseKey)
     const formData = await req.formData()
     const file = formData.get('meter_file') as File
     const aspId = Number(formData.get('asp_id') ?? ASP_ID)
