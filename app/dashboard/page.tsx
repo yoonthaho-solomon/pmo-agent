@@ -70,34 +70,29 @@ interface RecommendedDriver {
 // ─── Design System ────────────────────────────────────────────────────────────
 
 const C = {
-  bg: '#080C18',
-  bgCard: 'rgba(15,22,40,0.82)',
-  border: 'rgba(30,45,74,0.8)',
-  borderHover: 'rgba(45,68,112,0.9)',
-  cyan: '#22D3EE',
-  purple: '#8B5CF6',
-  red: '#F43F5E',
-  yellow: '#F59E0B',
-  green: '#10B981',
-  orange: '#FB923C',
-  blue: '#3B82F6',
-  text: '#F1F5F9',
-  sub: '#94A3B8',
-  muted: '#4E6080',
+  bg: '#0b0b0f',
+  bgCard: '#13131a',
+  border: '#2a2a30',
+  borderHover: '#3a3a40',
+  cyan: '#8eeaff',
+  red: '#e8271e',
+  yellow: '#ffa602',
+  green: '#00c49a',
+  text: '#e5e7eb',
+  sub: '#9ca3af',
+  muted: '#888',
 }
 
-const GLASS: React.CSSProperties = {
+const CARD: React.CSSProperties = {
   background: C.bgCard,
-  backdropFilter: 'blur(20px)',
-  WebkitBackdropFilter: 'blur(20px)',
   border: `1px solid ${C.border}`,
   borderRadius: 16,
 }
 
 const TOOLTIP_STYLE = {
   contentStyle: {
-    background: 'rgba(8,12,24,0.96)',
-    border: '1px solid rgba(30,45,74,0.9)',
+    background: 'rgba(19,19,26,0.98)',
+    border: `1px solid ${C.border}`,
     borderRadius: 12,
     fontSize: 13,
   },
@@ -240,8 +235,7 @@ function StatusBar() {
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 16 }}>
-      {/* 적재 기간 — 2칸 */}
-      <div style={{ ...GLASS, padding: '32px 36px', gridColumn: 'span 2' }}>
+      <div style={{ ...CARD, padding: '32px 36px', gridColumn: 'span 2' }}>
         <Label color={C.cyan}>적재 기간</Label>
         <p style={{ fontSize: 22, fontWeight: 800, color: C.text, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums' }}>
           {loading ? '…' : (s.minDate && s.maxDate
@@ -252,8 +246,8 @@ function StatusBar() {
       </div>
 
       <BigStatCard label="총 적재 일수" value={s.totalDays != null ? s.totalDays.toLocaleString() : null} unit="일" loading={loading} color={C.cyan} />
-      <BigStatCard label="총 기사 수" value={s.driverCount != null ? s.driverCount.toLocaleString() : null} unit="명" loading={loading} color={C.purple} />
-      <BigStatCard label="총 콜 수" value={s.callCount != null ? s.callCount.toLocaleString() : null} unit="건" loading={loading} color={C.yellow} />
+      <BigStatCard label="총 기사 수" value={s.driverCount != null ? s.driverCount.toLocaleString() : null} unit="명" loading={loading} color={C.yellow} />
+      <BigStatCard label="총 콜 수" value={s.callCount != null ? s.callCount.toLocaleString() : null} unit="건" loading={loading} color={C.green} />
       <BigStatCard label="마지막 실행" value={val(s.lastRun)} loading={false} color={C.sub} small />
     </div>
   )
@@ -270,7 +264,7 @@ function BigStatCard({
   small?: boolean
 }) {
   return (
-    <div style={{ ...GLASS, padding: '32px 36px' }}>
+    <div style={{ ...CARD, padding: '32px 36px' }}>
       <Label>{label}</Label>
       <p style={{
         fontSize: small ? 18 : 52,
@@ -345,9 +339,9 @@ function KpiSection() {
                 fontWeight: 600,
                 cursor: 'pointer',
                 transition: 'all 200ms',
-                border: asp === o.value ? `1px solid rgba(139,92,246,0.5)` : `1px solid ${C.border}`,
-                background: asp === o.value ? 'rgba(139,92,246,0.2)' : 'transparent',
-                color: asp === o.value ? C.purple : C.sub,
+                border: asp === o.value ? `1px solid rgba(142,234,255,0.5)` : `1px solid ${C.border}`,
+                background: asp === o.value ? 'rgba(142,234,255,0.12)' : 'transparent',
+                color: asp === o.value ? C.cyan : C.sub,
               }}
             >
               {o.label}
@@ -356,7 +350,7 @@ function KpiSection() {
         </div>
       </div>
 
-      <div style={{ ...GLASS, padding: '36px 40px' }}>
+      <div style={{ ...CARD, padding: '36px 40px' }}>
         {loading ? (
           <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.muted, fontSize: 15 }}>불러오는 중…</div>
         ) : chartData.length === 0 ? (
@@ -369,7 +363,7 @@ function KpiSection() {
               </p>
               <ResponsiveContainer width="100%" height={220}>
                 <LineChart data={chartData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(30,45,74,0.5)" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(42,42,48,0.6)" />
                   <XAxis dataKey="date" tick={{ fill: C.muted, fontSize: 12 }} />
                   <YAxis tick={{ fill: C.muted, fontSize: 12 }} unit="%" domain={[0, 100]} />
                   <Tooltip {...TOOLTIP_STYLE} />
@@ -385,11 +379,11 @@ function KpiSection() {
               </p>
               <ResponsiveContainer width="100%" height={160}>
                 <LineChart data={chartData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(30,45,74,0.5)" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(42,42,48,0.6)" />
                   <XAxis dataKey="date" tick={{ fill: C.muted, fontSize: 12 }} />
                   <YAxis tick={{ fill: C.muted, fontSize: 12 }} />
                   <Tooltip {...TOOLTIP_STYLE} />
-                  <Line type="monotone" dataKey="total_calls" name="호출수" stroke={C.purple} strokeWidth={2.5} dot={false} />
+                  <Line type="monotone" dataKey="total_calls" name="호출수" stroke={C.yellow} strokeWidth={2.5} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -456,7 +450,7 @@ function MbtiSection() {
   }
 
   const inputStyle: React.CSSProperties = {
-    background: 'rgba(8,12,24,0.6)',
+    background: C.bgCard,
     border: `1px solid ${C.border}`,
     borderRadius: 10,
     padding: '12px 16px',
@@ -469,7 +463,7 @@ function MbtiSection() {
   return (
     <section>
       <SectionTitle>기사 MBTI 검색</SectionTitle>
-      <div style={{ ...GLASS, padding: '36px 40px' }}>
+      <div style={{ ...CARD, padding: '36px 40px' }}>
         <div style={{ display: 'flex', gap: 12, marginBottom: 32 }}>
           <input
             type="text"
@@ -492,14 +486,14 @@ function MbtiSection() {
             disabled={loading || (!query && !aspFilter)}
             style={{
               padding: '12px 28px',
-              background: 'linear-gradient(135deg, #8B5CF6, #5b21b6)',
-              color: '#fff',
+              background: loading || (!query && !aspFilter) ? C.bgCard : C.cyan,
+              color: loading || (!query && !aspFilter) ? C.muted : '#0b0b0f',
               fontSize: 14,
               fontWeight: 700,
               borderRadius: 10,
-              border: 'none',
+              border: `1px solid ${loading || (!query && !aspFilter) ? C.border : C.cyan}`,
               cursor: loading || (!query && !aspFilter) ? 'not-allowed' : 'pointer',
-              opacity: loading || (!query && !aspFilter) ? 0.4 : 1,
+              opacity: loading || (!query && !aspFilter) ? 0.5 : 1,
               whiteSpace: 'nowrap',
               transition: 'all 200ms',
             }}
@@ -519,7 +513,7 @@ function MbtiSection() {
               const rates = acceptRates.get(d.driver_id)
               return (
                 <div key={d.driver_id} style={{
-                  background: 'rgba(8,12,24,0.6)',
+                  background: C.bgCard,
                   border: `1px solid ${C.border}`,
                   borderRadius: 14,
                   padding: '24px 28px',
@@ -531,9 +525,9 @@ function MbtiSection() {
                     </div>
                     <span style={{
                       fontSize: 12, fontWeight: 700,
-                      background: 'rgba(139,92,246,0.15)',
-                      color: C.purple,
-                      border: `1px solid rgba(139,92,246,0.3)`,
+                      background: 'rgba(142,234,255,0.1)',
+                      color: C.cyan,
+                      border: `1px solid rgba(142,234,255,0.25)`,
                       borderRadius: 20,
                       padding: '4px 12px',
                     }}>
@@ -544,10 +538,10 @@ function MbtiSection() {
                   <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
                     <div style={{ flexShrink: 0 }}>
                       <RadarChart width={160} height={160} data={toRadarData(d)} margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
-                        <PolarGrid stroke="rgba(30,45,74,0.8)" />
+                        <PolarGrid stroke={C.border} />
                         <PolarAngleAxis dataKey="subject" tick={{ fill: C.muted, fontSize: 9 }} />
                         <PolarRadiusAxis angle={90} domain={[0, 100]} tick={false} axisLine={false} />
-                        <Radar dataKey="value" stroke={C.purple} fill={C.purple} fillOpacity={0.2} strokeWidth={1.5} />
+                        <Radar dataKey="value" stroke={C.cyan} fill={C.cyan} fillOpacity={0.15} strokeWidth={1.5} />
                       </RadarChart>
                     </div>
 
@@ -648,7 +642,7 @@ function SimulatorSection() {
 
   const inputStyle: React.CSSProperties = {
     width: '100%',
-    background: 'rgba(8,12,24,0.6)',
+    background: C.bgCard,
     border: `1px solid ${C.border}`,
     borderRadius: 10,
     padding: '12px 16px',
@@ -670,7 +664,7 @@ function SimulatorSection() {
   return (
     <section>
       <SectionTitle>매칭 시뮬레이터</SectionTitle>
-      <div style={{ ...GLASS, padding: '36px 40px' }}>
+      <div style={{ ...CARD, padding: '36px 40px' }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 20, marginBottom: 28 }}>
           <div>
             <label style={labelStyle}>ASP ID *</label>
@@ -704,11 +698,11 @@ function SimulatorSection() {
           </div>
           <div style={{ display: 'flex', gap: 24, alignItems: 'flex-end', paddingBottom: 4 }}>
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-              <input type="checkbox" checked={form.is_paid} onChange={e => setField('is_paid', e.target.checked)} style={{ width: 16, height: 16, accentColor: C.purple }} />
+              <input type="checkbox" checked={form.is_paid} onChange={e => setField('is_paid', e.target.checked)} style={{ width: 16, height: 16, accentColor: C.cyan }} />
               <span style={{ fontSize: 14, color: C.sub }}>유료콜</span>
             </label>
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-              <input type="checkbox" checked={form.is_surge} onChange={e => setField('is_surge', e.target.checked)} style={{ width: 16, height: 16, accentColor: C.purple }} />
+              <input type="checkbox" checked={form.is_surge} onChange={e => setField('is_surge', e.target.checked)} style={{ width: 16, height: 16, accentColor: C.cyan }} />
               <span style={{ fontSize: 14, color: C.sub }}>탄력요금</span>
             </label>
           </div>
@@ -720,12 +714,12 @@ function SimulatorSection() {
           style={{
             width: '100%',
             padding: '16px',
-            background: loading ? 'rgba(15,22,40,0.9)' : 'linear-gradient(135deg, #8B5CF6, #5b21b6)',
-            color: loading ? C.muted : '#fff',
+            background: loading ? C.bgCard : C.green,
+            color: loading ? C.muted : '#0b0b0f',
             fontSize: 15,
             fontWeight: 700,
             borderRadius: 12,
-            border: loading ? `1px solid ${C.border}` : 'none',
+            border: loading ? `1px solid ${C.border}` : `1px solid ${C.green}`,
             cursor: loading ? 'not-allowed' : 'pointer',
             transition: 'all 200ms',
           }}
@@ -734,7 +728,7 @@ function SimulatorSection() {
         </button>
 
         {error && (
-          <p style={{ marginTop: 16, fontSize: 13, color: C.red, background: 'rgba(244,63,94,0.08)', border: '1px solid rgba(244,63,94,0.25)', borderRadius: 10, padding: '12px 16px' }}>
+          <p style={{ marginTop: 16, fontSize: 13, color: C.red, background: 'rgba(232,39,30,0.08)', border: `1px solid rgba(232,39,30,0.25)`, borderRadius: 10, padding: '12px 16px' }}>
             {error}
           </p>
         )}
@@ -750,7 +744,7 @@ function SimulatorSection() {
                   display: 'flex',
                   alignItems: 'center',
                   gap: 16,
-                  background: 'rgba(8,12,24,0.5)',
+                  background: C.bgCard,
                   border: `1px solid ${C.border}`,
                   borderRadius: 10,
                   padding: '14px 20px',
@@ -759,9 +753,9 @@ function SimulatorSection() {
                     width: 28, height: 28, borderRadius: '50%',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     fontSize: 12, fontWeight: 800, flexShrink: 0,
-                    background: d.rank <= 3 ? 'rgba(139,92,246,0.3)' : 'rgba(30,45,74,0.5)',
-                    color: d.rank <= 3 ? C.purple : C.muted,
-                    border: `1px solid ${d.rank <= 3 ? 'rgba(139,92,246,0.4)' : C.border}`,
+                    background: d.rank <= 3 ? 'rgba(255,166,2,0.2)' : 'rgba(42,42,48,0.5)',
+                    color: d.rank <= 3 ? C.yellow : C.muted,
+                    border: `1px solid ${d.rank <= 3 ? 'rgba(255,166,2,0.35)' : C.border}`,
                   }}>
                     {d.rank}
                   </span>
@@ -799,7 +793,7 @@ function LogsSection() {
   return (
     <section>
       <SectionTitle>실행 로그</SectionTitle>
-      <div style={{ ...GLASS, overflow: 'hidden' }}>
+      <div style={{ ...CARD, overflow: 'hidden' }}>
         {loading ? (
           <div style={{ height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.muted, fontSize: 15 }}>불러오는 중…</div>
         ) : logs.length === 0 ? (
@@ -825,7 +819,7 @@ function LogsSection() {
               </thead>
               <tbody>
                 {logs.map((log, i) => (
-                  <tr key={i} style={{ borderBottom: `1px solid rgba(30,45,74,0.4)` }}>
+                  <tr key={i} style={{ borderBottom: `1px solid ${C.border}` }}>
                     <td style={{ padding: '16px 24px', fontSize: 13, fontFamily: 'monospace', color: C.sub, whiteSpace: 'nowrap' }}>{log.run_date}</td>
                     <td style={{ padding: '16px 24px', fontSize: 13, color: C.text, whiteSpace: 'nowrap', fontWeight: 600 }}>{log.agent_name}</td>
                     <td style={{ padding: '16px 24px', fontSize: 13, color: C.sub, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{log.input_rows.toLocaleString()}</td>
@@ -836,9 +830,9 @@ function LogsSection() {
                         padding: '4px 12px',
                         borderRadius: 20,
                         whiteSpace: 'nowrap',
-                        background: log.status === 'success' ? 'rgba(16,185,129,0.12)' : 'rgba(244,63,94,0.12)',
+                        background: log.status === 'success' ? 'rgba(0,196,154,0.12)' : 'rgba(232,39,30,0.12)',
                         color: log.status === 'success' ? C.green : C.red,
-                        border: `1px solid ${log.status === 'success' ? 'rgba(16,185,129,0.25)' : 'rgba(244,63,94,0.25)'}`,
+                        border: `1px solid ${log.status === 'success' ? 'rgba(0,196,154,0.3)' : 'rgba(232,39,30,0.3)'}`,
                       }}>
                         {log.status === 'success' ? '성공' : '실패'}
                       </span>
@@ -863,23 +857,17 @@ export default function DashboardPage() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600;700;800&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { background: #080C18; font-family: 'Pretendard', -apple-system, sans-serif; -webkit-font-smoothing: antialiased; }
+        body { background: #0b0b0f; font-family: 'Pretendard', -apple-system, sans-serif; -webkit-font-smoothing: antialiased; }
         input, select, button, textarea { font-family: inherit; }
-        input::placeholder { color: #4E6080; }
-        select option { background: #0F1628; color: #F1F5F9; }
+        input::placeholder { color: #888; }
+        select option { background: #13131a; color: #e5e7eb; }
       `}</style>
 
-      <div style={{ minHeight: '100vh', background: '#080C18', color: C.text, position: 'relative', overflow: 'hidden' }}>
-        {/* Ambient glow */}
-        <div style={{ position: 'fixed', top: '-20%', left: '-10%', width: 700, height: 700, background: 'radial-gradient(circle, rgba(34,211,238,0.07), transparent 70%)', pointerEvents: 'none', zIndex: 0 }} />
-        <div style={{ position: 'fixed', bottom: '-20%', right: '-10%', width: 600, height: 600, background: 'radial-gradient(circle, rgba(139,92,246,0.06), transparent 70%)', pointerEvents: 'none', zIndex: 0 }} />
-
+      <div style={{ minHeight: '100vh', background: C.bg, color: C.text }}>
         {/* Header */}
         <div style={{
           position: 'sticky', top: 0, zIndex: 50,
-          background: 'rgba(8,12,24,0.95)',
-          backdropFilter: 'blur(20px)',
-          WebkitBackdropFilter: 'blur(20px)',
+          background: C.bg,
           borderBottom: `1px solid ${C.border}`,
           padding: '0 40px',
           height: 56,
@@ -905,21 +893,13 @@ export default function DashboardPage() {
             ← 일일 대시보드
           </Link>
           <div style={{ width: 1, height: 18, background: C.border }} />
-          <h1 style={{
-            fontSize: 15,
-            fontWeight: 800,
-            letterSpacing: '-0.02em',
-            color: 'transparent',
-            background: `linear-gradient(135deg, ${C.cyan}, ${C.purple})`,
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-          }}>
+          <h1 style={{ fontSize: 15, fontWeight: 800, letterSpacing: '-0.02em', color: C.text }}>
             누적 분석 대시보드
           </h1>
         </div>
 
         {/* Content */}
-        <div style={{ maxWidth: 1400, margin: '0 auto', padding: '48px 40px', display: 'flex', flexDirection: 'column', gap: 48, position: 'relative', zIndex: 1 }}>
+        <div style={{ maxWidth: 1400, margin: '0 auto', padding: '48px 40px', display: 'flex', flexDirection: 'column', gap: 48 }}>
           <StatusBar />
           <KpiSection />
           <MbtiSection />
