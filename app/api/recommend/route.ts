@@ -39,7 +39,9 @@ interface DriverRow {
   score_mid_fare: number
   score_high_fare: number
   score_paid: number
+  score_free: number
   score_surge: number
+  score_normal: number
   score_near: number
   pref_s_hexagons: string[]
   pref_d_hexagons: string[]
@@ -51,7 +53,9 @@ const DRIVER_COLS = [
   'score_mon', 'score_tue', 'score_wed', 'score_thu', 'score_fri', 'score_sat', 'score_sun',
   'score_short', 'score_medium', 'score_long',
   'score_low_fare', 'score_mid_fare', 'score_high_fare',
-  'score_paid', 'score_surge', 'score_near',
+  'score_paid', 'score_free',
+  'score_surge', 'score_normal',
+  'score_near',
   'pref_s_hexagons', 'pref_d_hexagons',
 ].join(',')
 
@@ -74,7 +78,7 @@ async function fetchDriversByAsp(aspId: number): Promise<DriverRow[]> {
   return all
 }
 
-// 20차원 벡터: 시간(4) + 요일(7) + 거리(3) + 요금(3) + 유료(1) + 서지(1) + near(1)
+// 22차원 벡터: /api/matching의 callcardToVector, driverToVector와 같은 순서
 function callToVector(call: CallInput): number[] {
   const h = call.hour_slot
   const dist = call.expected_distance ?? 0
@@ -97,7 +101,9 @@ function callToVector(call: CallInput): number[] {
     fare > 10000 && fare <= 20000 ? 1 : 0,
     fare > 20000 ? 1 : 0,
     call.is_paid ? 1 : 0,
+    call.is_paid ? 0 : 1,
     call.is_surge ? 1 : 0,
+    call.is_surge ? 0 : 1,
     0,  // near: 실시간 콜이므로 ETA 미상 → 0
   ]
 }
@@ -108,8 +114,8 @@ function driverToVector(d: DriverRow): number[] {
     d.score_mon, d.score_tue, d.score_wed, d.score_thu, d.score_fri, d.score_sat, d.score_sun,
     d.score_short, d.score_medium, d.score_long,
     d.score_low_fare, d.score_mid_fare, d.score_high_fare,
-    d.score_paid,
-    d.score_surge,
+    d.score_paid, d.score_free,
+    d.score_surge, d.score_normal,
     d.score_near,
   ]
 }
@@ -190,6 +196,8 @@ function buildMatchReason(call: CallInput, driver: DriverRow): string {
   // 유료콜
   if (call.is_paid && driver.score_paid > 0.3)
     factors.push({ weight: driver.score_paid, label: `유료콜 수락률 ${pct(driver.score_paid)}` })
+  if (!call.is_paid && driver.score_free > 0.3)
+    factors.push({ weight: driver.score_free, label: `무료콜 수락률 ${pct(driver.score_free)}` })
 
   // 탄력요금
   if (call.is_surge) {
@@ -197,6 +205,8 @@ function buildMatchReason(call: CallInput, driver: DriverRow): string {
       factors.push({ weight: driver.score_surge, label: `탄력요금 콜 적극 수락 (${pct(driver.score_surge)})` })
     else if (driver.score_surge > 0.15)
       factors.push({ weight: driver.score_surge, label: '탄력요금 콜 수락 이력' })
+  } else if (driver.score_normal > 0.3) {
+    factors.push({ weight: driver.score_normal, label: `일반요금 콜 수락률 ${pct(driver.score_normal)}` })
   }
 
   // 배차 근접도

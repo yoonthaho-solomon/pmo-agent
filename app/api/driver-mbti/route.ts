@@ -130,8 +130,8 @@ function computeScoreNear(etaVals: { val: number; w: number }[]): number {
   if (totalW === 0) return 0
   const avg = etaVals.reduce((s, e) => s + e.val * e.w, 0) / totalW
   if (avg <= 150) return 1.0
-  if (avg >= 300) return 0.0
-  return 1 - (avg - 150) / 150
+  if (avg >= 600) return 0.0
+  return 1 - (avg - 150) / 450
 }
 
 function computeMbti(logs: DailyLog[]): DriverMbti[] {

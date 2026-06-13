@@ -34,9 +34,8 @@ const FACTORS = [
   // 유료/무료 (2)
   { key: 'score_paid',      label: '유료콜',  group: '콜유형',  emoji: '💳', desc: '콜카드 필요' },
   { key: 'score_free',      label: '무료콜',  group: '콜유형',  emoji: '🆓', desc: '일반 호출' },
-  // 상품 (3)
+  // 상품 (2)
   { key: 'score_normal',    label: '일반요금', group: '상품',   emoji: '🟦', desc: '기본 요금제' },
-  { key: 'score_night_prod',label: '심야요금', group: '상품',   emoji: '🟣', desc: '심야 할증' },
   { key: 'score_surge',     label: '탄력요금', group: '상품',   emoji: '🔴', desc: '수요 폭등' },
 ] as const;
 
@@ -58,7 +57,7 @@ interface DriverMBTI {
   score_short: number; score_medium: number; score_long: number;
   score_low_fare: number; score_mid_fare: number; score_high_fare: number;
   score_paid: number; score_free: number;
-  score_normal: number; score_night_prod: number; score_surge: number;
+  score_normal: number; score_surge: number;
   score_loyalty: number;
   data_days: number;
   reliability: number;
@@ -70,7 +69,7 @@ interface CallCard {
   distance: 'short' | 'medium' | 'long';
   fare_tier: 'low' | 'mid' | 'high';
   is_paid: boolean;
-  product: 'normal' | 'night_prod' | 'surge';
+  product: 'normal' | 'surge';
   asp_id: AspId;
 }
 
@@ -115,7 +114,6 @@ function callcardToVector(card: CallCard): Record<FactorKey, number> {
 
   // 상품
   vec.score_normal    = card.product === 'normal'    ? 1 : 0;
-  vec.score_night_prod= card.product === 'night_prod'? 1 : 0;
   vec.score_surge     = card.product === 'surge'     ? 1 : 0;
 
   return vec as Record<FactorKey, number>;
@@ -471,7 +469,6 @@ export default function SimulatorPage() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {[
                   { v: 'normal',     label: '일반 요금',  emoji: '🟦', desc: '기본 미터 요금' },
-                  { v: 'night_prod', label: '심야 할증',  emoji: '🟣', desc: '22시 이후 할증' },
                   { v: 'surge',      label: '탄력 요금',  emoji: '🔴', desc: '수요 급증 구간' },
                 ].map(opt => (
                   <button key={opt.v}
@@ -536,7 +533,7 @@ export default function SimulatorPage() {
                     card.distance === 'short' ? '단거리' : card.distance === 'medium' ? '중거리' : '장거리',
                     card.fare_tier === 'low' ? '저요금' : card.fare_tier === 'mid' ? '중요금' : '고요금',
                     card.is_paid ? '유료콜' : '무료콜',
-                    card.product === 'normal' ? '일반요금' : card.product === 'night_prod' ? '심야할증' : '탄력요금',
+                    card.product === 'normal' ? '일반요금' : '탄력요금',
                   ].map(tag => (
                     <span key={tag} style={{
                       padding: '4px 10px', borderRadius: 20, fontSize: 13,
