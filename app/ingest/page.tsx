@@ -12,6 +12,9 @@ type UploadResult = {
   match_count?: number
   call_count?: number
   total_rows_read?: number
+  hourly_inserted?: number
+  driver_inserted?: number
+  elapsed_ms?: number
   error?: string
 }
 
@@ -172,22 +175,34 @@ export default function IngestPage() {
           <section style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 8, padding: 20 }}>
             <h2 style={{ fontSize: 20, margin: '0 0 14px' }}>앱미터데이터</h2>
             <FilePicker label="앱미터 엑셀" file={meterFile} onChange={setMeterFile} />
-            <div style={{ marginTop: 14 }}>
+            <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
+              <Button
+                tone="green"
+                disabled={!meterFile || running != null}
+                onClick={() => {
+                  if (!meterFile) return
+                  const form = new FormData()
+                  form.append('file', meterFile)
+                  postForm('/api/meter-logs', form, 'meter-daily')
+                }}
+              >
+                일별 앱미터 적재
+              </Button>
               <Button
                 tone="orange"
                 disabled={!meterFile || running != null}
                 onClick={() => {
                   if (!meterFile) return
                   const form = new FormData()
-                  form.append('file', meterFile)
-                  postForm('/api/meter-excel', form, 'meter')
+                  form.append('meter_file', meterFile)
+                  postForm('/api/meter-excel', form, 'meter-excel')
                 }}
               >
-                앱미터데이터 적재
+                2시트 앱미터 적재
               </Button>
             </div>
             <div style={{ marginTop: 14, padding: 12, borderRadius: 8, background: 'rgba(245,158,11,.08)', border: `1px solid rgba(245,158,11,.25)`, color: C.yellow, lineHeight: 1.55 }}>
-              현재 대시보드 조회 기준 테이블인 meter_daily_logs는 Supabase에서 확인되지 않았습니다. 적재 API의 실제 저장 테이블 확인이 필요합니다.
+              일별 적재는 <strong>meter_daily_logs</strong>에 저장하는 기존 경로입니다. 2시트 적재는 <strong>meter_hourly_logs</strong>, <strong>meter_driver_logs</strong>를 사용하므로 Supabase 테이블 존재 여부를 먼저 확인해야 합니다.
             </div>
           </section>
         </div>
