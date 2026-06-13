@@ -610,20 +610,31 @@ export default function Home() {
           }}>
             PMO 콜 분석
           </h1>
-          <Link href="/dashboard" style={{
-            fontSize: 13, fontWeight: 600,
-            color: C.sub, textDecoration: 'none',
-            background: 'linear-gradient(135deg, rgba(34,211,238,.1), rgba(139,92,246,.08))',
-            border: `1px solid rgba(34,211,238,.25)`,
-            borderRadius: 8, padding: '5px 14px',
-            transition: 'all 200ms cubic-bezier(.22,1,.36,1)',
-            display: 'flex', alignItems: 'center', gap: 6,
-          }}
-            onMouseOver={e => { (e.currentTarget as HTMLElement).style.color = C.cyan }}
-            onMouseOut={e => { (e.currentTarget as HTMLElement).style.color = C.sub }}
-          >
-            누적 분석 →
-          </Link>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <a href="https://yoonthaho-solomon.github.io/happycall-pmo/" target="_blank" style={{
+              fontSize: 13, fontWeight: 600, color: C.sub, textDecoration: 'none',
+              background: 'transparent', border: `1px solid ${C.border}`,
+              borderRadius: 8, padding: '5px 12px',
+              transition: 'all 200ms cubic-bezier(.22,1,.36,1)', whiteSpace: 'nowrap',
+            }}
+              onMouseOver={e => { (e.currentTarget as HTMLElement).style.color = C.text; (e.currentTarget as HTMLElement).style.borderColor = C.borderHover }}
+              onMouseOut={e => { (e.currentTarget as HTMLElement).style.color = C.sub; (e.currentTarget as HTMLElement).style.borderColor = C.border }}
+            >
+              ← 일일 관제
+            </a>
+            <Link href="/dashboard" style={{
+              fontSize: 13, fontWeight: 600, color: C.sub, textDecoration: 'none',
+              background: 'linear-gradient(135deg, rgba(34,211,238,.1), rgba(139,92,246,.08))',
+              border: `1px solid rgba(34,211,238,.25)`,
+              borderRadius: 8, padding: '5px 12px',
+              transition: 'all 200ms cubic-bezier(.22,1,.36,1)', whiteSpace: 'nowrap',
+            }}
+              onMouseOver={e => { (e.currentTarget as HTMLElement).style.color = C.cyan }}
+              onMouseOut={e => { (e.currentTarget as HTMLElement).style.color = C.sub }}
+            >
+              누적 분석 →
+            </Link>
+          </div>
         </div>
 
         {/* Content */}

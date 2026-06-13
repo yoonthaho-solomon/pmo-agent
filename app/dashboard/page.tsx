@@ -949,17 +949,20 @@ export default function DashboardPage() {
           alignItems: 'center',
           gap: 16,
         }}>
+          <a href="https://yoonthaho-solomon.github.io/happycall-pmo/" target="_blank" style={{
+            fontSize: 13, fontWeight: 600, color: '#94A3B8', textDecoration: 'none',
+            background: 'transparent', border: '1px solid #1E2D4A', borderRadius: 8,
+            padding: '5px 12px', transition: 'all 200ms cubic-bezier(.22,1,.36,1)', whiteSpace: 'nowrap',
+          }}
+            onMouseOver={e => { (e.currentTarget as HTMLElement).style.color = '#F1F5F9'; (e.currentTarget as HTMLElement).style.borderColor = '#2D4470' }}
+            onMouseOut={e => { (e.currentTarget as HTMLElement).style.color = '#94A3B8'; (e.currentTarget as HTMLElement).style.borderColor = '#1E2D4A' }}
+          >
+            ← 일일 관제
+          </a>
           <Link href="/" style={{
-            fontSize: 13,
-            fontWeight: 600,
-            color: '#94A3B8',
-            textDecoration: 'none',
-            background: 'transparent',
-            border: `1px solid #1E2D4A`,
-            borderRadius: 8,
-            padding: '5px 12px',
-            transition: 'all 200ms cubic-bezier(.22,1,.36,1)',
-            whiteSpace: 'nowrap',
+            fontSize: 13, fontWeight: 600, color: '#94A3B8', textDecoration: 'none',
+            background: 'transparent', border: '1px solid #1E2D4A', borderRadius: 8,
+            padding: '5px 12px', transition: 'all 200ms cubic-bezier(.22,1,.36,1)', whiteSpace: 'nowrap',
           }}
             onMouseOver={e => { (e.target as HTMLElement).style.color = '#F1F5F9'; (e.target as HTMLElement).style.borderColor = '#2D4470' }}
             onMouseOut={e => { (e.target as HTMLElement).style.color = '#94A3B8'; (e.target as HTMLElement).style.borderColor = '#1E2D4A' }}
