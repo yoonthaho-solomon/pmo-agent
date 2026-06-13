@@ -3,11 +3,6 @@ import { createClient } from '@supabase/supabase-js'
 import * as XLSX from 'xlsx'
 import { logAgentRun } from '@/lib/agent-logger'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!  // service role key 사용 (RLS 우회)
-)
-
 const BATCH = 500
 const ASP_ID = 147 // 행복콜/천안
 
@@ -28,6 +23,10 @@ function toPct(val: unknown): number | null {
 
 export async function POST(req: NextRequest) {
   const startTime = Date.now()
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!  // service role key 사용 (RLS 우회)
+  )
 
   try {
     const formData = await req.formData()
@@ -148,10 +147,11 @@ export async function POST(req: NextRequest) {
     const elapsed = Date.now() - startTime
 
     await logAgentRun({
+      run_date: new Date().toISOString().slice(0, 10),
       agent_name: 'meter-excel',
-      asp_id: aspId,
+      input_rows: hourlyRaw.length + driverRaw.length,
       status: 'success',
-      summary: `미터기 적재 완료 | hourly: ${hourlyInserted}건, driver: ${driverInserted}건 | ${elapsed}ms`,
+      duration_ms: elapsed,
     })
 
     return NextResponse.json({
@@ -165,10 +165,12 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     await logAgentRun({
+      run_date: new Date().toISOString().slice(0, 10),
       agent_name: 'meter-excel',
-      asp_id: ASP_ID,
-      status: 'failure',
-      summary: `미터기 적재 실패: ${message}`,
+      input_rows: 0,
+      status: 'failed',
+      duration_ms: Date.now() - startTime,
+      error_msg: message,
     })
     return NextResponse.json({ error: '서버 오류', detail: message }, { status: 500 })
   }

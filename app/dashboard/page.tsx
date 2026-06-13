@@ -67,6 +67,44 @@ interface RecommendedDriver {
   match_reason: string
 }
 
+// ─── Design System ────────────────────────────────────────────────────────────
+
+const C = {
+  bg: '#080C18',
+  bgCard: 'rgba(15,22,40,0.82)',
+  border: 'rgba(30,45,74,0.8)',
+  borderHover: 'rgba(45,68,112,0.9)',
+  cyan: '#22D3EE',
+  purple: '#8B5CF6',
+  red: '#F43F5E',
+  yellow: '#F59E0B',
+  green: '#10B981',
+  orange: '#FB923C',
+  blue: '#3B82F6',
+  text: '#F1F5F9',
+  sub: '#94A3B8',
+  muted: '#4E6080',
+}
+
+const GLASS: React.CSSProperties = {
+  background: C.bgCard,
+  backdropFilter: 'blur(20px)',
+  WebkitBackdropFilter: 'blur(20px)',
+  border: `1px solid ${C.border}`,
+  borderRadius: 16,
+}
+
+const TOOLTIP_STYLE = {
+  contentStyle: {
+    background: 'rgba(8,12,24,0.96)',
+    border: '1px solid rgba(30,45,74,0.9)',
+    borderRadius: 12,
+    fontSize: 13,
+  },
+  labelStyle: { color: C.text, fontWeight: 700 },
+  itemStyle: { color: C.sub },
+}
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const ASP_OPTS = [
@@ -93,14 +131,6 @@ const RADAR_DIMS: { label: string; key: keyof DriverMbtiRow }[] = [
 ]
 
 const WEEKDAYS = ['월', '화', '수', '목', '금', '토', '일']
-
-const CARD = 'bg-[#111118] border border-[#1e1e2d] rounded-xl'
-
-const TOOLTIP_STYLE = {
-  contentStyle: { background: '#16161f', border: '1px solid #2e2e4d', borderRadius: 8, fontSize: 12 },
-  labelStyle: { color: '#e5e7eb' },
-  itemStyle: { color: '#d1d5db' },
-}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -136,6 +166,24 @@ function toRadarData(d: DriverMbtiRow) {
     value: parseFloat(((d[dim.key] as number) * 100).toFixed(1)),
     fullMark: 100,
   }))
+}
+
+// ─── Shared Components ────────────────────────────────────────────────────────
+
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return (
+    <h2 style={{ fontSize: 22, fontWeight: 800, color: C.text, letterSpacing: '-0.02em', marginBottom: 20 }}>
+      {children}
+    </h2>
+  )
+}
+
+function Label({ children, color }: { children: React.ReactNode; color?: string }) {
+  return (
+    <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: color ?? C.muted, marginBottom: 12 }}>
+      {children}
+    </p>
+  )
 }
 
 // ─── Section 0: 데이터 현황 ───────────────────────────────────────────────────
@@ -188,55 +236,54 @@ function StatusBar() {
     })()
   }, [])
 
-  const dash = (v: string | null) =>
-    loading ? <span className="text-gray-700">…</span> : (v ?? <span className="text-gray-700">—</span>)
+  const val = (v: string | null) => loading ? '…' : (v ?? '—')
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-      {/* 적재 기간 — col-span-2 on large */}
-      <div className={`${CARD} px-4 py-3 col-span-2 sm:col-span-3 lg:col-span-2`}>
-        <p className="text-xs text-gray-500 mb-1">적재 기간</p>
-        <p className="text-sm font-semibold text-gray-200 tabular-nums">
-          {loading
-            ? <span className="text-gray-700">…</span>
-            : (s.minDate && s.maxDate
-                ? <>{s.minDate} <span className="text-gray-600">~</span> {s.maxDate}</>
-                : <span className="text-gray-700">—</span>)
-          }
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 16 }}>
+      {/* 적재 기간 — 2칸 */}
+      <div style={{ ...GLASS, padding: '32px 36px', gridColumn: 'span 2' }}>
+        <Label color={C.cyan}>적재 기간</Label>
+        <p style={{ fontSize: 22, fontWeight: 800, color: C.text, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums' }}>
+          {loading ? '…' : (s.minDate && s.maxDate
+            ? <>{s.minDate} <span style={{ color: C.muted }}>~</span> {s.maxDate}</>
+            : '—'
+          )}
         </p>
       </div>
 
-      <StatCell label="총 적재 일수" loading={loading}
-        value={s.totalDays != null ? `${s.totalDays.toLocaleString()}일` : null} />
-      <StatCell label="총 기사 수" loading={loading}
-        value={s.driverCount != null ? `${s.driverCount.toLocaleString()}명` : null} accent />
-      <StatCell label="총 콜 수" loading={loading}
-        value={s.callCount != null ? `${s.callCount.toLocaleString()}건` : null} accent />
-      <StatCell label="평균 reliability" loading={loading}
-        value={s.avgReliability != null ? pct(s.avgReliability) : null} />
-      <StatCell label="마지막 실행" loading={loading}
-        value={s.lastRun} mono />
+      <BigStatCard label="총 적재 일수" value={s.totalDays != null ? s.totalDays.toLocaleString() : null} unit="일" loading={loading} color={C.cyan} />
+      <BigStatCard label="총 기사 수" value={s.driverCount != null ? s.driverCount.toLocaleString() : null} unit="명" loading={loading} color={C.purple} />
+      <BigStatCard label="총 콜 수" value={s.callCount != null ? s.callCount.toLocaleString() : null} unit="건" loading={loading} color={C.yellow} />
+      <BigStatCard label="마지막 실행" value={val(s.lastRun)} loading={false} color={C.sub} small />
     </div>
   )
 }
 
-function StatCell({
-  label, value, loading, accent, mono,
+function BigStatCard({
+  label, value, unit, loading, color, small,
 }: {
   label: string
   value: string | null
+  unit?: string
   loading: boolean
-  accent?: boolean
-  mono?: boolean
+  color: string
+  small?: boolean
 }) {
   return (
-    <div className={`${CARD} px-4 py-3`}>
-      <p className="text-xs text-gray-500 mb-1">{label}</p>
-      <p className={`text-base font-semibold ${mono ? 'font-mono text-sm' : ''} ${accent ? 'text-indigo-300' : 'text-gray-200'}`}>
-        {loading
-          ? <span className="text-gray-700">…</span>
-          : (value ?? <span className="text-gray-700">—</span>)
-        }
+    <div style={{ ...GLASS, padding: '32px 36px' }}>
+      <Label>{label}</Label>
+      <p style={{
+        fontSize: small ? 18 : 52,
+        fontWeight: 800,
+        color: loading || !value ? C.muted : color,
+        letterSpacing: small ? '-0.01em' : '-0.05em',
+        lineHeight: 1,
+        fontVariantNumeric: 'tabular-nums',
+      }}>
+        {loading ? '…' : (value ?? '—')}
+        {!loading && value && unit && (
+          <span style={{ fontSize: small ? 14 : 22, fontWeight: 600, color: C.sub, marginLeft: 6 }}>{unit}</span>
+        )}
       </p>
     </div>
   )
@@ -255,7 +302,7 @@ function KpiSection() {
       let q = supabase
         .from('daily_snapshots')
         .select('service_date, asp_id, total_calls, expired_count, success_rate')
-        .gte('service_date', cutoffStr(30))
+        .gte('service_date', '2026-05-23')
         .order('service_date', { ascending: true })
       if (asp !== 0) q = q.eq('asp_id', asp)
       const { data } = await q
@@ -284,49 +331,65 @@ function KpiSection() {
 
   return (
     <section>
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="font-semibold text-gray-100">KPI 추이</h2>
-        <div className="flex gap-1.5">
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+        <SectionTitle>KPI 추이</SectionTitle>
+        <div style={{ display: 'flex', gap: 8 }}>
           {ASP_OPTS.map(o => (
-            <button key={o.value} onClick={() => setAsp(o.value)}
-              className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
-                asp === o.value ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-              }`}
-            >{o.label}</button>
+            <button
+              key={o.value}
+              onClick={() => setAsp(o.value)}
+              style={{
+                padding: '6px 16px',
+                borderRadius: 8,
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'all 200ms',
+                border: asp === o.value ? `1px solid rgba(139,92,246,0.5)` : `1px solid ${C.border}`,
+                background: asp === o.value ? 'rgba(139,92,246,0.2)' : 'transparent',
+                color: asp === o.value ? C.purple : C.sub,
+              }}
+            >
+              {o.label}
+            </button>
           ))}
         </div>
       </div>
 
-      <div className={`${CARD} p-6`}>
+      <div style={{ ...GLASS, padding: '36px 40px' }}>
         {loading ? (
-          <div className="h-48 flex items-center justify-center text-gray-600 text-sm">불러오는 중…</div>
+          <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.muted, fontSize: 15 }}>불러오는 중…</div>
         ) : chartData.length === 0 ? (
-          <div className="h-48 flex items-center justify-center text-gray-600 text-sm">데이터가 없습니다</div>
+          <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.muted, fontSize: 15 }}>데이터가 없습니다</div>
         ) : (
-          <div className="space-y-8">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 48 }}>
             <div>
-              <p className="text-xs text-gray-500 mb-3">성공률 · EXPIRED율 (%)</p>
-              <ResponsiveContainer width="100%" height={200}>
-                <LineChart data={chartData} margin={{ top: 4, right: 8, left: -24, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1e2028" />
-                  <XAxis dataKey="date" tick={{ fill: '#6b7280', fontSize: 11 }} />
-                  <YAxis tick={{ fill: '#6b7280', fontSize: 11 }} unit="%" domain={[0, 100]} />
+              <p style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.muted, marginBottom: 20 }}>
+                수락률 · EXPIRED율 (%)
+              </p>
+              <ResponsiveContainer width="100%" height={220}>
+                <LineChart data={chartData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(30,45,74,0.5)" />
+                  <XAxis dataKey="date" tick={{ fill: C.muted, fontSize: 12 }} />
+                  <YAxis tick={{ fill: C.muted, fontSize: 12 }} unit="%" domain={[0, 100]} />
                   <Tooltip {...TOOLTIP_STYLE} />
-                  <Legend wrapperStyle={{ fontSize: 12, color: '#9ca3af' }} />
-                  <Line type="monotone" dataKey="success_rate" name="수락률" stroke="#22d3ee" strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="expired_rate" name="EXPIRED율" stroke="#f87171" strokeWidth={2} dot={false} />
+                  <Legend wrapperStyle={{ fontSize: 13, color: C.sub }} />
+                  <Line type="monotone" dataKey="success_rate" name="수락률" stroke={C.cyan} strokeWidth={2.5} dot={false} />
+                  <Line type="monotone" dataKey="expired_rate" name="EXPIRED율" stroke={C.red} strokeWidth={2.5} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
             <div>
-              <p className="text-xs text-gray-500 mb-3">호출수</p>
-              <ResponsiveContainer width="100%" height={140}>
-                <LineChart data={chartData} margin={{ top: 4, right: 8, left: -24, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1e2028" />
-                  <XAxis dataKey="date" tick={{ fill: '#6b7280', fontSize: 11 }} />
-                  <YAxis tick={{ fill: '#6b7280', fontSize: 11 }} />
+              <p style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.muted, marginBottom: 20 }}>
+                호출수
+              </p>
+              <ResponsiveContainer width="100%" height={160}>
+                <LineChart data={chartData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(30,45,74,0.5)" />
+                  <XAxis dataKey="date" tick={{ fill: C.muted, fontSize: 12 }} />
+                  <YAxis tick={{ fill: C.muted, fontSize: 12 }} />
                   <Tooltip {...TOOLTIP_STYLE} />
-                  <Line type="monotone" dataKey="total_calls" name="호출수" stroke="#a78bfa" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="total_calls" name="호출수" stroke={C.purple} strokeWidth={2.5} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -392,23 +455,34 @@ function MbtiSection() {
     setLoading(false)
   }
 
+  const inputStyle: React.CSSProperties = {
+    background: 'rgba(8,12,24,0.6)',
+    border: `1px solid ${C.border}`,
+    borderRadius: 10,
+    padding: '12px 16px',
+    fontSize: 14,
+    color: C.text,
+    outline: 'none',
+    width: '100%',
+  }
+
   return (
     <section>
-      <h2 className="font-semibold text-gray-100 mb-4">기사 MBTI 검색</h2>
-      <div className={`${CARD} p-6`}>
-        <div className="flex gap-3 mb-6">
+      <SectionTitle>기사 MBTI 검색</SectionTitle>
+      <div style={{ ...GLASS, padding: '36px 40px' }}>
+        <div style={{ display: 'flex', gap: 12, marginBottom: 32 }}>
           <input
             type="text"
             placeholder="driver_id 검색"
             value={query}
             onChange={e => setQuery(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && search()}
-            className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-indigo-500"
+            style={{ ...inputStyle, flex: 1 }}
           />
           <select
             value={aspFilter}
             onChange={e => setAspFilter(e.target.value === '' ? '' : Number(e.target.value))}
-            className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-indigo-500"
+            style={{ ...inputStyle, width: 140 }}
           >
             <option value="">ASP 전체</option>
             {ASP_OPTS.slice(1).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -416,71 +490,95 @@ function MbtiSection() {
           <button
             onClick={search}
             disabled={loading || (!query && !aspFilter)}
-            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white text-sm font-medium rounded-lg transition-colors"
+            style={{
+              padding: '12px 28px',
+              background: 'linear-gradient(135deg, #8B5CF6, #5b21b6)',
+              color: '#fff',
+              fontSize: 14,
+              fontWeight: 700,
+              borderRadius: 10,
+              border: 'none',
+              cursor: loading || (!query && !aspFilter) ? 'not-allowed' : 'pointer',
+              opacity: loading || (!query && !aspFilter) ? 0.4 : 1,
+              whiteSpace: 'nowrap',
+              transition: 'all 200ms',
+            }}
           >
             {loading ? '검색 중…' : '검색'}
           </button>
         </div>
 
         {searched && !loading && drivers.length === 0 && (
-          <p className="text-center text-gray-600 text-sm py-8">검색 결과가 없습니다</p>
+          <p style={{ textAlign: 'center', color: C.muted, fontSize: 15, padding: '32px 0' }}>검색 결과가 없습니다</p>
         )}
 
         {drivers.length > 0 && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: 16 }}>
             {drivers.map(d => {
               const { timeLabel, distLabel, prefArea } = driverSummary(d)
               const rates = acceptRates.get(d.driver_id)
               return (
-                <div key={d.driver_id} className="bg-gray-900/80 border border-gray-800 rounded-xl p-4">
-                  <div className="flex items-start justify-between mb-3">
+                <div key={d.driver_id} style={{
+                  background: 'rgba(8,12,24,0.6)',
+                  border: `1px solid ${C.border}`,
+                  borderRadius: 14,
+                  padding: '24px 28px',
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
                     <div>
-                      <p className="text-sm font-mono font-medium text-gray-200">{d.driver_id}</p>
-                      <p className="text-xs text-gray-500 mt-0.5">ASP {d.asp_id}</p>
+                      <p style={{ fontSize: 16, fontWeight: 700, fontFamily: 'monospace', color: C.text }}>{d.driver_id}</p>
+                      <p style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>ASP {d.asp_id}</p>
                     </div>
-                    <span className="text-xs bg-indigo-900/50 text-indigo-300 border border-indigo-800/60 px-2 py-0.5 rounded-full">
+                    <span style={{
+                      fontSize: 12, fontWeight: 700,
+                      background: 'rgba(139,92,246,0.15)',
+                      color: C.purple,
+                      border: `1px solid rgba(139,92,246,0.3)`,
+                      borderRadius: 20,
+                      padding: '4px 12px',
+                    }}>
                       신뢰도 {pct(d.reliability)}
                     </span>
                   </div>
 
-                  <div className="flex gap-3 items-start">
-                    <div className="flex-shrink-0">
-                      <RadarChart width={150} height={150} data={toRadarData(d)} margin={{ top: 6, right: 6, bottom: 6, left: 6 }}>
-                        <PolarGrid stroke="#2e2e4d" />
-                        <PolarAngleAxis dataKey="subject" tick={{ fill: '#6b7280', fontSize: 9 }} />
+                  <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
+                    <div style={{ flexShrink: 0 }}>
+                      <RadarChart width={160} height={160} data={toRadarData(d)} margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
+                        <PolarGrid stroke="rgba(30,45,74,0.8)" />
+                        <PolarAngleAxis dataKey="subject" tick={{ fill: C.muted, fontSize: 9 }} />
                         <PolarRadiusAxis angle={90} domain={[0, 100]} tick={false} axisLine={false} />
-                        <Radar dataKey="value" stroke="#6366f1" fill="#6366f1" fillOpacity={0.2} strokeWidth={1.5} />
+                        <Radar dataKey="value" stroke={C.purple} fill={C.purple} fillOpacity={0.2} strokeWidth={1.5} />
                       </RadarChart>
                     </div>
 
-                    <div className="flex-1 space-y-2 text-xs pt-1">
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 12, paddingTop: 8 }}>
                       <div>
-                        <span className="text-gray-500">유형  </span>
-                        <span className="text-gray-200">{timeLabel} · {distLabel} 선호</span>
+                        <span style={{ fontSize: 12, color: C.muted }}>유형 </span>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{timeLabel} · {distLabel} 선호</span>
                       </div>
                       <div>
-                        <span className="text-gray-500">선호지역 </span>
-                        <span className="text-gray-300 font-mono text-[11px]">{prefArea}</span>
+                        <span style={{ fontSize: 12, color: C.muted }}>선호지역 </span>
+                        <span style={{ fontSize: 12, fontFamily: 'monospace', color: C.sub }}>{prefArea}</span>
                       </div>
                       <div>
-                        <span className="text-gray-500">데이터 </span>
-                        <span className="text-gray-300">{d.data_days}일치</span>
+                        <span style={{ fontSize: 12, color: C.muted }}>데이터 </span>
+                        <span style={{ fontSize: 13, color: C.sub }}>{d.data_days}일치</span>
                       </div>
-                      <div className="border-t border-gray-800 pt-2 mt-1 space-y-1">
-                        <p className="text-gray-500 mb-1">수락률</p>
-                        <div className="flex gap-4">
-                          <span>
-                            <span className="text-gray-600">7일 </span>
-                            <span className={rates?.rate7 != null ? 'text-cyan-400 font-medium' : 'text-gray-700'}>
+                      <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 12, marginTop: 4 }}>
+                        <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.muted, marginBottom: 10 }}>수락률</p>
+                        <div style={{ display: 'flex', gap: 24 }}>
+                          <div>
+                            <span style={{ fontSize: 12, color: C.muted }}>7일 </span>
+                            <span style={{ fontSize: 15, fontWeight: 700, color: rates?.rate7 != null ? C.cyan : C.muted }}>
                               {rates?.rate7 != null ? pct(rates.rate7) : '—'}
                             </span>
-                          </span>
-                          <span>
-                            <span className="text-gray-600">30일 </span>
-                            <span className={rates?.rate30 != null ? 'text-cyan-400 font-medium' : 'text-gray-700'}>
+                          </div>
+                          <div>
+                            <span style={{ fontSize: 12, color: C.muted }}>30일 </span>
+                            <span style={{ fontSize: 15, fontWeight: 700, color: rates?.rate30 != null ? C.cyan : C.muted }}>
                               {rates?.rate30 != null ? pct(rates.rate30) : '—'}
                             </span>
-                          </span>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -548,52 +646,70 @@ function SimulatorSection() {
     }
   }
 
-  const inputCls = 'w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-indigo-500'
-  const labelCls = 'block text-xs text-gray-500 mb-1'
+  const inputStyle: React.CSSProperties = {
+    width: '100%',
+    background: 'rgba(8,12,24,0.6)',
+    border: `1px solid ${C.border}`,
+    borderRadius: 10,
+    padding: '12px 16px',
+    fontSize: 14,
+    color: C.text,
+    outline: 'none',
+  }
+
+  const labelStyle: React.CSSProperties = {
+    display: 'block',
+    fontSize: 11,
+    fontWeight: 700,
+    letterSpacing: '0.08em',
+    textTransform: 'uppercase',
+    color: C.muted,
+    marginBottom: 8,
+  }
 
   return (
     <section>
-      <h2 className="font-semibold text-gray-100 mb-4">매칭 시뮬레이터</h2>
-      <div className={`${CARD} p-6`}>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 mb-5">
+      <SectionTitle>매칭 시뮬레이터</SectionTitle>
+      <div style={{ ...GLASS, padding: '36px 40px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 20, marginBottom: 28 }}>
           <div>
-            <label className={labelCls}>ASP ID *</label>
-            <input type="number" value={form.asp_id} onChange={e => setField('asp_id', e.target.value)} placeholder="137" className={inputCls} />
+            <label style={labelStyle}>ASP ID *</label>
+            <input type="number" value={form.asp_id} onChange={e => setField('asp_id', e.target.value)} placeholder="137" style={inputStyle} />
           </div>
           <div>
-            <label className={labelCls}>출발 헥사곤</label>
-            <input type="text" value={form.s_hexagon} onChange={e => setField('s_hexagon', e.target.value)} placeholder="hex_id" className={inputCls} />
+            <label style={labelStyle}>출발 헥사곤</label>
+            <input type="text" value={form.s_hexagon} onChange={e => setField('s_hexagon', e.target.value)} placeholder="hex_id" style={inputStyle} />
           </div>
           <div>
-            <label className={labelCls}>도착 헥사곤</label>
-            <input type="text" value={form.d_hexagon} onChange={e => setField('d_hexagon', e.target.value)} placeholder="hex_id" className={inputCls} />
+            <label style={labelStyle}>도착 헥사곤</label>
+            <input type="text" value={form.d_hexagon} onChange={e => setField('d_hexagon', e.target.value)} placeholder="hex_id" style={inputStyle} />
           </div>
           <div>
-            <label className={labelCls}>시간대 (0–23)</label>
-            <input type="number" min={0} max={23} value={form.hour_slot} onChange={e => setField('hour_slot', e.target.value)} className={inputCls} />
+            <label style={labelStyle}>시간대 (0–23)</label>
+            <input type="number" min={0} max={23} value={form.hour_slot} onChange={e => setField('hour_slot', e.target.value)} style={inputStyle} />
           </div>
           <div>
-            <label className={labelCls}>요일</label>
-            <select value={form.weekday} onChange={e => setField('weekday', e.target.value)} className={inputCls}>
+            <label style={labelStyle}>요일</label>
+            <select value={form.weekday} onChange={e => setField('weekday', e.target.value)} style={inputStyle}>
               {WEEKDAYS.map((w, i) => <option key={i} value={i}>{w}요일</option>)}
             </select>
           </div>
           <div>
-            <label className={labelCls}>예상 거리 (m)</label>
-            <input type="number" value={form.expected_distance} onChange={e => setField('expected_distance', e.target.value)} className={inputCls} />
+            <label style={labelStyle}>예상 거리 (m)</label>
+            <input type="number" value={form.expected_distance} onChange={e => setField('expected_distance', e.target.value)} style={inputStyle} />
           </div>
           <div>
-            <label className={labelCls}>예상 요금 (원)</label>
-            <input type="number" value={form.expected_fare} onChange={e => setField('expected_fare', e.target.value)} className={inputCls} />
+            <label style={labelStyle}>예상 요금 (원)</label>
+            <input type="number" value={form.expected_fare} onChange={e => setField('expected_fare', e.target.value)} style={inputStyle} />
           </div>
-          <div className="flex gap-5 items-end pb-2">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" checked={form.is_paid} onChange={e => setField('is_paid', e.target.checked)} className="w-4 h-4 accent-indigo-500" />
-              <span className="text-sm text-gray-300">유료콜</span>
+          <div style={{ display: 'flex', gap: 24, alignItems: 'flex-end', paddingBottom: 4 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+              <input type="checkbox" checked={form.is_paid} onChange={e => setField('is_paid', e.target.checked)} style={{ width: 16, height: 16, accentColor: C.purple }} />
+              <span style={{ fontSize: 14, color: C.sub }}>유료콜</span>
             </label>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" checked={form.is_surge} onChange={e => setField('is_surge', e.target.checked)} className="w-4 h-4 accent-indigo-500" />
-              <span className="text-sm text-gray-300">탄력요금</span>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+              <input type="checkbox" checked={form.is_surge} onChange={e => setField('is_surge', e.target.checked)} style={{ width: 16, height: 16, accentColor: C.purple }} />
+              <span style={{ fontSize: 14, color: C.sub }}>탄력요금</span>
             </label>
           </div>
         </div>
@@ -601,31 +717,57 @@ function SimulatorSection() {
         <button
           onClick={run}
           disabled={loading}
-          className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-medium text-sm rounded-lg transition-colors"
+          style={{
+            width: '100%',
+            padding: '16px',
+            background: loading ? 'rgba(15,22,40,0.9)' : 'linear-gradient(135deg, #8B5CF6, #5b21b6)',
+            color: loading ? C.muted : '#fff',
+            fontSize: 15,
+            fontWeight: 700,
+            borderRadius: 12,
+            border: loading ? `1px solid ${C.border}` : 'none',
+            cursor: loading ? 'not-allowed' : 'pointer',
+            transition: 'all 200ms',
+          }}
         >
           {loading ? '추천 중…' : '추천 기사 조회'}
         </button>
 
         {error && (
-          <p className="mt-3 text-xs text-red-400 bg-red-900/20 border border-red-900/40 rounded-lg px-3 py-2">{error}</p>
+          <p style={{ marginTop: 16, fontSize: 13, color: C.red, background: 'rgba(244,63,94,0.08)', border: '1px solid rgba(244,63,94,0.25)', borderRadius: 10, padding: '12px 16px' }}>
+            {error}
+          </p>
         )}
 
         {result && (
-          <div className="mt-6">
-            <p className="text-xs text-gray-500 mb-3">
-              기사 풀 <span className="text-gray-300">{result.driver_pool_size.toLocaleString()}명</span> 중 TOP 10
+          <div style={{ marginTop: 28 }}>
+            <p style={{ fontSize: 13, color: C.muted, marginBottom: 16 }}>
+              기사 풀 <span style={{ color: C.text, fontWeight: 700 }}>{result.driver_pool_size.toLocaleString()}명</span> 중 TOP 10
             </p>
-            <div className="space-y-1.5">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {result.recommended_drivers.map(d => (
-                <div key={d.driver_id} className="flex items-center gap-3 bg-gray-900/80 hover:bg-gray-900 rounded-lg px-4 py-3 transition-colors">
-                  <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${
-                    d.rank <= 3 ? 'bg-indigo-600 text-white' : 'bg-gray-700 text-gray-400'
-                  }`}>
+                <div key={d.driver_id} style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 16,
+                  background: 'rgba(8,12,24,0.5)',
+                  border: `1px solid ${C.border}`,
+                  borderRadius: 10,
+                  padding: '14px 20px',
+                }}>
+                  <span style={{
+                    width: 28, height: 28, borderRadius: '50%',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 12, fontWeight: 800, flexShrink: 0,
+                    background: d.rank <= 3 ? 'rgba(139,92,246,0.3)' : 'rgba(30,45,74,0.5)',
+                    color: d.rank <= 3 ? C.purple : C.muted,
+                    border: `1px solid ${d.rank <= 3 ? 'rgba(139,92,246,0.4)' : C.border}`,
+                  }}>
                     {d.rank}
                   </span>
-                  <span className="font-mono text-sm text-gray-200 w-40 truncate">{d.driver_id}</span>
-                  <span className="text-xs text-indigo-300 w-12 text-right">{(d.cosine_score * 100).toFixed(1)}%</span>
-                  <span className="text-xs text-gray-500 flex-1 truncate">{d.match_reason}</span>
+                  <span style={{ fontFamily: 'monospace', fontSize: 14, color: C.text, width: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.driver_id}</span>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: C.cyan, width: 52, textAlign: 'right' }}>{(d.cosine_score * 100).toFixed(1)}%</span>
+                  <span style={{ fontSize: 13, color: C.muted, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.match_reason}</span>
                 </div>
               ))}
             </div>
@@ -656,38 +798,52 @@ function LogsSection() {
 
   return (
     <section>
-      <h2 className="font-semibold text-gray-100 mb-4">실행 로그</h2>
-      <div className={`${CARD} overflow-hidden`}>
+      <SectionTitle>실행 로그</SectionTitle>
+      <div style={{ ...GLASS, overflow: 'hidden' }}>
         {loading ? (
-          <div className="h-32 flex items-center justify-center text-gray-600 text-sm">불러오는 중…</div>
+          <div style={{ height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.muted, fontSize: 15 }}>불러오는 중…</div>
         ) : logs.length === 0 ? (
-          <div className="h-32 flex items-center justify-center text-gray-600 text-sm">로그가 없습니다</div>
+          <div style={{ height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.muted, fontSize: 15 }}>로그가 없습니다</div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
               <thead>
-                <tr className="border-b border-[#1e1e2d]">
+                <tr style={{ borderBottom: `1px solid ${C.border}` }}>
                   {['날짜', '에이전트', '처리 행수', '상태', '소요시간'].map(h => (
-                    <th key={h} className="text-left text-xs text-gray-500 font-medium px-4 py-3 whitespace-nowrap">{h}</th>
+                    <th key={h} style={{
+                      textAlign: 'left',
+                      fontSize: 11,
+                      fontWeight: 700,
+                      letterSpacing: '0.08em',
+                      textTransform: 'uppercase',
+                      color: C.muted,
+                      padding: '20px 24px',
+                      whiteSpace: 'nowrap',
+                    }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {logs.map((log, i) => (
-                  <tr key={i} className="border-b border-[#16161e] hover:bg-gray-900/40 transition-colors">
-                    <td className="px-4 py-3 text-xs text-gray-400 font-mono whitespace-nowrap">{log.run_date}</td>
-                    <td className="px-4 py-3 text-xs text-gray-300 whitespace-nowrap">{log.agent_name}</td>
-                    <td className="px-4 py-3 text-xs text-gray-400 text-right tabular-nums">{log.input_rows.toLocaleString()}</td>
-                    <td className="px-4 py-3">
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${
-                        log.status === 'success'
-                          ? 'bg-emerald-900/40 text-emerald-400 border border-emerald-900/60'
-                          : 'bg-red-900/40 text-red-400 border border-red-900/60'
-                      }`}>
+                  <tr key={i} style={{ borderBottom: `1px solid rgba(30,45,74,0.4)` }}>
+                    <td style={{ padding: '16px 24px', fontSize: 13, fontFamily: 'monospace', color: C.sub, whiteSpace: 'nowrap' }}>{log.run_date}</td>
+                    <td style={{ padding: '16px 24px', fontSize: 13, color: C.text, whiteSpace: 'nowrap', fontWeight: 600 }}>{log.agent_name}</td>
+                    <td style={{ padding: '16px 24px', fontSize: 13, color: C.sub, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{log.input_rows.toLocaleString()}</td>
+                    <td style={{ padding: '16px 24px' }}>
+                      <span style={{
+                        fontSize: 12,
+                        fontWeight: 700,
+                        padding: '4px 12px',
+                        borderRadius: 20,
+                        whiteSpace: 'nowrap',
+                        background: log.status === 'success' ? 'rgba(16,185,129,0.12)' : 'rgba(244,63,94,0.12)',
+                        color: log.status === 'success' ? C.green : C.red,
+                        border: `1px solid ${log.status === 'success' ? 'rgba(16,185,129,0.25)' : 'rgba(244,63,94,0.25)'}`,
+                      }}>
                         {log.status === 'success' ? '성공' : '실패'}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">{secFmt(log.duration_ms)}</td>
+                    <td style={{ padding: '16px 24px', fontSize: 13, color: C.sub, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{secFmt(log.duration_ms)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -703,24 +859,74 @@ function LogsSection() {
 
 export default function DashboardPage() {
   return (
-    <div className="min-h-screen bg-[#0a0a0f] text-gray-100">
-      <div className="border-b border-[#1e1e2d] px-6 py-4">
-        <div className="max-w-7xl mx-auto flex items-center gap-3">
-          <Link href="/" className="text-sm text-gray-500 hover:text-gray-200 transition-colors">
+    <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600;700;800&display=swap');
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background: #080C18; font-family: 'Pretendard', -apple-system, sans-serif; -webkit-font-smoothing: antialiased; }
+        input, select, button, textarea { font-family: inherit; }
+        input::placeholder { color: #4E6080; }
+        select option { background: #0F1628; color: #F1F5F9; }
+      `}</style>
+
+      <div style={{ minHeight: '100vh', background: '#080C18', color: C.text, position: 'relative', overflow: 'hidden' }}>
+        {/* Ambient glow */}
+        <div style={{ position: 'fixed', top: '-20%', left: '-10%', width: 700, height: 700, background: 'radial-gradient(circle, rgba(34,211,238,0.07), transparent 70%)', pointerEvents: 'none', zIndex: 0 }} />
+        <div style={{ position: 'fixed', bottom: '-20%', right: '-10%', width: 600, height: 600, background: 'radial-gradient(circle, rgba(139,92,246,0.06), transparent 70%)', pointerEvents: 'none', zIndex: 0 }} />
+
+        {/* Header */}
+        <div style={{
+          position: 'sticky', top: 0, zIndex: 50,
+          background: 'rgba(8,12,24,0.95)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+          borderBottom: `1px solid ${C.border}`,
+          padding: '0 40px',
+          height: 56,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 16,
+        }}>
+          <Link href="/" style={{
+            fontSize: 13,
+            fontWeight: 600,
+            color: C.sub,
+            textDecoration: 'none',
+            background: 'transparent',
+            border: `1px solid ${C.border}`,
+            borderRadius: 8,
+            padding: '5px 12px',
+            transition: 'all 200ms',
+            whiteSpace: 'nowrap',
+          }}
+            onMouseOver={e => { (e.target as HTMLElement).style.color = C.text; (e.target as HTMLElement).style.borderColor = C.borderHover }}
+            onMouseOut={e => { (e.target as HTMLElement).style.color = C.sub; (e.target as HTMLElement).style.borderColor = C.border }}
+          >
             ← 일일 대시보드
           </Link>
-          <span className="text-gray-800">|</span>
-          <h1 className="text-sm font-semibold text-gray-200">누적 분석 대시보드</h1>
+          <div style={{ width: 1, height: 18, background: C.border }} />
+          <h1 style={{
+            fontSize: 15,
+            fontWeight: 800,
+            letterSpacing: '-0.02em',
+            color: 'transparent',
+            background: `linear-gradient(135deg, ${C.cyan}, ${C.purple})`,
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+          }}>
+            누적 분석 대시보드
+          </h1>
+        </div>
+
+        {/* Content */}
+        <div style={{ maxWidth: 1400, margin: '0 auto', padding: '48px 40px', display: 'flex', flexDirection: 'column', gap: 48, position: 'relative', zIndex: 1 }}>
+          <StatusBar />
+          <KpiSection />
+          <MbtiSection />
+          <SimulatorSection />
+          <LogsSection />
         </div>
       </div>
-
-      <div className="max-w-7xl mx-auto px-6 py-8 space-y-10">
-        <StatusBar />
-        <KpiSection />
-        <MbtiSection />
-        <SimulatorSection />
-        <LogsSection />
-      </div>
-    </div>
+    </>
   )
 }
