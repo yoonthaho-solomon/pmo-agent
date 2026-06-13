@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
+import Link from 'next/link'
 
 interface KpiRow {
   asp_id: number
@@ -61,7 +62,7 @@ interface MeterLogsResponse {
   total_rows_read: number
 }
 
-// --- Auto-run pipeline ---
+// ─── Auto-run pipeline ────────────────────────────────────────────────────────
 
 type StepKey = 'driverLogs' | 'callcardMbti' | 'driverMbti' | 'matching'
 type StepStatus = 'idle' | 'running' | 'done' | 'error'
@@ -86,7 +87,36 @@ const IDLE_STEPS: Record<StepKey, StepState> = {
   matching:     { status: 'idle' },
 }
 
-// --- FileInput component ---
+// ─── Design System ────────────────────────────────────────────────────────────
+
+const C = {
+  bg: '#080C18',
+  bgCard: '#0F1628',
+  bgCardHover: '#131D35',
+  border: '#1E2D4A',
+  borderHover: '#2D4470',
+  cyan: '#22D3EE',
+  red: '#F43F5E',
+  yellow: '#F59E0B',
+  green: '#10B981',
+  purple: '#8B5CF6',
+  blue: '#3B82F6',
+  orange: '#FB923C',
+  text: '#F1F5F9',
+  sub: '#94A3B8',
+  muted: '#4E6080',
+}
+
+const CARD: React.CSSProperties = {
+  background: C.bgCard,
+  border: `1px solid ${C.border}`,
+  borderRadius: 16,
+  position: 'relative',
+  overflow: 'hidden',
+  transition: 'all 200ms cubic-bezier(.22,1,.36,1)',
+}
+
+// ─── FileInput ────────────────────────────────────────────────────────────────
 
 function FileInput({
   label, icon, file, inputRef, onChange, onClear,
@@ -98,24 +128,57 @@ function FileInput({
   onChange: (f: File | null) => void
   onClear: () => void
 }) {
+  const [hover, setHover] = useState(false)
+
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">
-        {label} <span className="text-red-500">*</span>
-      </label>
+      <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.muted, marginBottom: 10 }}>
+        {label} <span style={{ color: C.red }}>*</span>
+      </p>
       <div
-        className="flex items-center gap-3 border border-dashed border-gray-300 rounded-lg px-4 py-3 cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors"
         onClick={() => inputRef.current?.click()}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 14,
+          background: hover ? C.bgCardHover : 'rgba(255,255,255,.02)',
+          border: `1px dashed ${file ? 'rgba(16,185,129,.4)' : hover ? C.borderHover : C.border}`,
+          borderRadius: 12,
+          padding: '14px 18px',
+          cursor: 'pointer',
+          transition: 'all 200ms cubic-bezier(.22,1,.36,1)',
+        }}
       >
-        <span className="text-2xl">{icon}</span>
-        <span className="text-sm text-gray-600 flex-1 truncate">
-          {file ? file.name : '파일을 클릭해서 선택하세요 (.xlsx)'}
+        <span style={{ fontSize: 20, flexShrink: 0 }}>{icon}</span>
+        <span style={{
+          fontSize: 13,
+          color: file ? C.text : C.muted,
+          flex: 1,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          fontWeight: file ? 600 : 400,
+        }}>
+          {file ? file.name : '클릭해서 파일 선택 (.xlsx)'}
         </span>
         {file && (
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); onClear() }}
-            className="text-gray-400 hover:text-red-500 text-xs"
+            style={{
+              fontSize: 12,
+              color: C.muted,
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              padding: '2px 6px',
+              borderRadius: 4,
+              transition: 'color 150ms',
+            }}
+            onMouseOver={e => (e.currentTarget.style.color = C.red)}
+            onMouseOut={e => (e.currentTarget.style.color = C.muted)}
           >
             ✕
           </button>
@@ -125,29 +188,29 @@ function FileInput({
         ref={inputRef}
         type="file"
         accept=".xlsx,.xls"
-        className="hidden"
+        style={{ display: 'none' }}
         onChange={(e) => onChange(e.target.files?.[0] ?? null)}
       />
     </div>
   )
 }
 
-// --- Step indicator ---
+// ─── StepRow ──────────────────────────────────────────────────────────────────
 
 function StepRow({ index, label, state }: { index: number; label: string; state: StepState }) {
   const { status, message, error } = state
 
-  const numCls =
-    status === 'idle'    ? 'bg-gray-100 text-gray-400' :
-    status === 'running' ? 'bg-blue-100 text-blue-600' :
-    status === 'done'    ? 'bg-green-100 text-green-600' :
-                           'bg-red-100 text-red-600'
+  const circleColor =
+    status === 'idle'    ? C.muted :
+    status === 'running' ? C.cyan :
+    status === 'done'    ? C.green :
+                           C.red
 
-  const textCls =
-    status === 'idle'    ? 'text-gray-400' :
-    status === 'running' ? 'text-blue-600' :
-    status === 'done'    ? 'text-green-600' :
-                           'text-red-600'
+  const circleBg =
+    status === 'idle'    ? 'rgba(78,96,128,.15)' :
+    status === 'running' ? 'rgba(34,211,238,.15)' :
+    status === 'done'    ? 'rgba(16,185,129,.15)' :
+                           'rgba(244,63,94,.15)'
 
   const detail =
     status === 'idle'    ? '대기 중' :
@@ -156,21 +219,83 @@ function StepRow({ index, label, state }: { index: number; label: string; state:
                            (error ?? '오류')
 
   return (
-    <div className="flex items-center gap-3 py-1">
-      <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${numCls}`}>
-        {status === 'running' ? (
-          <span className="inline-block animate-spin">↻</span>
-        ) : (
-          index
-        )}
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 0', borderBottom: `1px solid ${C.border}` }}>
+      <div style={{
+        width: 26, height: 26, borderRadius: '50%',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: 11, fontWeight: 800, flexShrink: 0,
+        background: circleBg,
+        color: circleColor,
+        border: `1px solid ${circleColor}40`,
+      }}>
+        {status === 'running' ? <span style={{ display: 'inline-block', animation: 'spin 1s linear infinite' }}>↻</span> : index}
       </div>
-      <span className="text-sm text-gray-700 w-36 flex-shrink-0">{label}</span>
-      <span className={`text-xs ${textCls}`}>{detail}</span>
+      <span style={{ fontSize: 13, fontWeight: 600, color: C.text, width: 140, flexShrink: 0 }}>{label}</span>
+      <span style={{ fontSize: 12, color: circleColor, flex: 1 }}>{detail}</span>
     </div>
   )
 }
 
-// --- Helpers ---
+// ─── ActionCard ───────────────────────────────────────────────────────────────
+
+function ActionCard({
+  title, desc, accentColor, loading, disabled, onRun, btnLabel, result, error, children,
+}: {
+  title: string
+  desc: string
+  accentColor: string
+  loading: boolean
+  disabled: boolean
+  onRun: () => void
+  btnLabel: string
+  result?: React.ReactNode
+  error?: string | null
+  children?: React.ReactNode
+}) {
+  return (
+    <div className="h-card" style={{ ...CARD, padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: accentColor, opacity: 0.7 }} />
+      <div>
+        <p style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 4 }}>{title}</p>
+        <p style={{ fontSize: 11, color: C.muted }}>{desc}</p>
+      </div>
+      {children}
+      {error && (
+        <div style={{ fontSize: 12, color: C.red, background: 'rgba(244,63,94,.08)', border: `1px solid rgba(244,63,94,.2)`, borderRadius: 8, padding: '10px 12px' }}>
+          {error}
+        </div>
+      )}
+      {result && (
+        <div style={{ fontSize: 12, color: C.green, background: 'rgba(16,185,129,.08)', border: `1px solid rgba(16,185,129,.2)`, borderRadius: 8, padding: '10px 12px' }}>
+          {result}
+        </div>
+      )}
+      <button
+        onClick={onRun}
+        disabled={disabled}
+        style={{
+          marginTop: 'auto',
+          width: '100%',
+          padding: '10px',
+          background: disabled ? 'transparent' : accentColor,
+          color: disabled ? C.muted : '#fff',
+          fontSize: 12,
+          fontWeight: 700,
+          borderRadius: 10,
+          border: `1px solid ${disabled ? C.border : 'transparent'}`,
+          cursor: disabled ? 'not-allowed' : 'pointer',
+          opacity: disabled ? 0.5 : 1,
+          transition: 'all 200ms cubic-bezier(.22,1,.36,1)',
+          boxShadow: !disabled ? `0 4px 16px ${accentColor}40` : 'none',
+        }}
+      >
+        {loading ? '실행 중…' : btnLabel}
+      </button>
+    </div>
+  )
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function extractDateFromFilename(filename: string): string | null {
   const m = filename.match(/^(\d{4})(\d{2})(\d{2})/)
@@ -178,7 +303,7 @@ function extractDateFromFilename(filename: string): string | null {
   return `${m[1]}-${m[2]}-${m[3]}`
 }
 
-// --- Main page ---
+// ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function Home() {
   const [callcardFile, setCallcardFile] = useState<File | null>(null)
@@ -190,11 +315,9 @@ export default function Home() {
   const remappedRef = useRef<HTMLInputElement>(null)
   const meterRef = useRef<HTMLInputElement>(null)
 
-  // Auto-run state
   const [autoRunning, setAutoRunning] = useState(false)
   const [steps, setSteps] = useState<Record<StepKey, StepState>>(IDLE_STEPS)
 
-  // Individual action states
   const [analyzeLoading, setAnalyzeLoading] = useState(false)
   const [analyzeResult, setAnalyzeResult] = useState<AnalyzeResponse | null>(null)
   const [analyzeError, setAnalyzeError] = useState<string | null>(null)
@@ -226,40 +349,32 @@ export default function Home() {
   const [meterResult, setMeterResult] = useState<MeterLogsResponse | null>(null)
   const [meterError, setMeterError] = useState<string | null>(null)
 
-  // callcard_eta 선택 시 파일명에서 날짜 추출
   function handleCallcardChange(file: File | null) {
     setCallcardFile(file)
     setDateError(null)
-    if (!file) {
-      setExtractedDate(null)
-      return
-    }
+    if (!file) { setExtractedDate(null); return }
     const date = extractDateFromFilename(file.name)
     setExtractedDate(date)
-    if (!date) setDateError(`파일명에서 날짜를 찾을 수 없습니다. 패턴: YYYYMMDD_*.xlsx`)
+    if (!date) setDateError('파일명에서 날짜를 찾을 수 없습니다. 패턴: YYYYMMDD_*.xlsx')
   }
 
   function setStep(key: StepKey, state: StepState) {
     setSteps((prev) => ({ ...prev, [key]: state }))
   }
 
-  // --- Auto-run ---
-
   async function handleAutoRun() {
     if (!callcardFile || !remappedFile) return
-
     setAutoRunning(true)
     setSteps(IDLE_STEPS)
 
     let date = extractedDate ?? extractDateFromFilename(callcardFile.name)
     if (!date) {
-      setStep('driverLogs', { status: 'error', error: '파일명에서 날짜를 추출할 수 없습니다. 패턴: YYYYMMDD_*.xlsx' })
+      setStep('driverLogs', { status: 'error', error: '파일명에서 날짜를 추출할 수 없습니다.' })
       setAutoRunning(false)
       return
     }
     if (!extractedDate) setExtractedDate(date)
 
-    // 1. 기사 로그 적재
     setStep('driverLogs', { status: 'running' })
     try {
       const form = new FormData()
@@ -268,19 +383,10 @@ export default function Home() {
       form.append('service_date', date)
       const res = await fetch('/api/driver-logs', { method: 'POST', body: form })
       const json = await res.json()
-      if (!res.ok) {
-        setStep('driverLogs', { status: 'error', error: json.error })
-        setAutoRunning(false)
-        return
-      }
+      if (!res.ok) { setStep('driverLogs', { status: 'error', error: json.error }); setAutoRunning(false); return }
       setStep('driverLogs', { status: 'done', message: `기사 ${json.driver_count}명 적재` })
-    } catch (err) {
-      setStep('driverLogs', { status: 'error', error: String(err) })
-      setAutoRunning(false)
-      return
-    }
+    } catch (err) { setStep('driverLogs', { status: 'error', error: String(err) }); setAutoRunning(false); return }
 
-    // 2. 콜카드 MBTI 적재
     setStep('callcardMbti', { status: 'running' })
     try {
       const form = new FormData()
@@ -288,36 +394,18 @@ export default function Home() {
       form.append('remapped', remappedFile)
       const res = await fetch('/api/callcard-mbti', { method: 'POST', body: form })
       const json = await res.json()
-      if (!res.ok) {
-        setStep('callcardMbti', { status: 'error', error: json.error })
-        setAutoRunning(false)
-        return
-      }
+      if (!res.ok) { setStep('callcardMbti', { status: 'error', error: json.error }); setAutoRunning(false); return }
       setStep('callcardMbti', { status: 'done', message: `콜 ${json.callcard_count.toLocaleString()}건 적재` })
-    } catch (err) {
-      setStep('callcardMbti', { status: 'error', error: String(err) })
-      setAutoRunning(false)
-      return
-    }
+    } catch (err) { setStep('callcardMbti', { status: 'error', error: String(err) }); setAutoRunning(false); return }
 
-    // 3. 기사 MBTI 계산
     setStep('driverMbti', { status: 'running' })
     try {
       const res = await fetch('/api/driver-mbti', { method: 'POST' })
       const json = await res.json()
-      if (!res.ok) {
-        setStep('driverMbti', { status: 'error', error: json.error })
-        setAutoRunning(false)
-        return
-      }
+      if (!res.ok) { setStep('driverMbti', { status: 'error', error: json.error }); setAutoRunning(false); return }
       setStep('driverMbti', { status: 'done', message: `기사 ${json.driver_count.toLocaleString()}명 계산` })
-    } catch (err) {
-      setStep('driverMbti', { status: 'error', error: String(err) })
-      setAutoRunning(false)
-      return
-    }
+    } catch (err) { setStep('driverMbti', { status: 'error', error: String(err) }); setAutoRunning(false); return }
 
-    // 4. 매칭 계산
     setStep('matching', { status: 'running' })
     try {
       const res = await fetch('/api/matching', {
@@ -326,29 +414,16 @@ export default function Home() {
         body: JSON.stringify({ call_date: date }),
       })
       const json = await res.json()
-      if (!res.ok) {
-        setStep('matching', { status: 'error', error: json.error })
-        setAutoRunning(false)
-        return
-      }
+      if (!res.ok) { setStep('matching', { status: 'error', error: json.error }); setAutoRunning(false); return }
       setStep('matching', { status: 'done', message: `매칭 ${json.match_count.toLocaleString()}건 저장` })
-    } catch (err) {
-      setStep('matching', { status: 'error', error: String(err) })
-      setAutoRunning(false)
-      return
-    }
+    } catch (err) { setStep('matching', { status: 'error', error: String(err) }); setAutoRunning(false); return }
 
     setAutoRunning(false)
   }
 
-  // --- Individual handlers ---
-
   async function handleAnalyze() {
     if (!callcardFile || !remappedFile || !extractedDate) return
-    setAnalyzeLoading(true)
-    setAnalyzeError(null)
-    setAnalyzeResult(null)
-    setAnalyzeDebug(null)
+    setAnalyzeLoading(true); setAnalyzeError(null); setAnalyzeResult(null); setAnalyzeDebug(null)
     try {
       const form = new FormData()
       form.append('callcard_eta', callcardFile)
@@ -356,22 +431,15 @@ export default function Home() {
       form.append('service_date', extractedDate)
       const res = await fetch('/api/analyze', { method: 'POST', body: form })
       const json = await res.json()
-      if (!res.ok) {
-        setAnalyzeError(json.error ?? '알 수 없는 오류')
-        if (json.debug) setAnalyzeDebug(json.debug)
-      } else {
-        setAnalyzeResult(json as AnalyzeResponse)
-      }
+      if (!res.ok) { setAnalyzeError(json.error ?? '알 수 없는 오류'); if (json.debug) setAnalyzeDebug(json.debug) }
+      else setAnalyzeResult(json as AnalyzeResponse)
     } catch { setAnalyzeError('서버 연결에 실패했습니다.') }
     finally { setAnalyzeLoading(false) }
   }
 
   async function handleDriverLogs() {
     if (!callcardFile || !remappedFile || !extractedDate) return
-    setDriverLoading(true)
-    setDriverError(null)
-    setDriverResult(null)
-    setDriverDebug(null)
+    setDriverLoading(true); setDriverError(null); setDriverResult(null); setDriverDebug(null)
     try {
       const form = new FormData()
       form.append('callcard_eta', callcardFile)
@@ -379,21 +447,15 @@ export default function Home() {
       form.append('service_date', extractedDate)
       const res = await fetch('/api/driver-logs', { method: 'POST', body: form })
       const json = await res.json()
-      if (!res.ok) {
-        setDriverError(json.error ?? '알 수 없는 오류')
-        if (json.debug) setDriverDebug(json.debug)
-      } else {
-        setDriverResult(json as DriverLogsResponse)
-      }
+      if (!res.ok) { setDriverError(json.error ?? '알 수 없는 오류'); if (json.debug) setDriverDebug(json.debug) }
+      else setDriverResult(json as DriverLogsResponse)
     } catch { setDriverError('서버 연결에 실패했습니다.') }
     finally { setDriverLoading(false) }
   }
 
   async function handleCallcardMbti() {
     if (!callcardFile || !remappedFile) return
-    setCallcardMbtiLoading(true)
-    setCallcardMbtiError(null)
-    setCallcardMbtiResult(null)
+    setCallcardMbtiLoading(true); setCallcardMbtiError(null); setCallcardMbtiResult(null)
     try {
       const form = new FormData()
       form.append('callcard_eta', callcardFile)
@@ -407,9 +469,7 @@ export default function Home() {
   }
 
   async function handleCallcardProfile() {
-    setCallcardProfileLoading(true)
-    setCallcardProfileError(null)
-    setCallcardProfileResult(null)
+    setCallcardProfileLoading(true); setCallcardProfileError(null); setCallcardProfileResult(null)
     try {
       const res = await fetch('/api/callcard-mbti-compute', { method: 'POST' })
       const json = await res.json()
@@ -420,9 +480,7 @@ export default function Home() {
   }
 
   async function handleDriverMbti() {
-    setDriverMbtiLoading(true)
-    setDriverMbtiError(null)
-    setDriverMbtiResult(null)
+    setDriverMbtiLoading(true); setDriverMbtiError(null); setDriverMbtiResult(null)
     try {
       const res = await fetch('/api/driver-mbti', { method: 'POST' })
       const json = await res.json()
@@ -434,9 +492,7 @@ export default function Home() {
 
   async function handleMatching() {
     if (!extractedDate) return
-    setMatchingLoading(true)
-    setMatchingError(null)
-    setMatchingResult(null)
+    setMatchingLoading(true); setMatchingError(null); setMatchingResult(null)
     try {
       const res = await fetch('/api/matching', {
         method: 'POST',
@@ -452,9 +508,7 @@ export default function Home() {
 
   async function handleMeterLogs() {
     if (!meterFile) return
-    setMeterLoading(true)
-    setMeterError(null)
-    setMeterResult(null)
+    setMeterLoading(true); setMeterError(null); setMeterResult(null)
     try {
       const form = new FormData()
       form.append('file', meterFile)
@@ -472,314 +526,383 @@ export default function Home() {
     callcardMbtiLoading || callcardProfileLoading || driverMbtiLoading || matchingLoading || meterLoading
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12 px-4">
-      <div className="mx-auto max-w-3xl space-y-8">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-1">PMO 콜 분석</h1>
-          <p className="text-sm text-gray-500">callcard_eta, remapped 파일을 업로드하면 날짜가 자동 추출됩니다.</p>
-        </div>
+    <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600;700;800&display=swap');
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+          background: #080C18;
+          font-family: 'Pretendard', -apple-system, sans-serif;
+          -webkit-font-smoothing: antialiased;
+        }
+        body::before {
+          content: '';
+          position: fixed;
+          top: -20%; left: -10%;
+          width: 700px; height: 700px;
+          background: radial-gradient(circle, rgba(34,211,238,.06), transparent 70%);
+          pointer-events: none; z-index: 0;
+        }
+        body::after {
+          content: '';
+          position: fixed;
+          bottom: -20%; right: -10%;
+          width: 600px; height: 600px;
+          background: radial-gradient(circle, rgba(139,92,246,.05), transparent 70%);
+          pointer-events: none; z-index: 0;
+        }
+        input, select, button, textarea { font-family: inherit; }
+        input::placeholder { color: #4E6080; }
+        @keyframes cardReveal {
+          0% { opacity: 0; transform: translateY(20px) scale(.97); filter: blur(4px); }
+          100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+        }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .h-card {
+          animation: cardReveal .65s cubic-bezier(.22,1,.36,1) forwards;
+          opacity: 0;
+        }
+        .h-card:hover {
+          transform: translateY(-2px);
+          border-color: #2D4470 !important;
+          box-shadow: 0 12px 32px rgba(0,0,0,.4);
+        }
+        .h-card:nth-child(1) { animation-delay: .05s; }
+        .h-card:nth-child(2) { animation-delay: .10s; }
+        .h-card:nth-child(3) { animation-delay: .15s; }
+        .h-card:nth-child(4) { animation-delay: .20s; }
+        .h-card:nth-child(5) { animation-delay: .25s; }
+        .h-card:nth-child(6) { animation-delay: .30s; }
+        .section-title {
+          display: flex; align-items: center; gap: 14px; margin-bottom: 20px;
+        }
+        .section-title h2 {
+          font-size: 12px; font-weight: 700; letter-spacing: .1em;
+          text-transform: uppercase; color: #94A3B8; white-space: nowrap;
+        }
+        .section-title::after {
+          content: ''; flex: 1; height: 1px; background: #1E2D4A;
+        }
+      `}</style>
 
-        {/* 파일 업로드 */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-4">
-          <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">파일 업로드</h2>
+      <div style={{ minHeight: '100vh', background: C.bg, color: C.text, position: 'relative', zIndex: 1 }}>
 
-          <FileInput
-            label="callcard_eta 파일"
-            icon="📋"
-            file={callcardFile}
-            inputRef={callcardRef}
-            onChange={handleCallcardChange}
-            onClear={() => { setCallcardFile(null); setExtractedDate(null); setDateError(null) }}
-          />
-
-          <FileInput
-            label="remapped 파일"
-            icon="🗂️"
-            file={remappedFile}
-            inputRef={remappedRef}
-            onChange={setRemappedFile}
-            onClear={() => setRemappedFile(null)}
-          />
-
-          {extractedDate && (
-            <div className="flex items-center gap-2 text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
-              <span className="font-medium">서비스 날짜</span>
-              <span>{extractedDate}</span>
-            </div>
-          )}
-          {dateError && (
-            <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-              날짜 추출 실패: {dateError}
-            </div>
-          )}
-        </div>
-
-        {/* 자동 실행 파이프라인 */}
-        <div className="bg-white rounded-xl shadow-sm border border-indigo-100 border-2 p-6 space-y-4">
-          <div>
-            <h2 className="font-semibold text-gray-900">자동 실행</h2>
-            <p className="text-xs text-gray-500 mt-0.5">4단계를 순서대로 자동 실행합니다</p>
-          </div>
-
-          <div className="space-y-1">
-            {STEP_META.map(({ key, label }, i) => (
-              <StepRow key={key} index={i + 1} label={label} state={steps[key]} />
-            ))}
-          </div>
-
-          <button
-            onClick={handleAutoRun}
-            disabled={autoRunning || !filesReady}
-            className="w-full py-3 px-4 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
+        {/* Header */}
+        <div style={{
+          position: 'sticky', top: 0, zIndex: 50,
+          background: 'rgba(8,12,24,.95)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+          borderBottom: `1px solid ${C.border}`,
+          padding: '0 40px',
+          height: 56,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}>
+          <h1 style={{
+            fontSize: 15, fontWeight: 800, letterSpacing: '-0.02em',
+            background: 'linear-gradient(135deg, #22D3EE, #8B5CF6)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text',
+          }}>
+            PMO 콜 분석
+          </h1>
+          <Link href="/dashboard" style={{
+            fontSize: 13, fontWeight: 600,
+            color: C.sub, textDecoration: 'none',
+            background: 'linear-gradient(135deg, rgba(34,211,238,.1), rgba(139,92,246,.08))',
+            border: `1px solid rgba(34,211,238,.25)`,
+            borderRadius: 8, padding: '5px 14px',
+            transition: 'all 200ms cubic-bezier(.22,1,.36,1)',
+            display: 'flex', alignItems: 'center', gap: 6,
+          }}
+            onMouseOver={e => { (e.currentTarget as HTMLElement).style.color = C.cyan }}
+            onMouseOut={e => { (e.currentTarget as HTMLElement).style.color = C.sub }}
           >
-            {autoRunning
-              ? '실행 중…'
-              : `자동 실행${extractedDate ? ` (${extractedDate})` : ''}`}
-          </button>
+            누적 분석 →
+          </Link>
         </div>
 
-        {/* 미터기 데이터 적재 */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-4">
-          <div>
-            <h2 className="font-semibold text-gray-900">미터기 데이터 적재 (천안)</h2>
-            <p className="text-xs text-gray-500 mt-0.5">통계_천안_날짜.xlsx → meter_daily_logs</p>
-          </div>
+        {/* Content */}
+        <div style={{ maxWidth: 960, margin: '0 auto', padding: '48px 40px', display: 'flex', flexDirection: 'column', gap: 40 }}>
 
-          <FileInput
-            label="미터기 통계 파일"
-            icon="🚖"
-            file={meterFile}
-            inputRef={meterRef}
-            onChange={setMeterFile}
-            onClear={() => { setMeterFile(null); setMeterResult(null); setMeterError(null) }}
-          />
-
-          {meterError && (
-            <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-              {meterError}
-            </div>
-          )}
-          {meterResult && (
-            <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
-              처리 완료: {meterResult.driver_count}명 기사 적재됨 ({meterResult.service_date})
-            </div>
-          )}
-
-          <button
-            onClick={handleMeterLogs}
-            disabled={meterLoading || !meterFile || anyRunning}
-            className="w-full py-2.5 px-4 bg-amber-500 text-white font-semibold rounded-lg hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
-          >
-            {meterLoading ? '적재 중…' : '미터기 적재'}
-          </button>
-        </div>
-
-        {/* 개별 액션 카드 */}
-        <div>
-          <p className="text-xs text-gray-400 mb-3 uppercase tracking-wide font-medium">개별 실행</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-
-            {/* ASP 분석 */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex flex-col gap-3">
-              <div>
-                <h2 className="font-semibold text-gray-900 text-sm">ASP 콜 분석</h2>
-                <p className="text-xs text-gray-400 mt-0.5">KPI + AI 요약 → daily_snapshots</p>
-              </div>
-              {analyzeError && (
-                <div className="text-xs text-red-700 bg-red-50 rounded px-2 py-1.5">
-                  {analyzeError}
-                  {analyzeDebug && (
-                    <pre className="mt-1 bg-red-100 rounded p-1 overflow-auto whitespace-pre-wrap text-xs">
-                      {JSON.stringify(analyzeDebug, null, 2)}
-                    </pre>
-                  )}
+          {/* 파일 업로드 */}
+          <section>
+            <div className="section-title"><h2>파일 업로드</h2></div>
+            <div className="h-card" style={{ ...CARD, padding: '28px 32px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+              <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, ${C.cyan}, ${C.purple})` }} />
+              <FileInput
+                label="callcard_eta 파일"
+                icon="📋"
+                file={callcardFile}
+                inputRef={callcardRef}
+                onChange={handleCallcardChange}
+                onClear={() => { setCallcardFile(null); setExtractedDate(null); setDateError(null) }}
+              />
+              <FileInput
+                label="remapped 파일"
+                icon="🗂️"
+                file={remappedFile}
+                inputRef={remappedRef}
+                onChange={setRemappedFile}
+                onClear={() => setRemappedFile(null)}
+              />
+              {extractedDate && (
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  fontSize: 13, color: C.green,
+                  background: 'rgba(16,185,129,.08)', border: `1px solid rgba(16,185,129,.25)`,
+                  borderRadius: 10, padding: '10px 14px',
+                }}>
+                  <span style={{ fontWeight: 700 }}>서비스 날짜</span>
+                  <span style={{ fontVariantNumeric: 'tabular-nums' }}>{extractedDate}</span>
                 </div>
               )}
-              {analyzeResult && (
-                <div className="text-xs text-green-700 bg-green-50 rounded px-2 py-1.5">
-                  ASP {analyzeResult.asp_count}개 · {analyzeResult.total_rows_processed}건
+              {dateError && (
+                <div style={{
+                  fontSize: 12, color: C.yellow,
+                  background: 'rgba(245,158,11,.08)', border: `1px solid rgba(245,158,11,.2)`,
+                  borderRadius: 10, padding: '10px 14px',
+                }}>
+                  {dateError}
+                </div>
+              )}
+            </div>
+          </section>
+
+          {/* 자동 실행 */}
+          <section>
+            <div className="section-title"><h2>자동 실행</h2></div>
+            <div className="h-card" style={{ ...CARD, padding: '28px 32px', border: `1px solid rgba(139,92,246,.3)` }}>
+              <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, ${C.purple}, ${C.cyan})` }} />
+              <div style={{ marginBottom: 20 }}>
+                <p style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 4 }}>파이프라인 자동 실행</p>
+                <p style={{ fontSize: 12, color: C.muted }}>4단계를 순서대로 자동 실행합니다</p>
+              </div>
+              <div style={{ marginBottom: 24 }}>
+                {STEP_META.map(({ key, label }, i) => (
+                  <StepRow key={key} index={i + 1} label={label} state={steps[key]} />
+                ))}
+              </div>
+              <button
+                onClick={handleAutoRun}
+                disabled={autoRunning || !filesReady}
+                style={{
+                  width: '100%', padding: '14px',
+                  background: autoRunning || !filesReady ? 'transparent' : `linear-gradient(135deg, ${C.purple}, #5b21b6)`,
+                  color: autoRunning || !filesReady ? C.muted : '#fff',
+                  fontSize: 14, fontWeight: 700, borderRadius: 12,
+                  border: `1px solid ${autoRunning || !filesReady ? C.border : 'transparent'}`,
+                  cursor: autoRunning || !filesReady ? 'not-allowed' : 'pointer',
+                  opacity: autoRunning || !filesReady ? 0.6 : 1,
+                  transition: 'all 200ms cubic-bezier(.22,1,.36,1)',
+                  boxShadow: !autoRunning && filesReady ? `0 4px 20px rgba(139,92,246,.35)` : 'none',
+                }}
+              >
+                {autoRunning ? '실행 중…' : `자동 실행${extractedDate ? ` (${extractedDate})` : ''}`}
+              </button>
+            </div>
+          </section>
+
+          {/* 미터기 */}
+          <section>
+            <div className="section-title"><h2>미터기 데이터 (천안)</h2></div>
+            <div className="h-card" style={{ ...CARD, padding: '28px 32px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: C.yellow, opacity: 0.7 }} />
+              <div>
+                <p style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 4 }}>미터기 데이터 적재</p>
+                <p style={{ fontSize: 12, color: C.muted }}>통계_천안_날짜.xlsx → meter_daily_logs</p>
+              </div>
+              <FileInput
+                label="미터기 통계 파일"
+                icon="🚖"
+                file={meterFile}
+                inputRef={meterRef}
+                onChange={setMeterFile}
+                onClear={() => { setMeterFile(null); setMeterResult(null); setMeterError(null) }}
+              />
+              {meterError && (
+                <div style={{ fontSize: 12, color: C.red, background: 'rgba(244,63,94,.08)', border: `1px solid rgba(244,63,94,.2)`, borderRadius: 8, padding: '10px 12px' }}>
+                  {meterError}
+                </div>
+              )}
+              {meterResult && (
+                <div style={{ fontSize: 12, color: C.green, background: 'rgba(16,185,129,.08)', border: `1px solid rgba(16,185,129,.2)`, borderRadius: 8, padding: '10px 12px' }}>
+                  처리 완료: {meterResult.driver_count}명 적재 ({meterResult.service_date})
                 </div>
               )}
               <button
-                onClick={handleAnalyze}
+                onClick={handleMeterLogs}
+                disabled={meterLoading || !meterFile || anyRunning}
+                style={{
+                  width: '100%', padding: '12px',
+                  background: meterLoading || !meterFile || anyRunning ? 'transparent' : C.yellow,
+                  color: meterLoading || !meterFile || anyRunning ? C.muted : '#0b0b0f',
+                  fontSize: 13, fontWeight: 700, borderRadius: 10,
+                  border: `1px solid ${meterLoading || !meterFile || anyRunning ? C.border : 'transparent'}`,
+                  cursor: meterLoading || !meterFile || anyRunning ? 'not-allowed' : 'pointer',
+                  opacity: meterLoading || !meterFile || anyRunning ? 0.5 : 1,
+                  transition: 'all 200ms cubic-bezier(.22,1,.36,1)',
+                }}
+              >
+                {meterLoading ? '적재 중…' : '미터기 적재'}
+              </button>
+            </div>
+          </section>
+
+          {/* 개별 실행 */}
+          <section>
+            <div className="section-title"><h2>개별 실행</h2></div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
+              <ActionCard
+                title="ASP 콜 분석"
+                desc="KPI + AI 요약 → daily_snapshots"
+                accentColor={C.blue}
+                loading={analyzeLoading}
                 disabled={analyzeLoading || !filesReady || !dateReady || anyRunning}
-                className="mt-auto w-full py-2 px-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-xs"
+                onRun={handleAnalyze}
+                btnLabel="분석 실행"
+                error={analyzeError}
+                result={analyzeResult ? `ASP ${analyzeResult.asp_count}개 · ${analyzeResult.total_rows_processed}건` : undefined}
               >
-                {analyzeLoading ? '분석 중…' : '분석 실행'}
-              </button>
-            </div>
-
-            {/* 기사 로그 */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex flex-col gap-3">
-              <div>
-                <h2 className="font-semibold text-gray-900 text-sm">기사 로그 적재</h2>
-                <p className="text-xs text-gray-400 mt-0.5">하루치 행동 데이터 → driver_daily_logs</p>
-              </div>
-              {driverError && (
-                <div className="text-xs text-red-700 bg-red-50 rounded px-2 py-1.5">
-                  {driverError}
-                  {driverDebug && (
-                    <pre className="mt-1 bg-red-100 rounded p-1 overflow-auto whitespace-pre-wrap text-xs">
-                      {JSON.stringify(driverDebug, null, 2)}
-                    </pre>
-                  )}
-                </div>
-              )}
-              {driverResult && (
-                <div className="text-xs text-green-700 bg-green-50 rounded px-2 py-1.5">
-                  기사 {driverResult.driver_count}명 적재됨
-                </div>
-              )}
-              <button
-                onClick={handleDriverLogs}
-                disabled={driverLoading || !filesReady || !dateReady || anyRunning}
-                className="mt-auto w-full py-2 px-3 bg-emerald-600 text-white font-medium rounded-lg hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-xs"
-              >
-                {driverLoading ? '적재 중…' : '기사 로그 적재'}
-              </button>
-            </div>
-
-            {/* 콜카드 MBTI */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex flex-col gap-3">
-              <div>
-                <h2 className="font-semibold text-gray-900 text-sm">콜카드 MBTI 적재</h2>
-                <p className="text-xs text-gray-400 mt-0.5">콜 단위 벡터 → callcard_mbti</p>
-              </div>
-              {callcardMbtiError && (
-                <div className="text-xs text-red-700 bg-red-50 rounded px-2 py-1.5">{callcardMbtiError}</div>
-              )}
-              {callcardMbtiResult && (
-                <div className="text-xs text-green-700 bg-green-50 rounded px-2 py-1.5">
-                  {callcardMbtiResult.callcard_count.toLocaleString()}건 적재됨
-                </div>
-              )}
-              <button
-                onClick={handleCallcardMbti}
-                disabled={callcardMbtiLoading || !filesReady || anyRunning}
-                className="mt-auto w-full py-2 px-3 bg-violet-600 text-white font-medium rounded-lg hover:bg-violet-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-xs"
-              >
-                {callcardMbtiLoading ? '적재 중…' : '콜카드 MBTI 적재'}
-              </button>
-            </div>
-
-            {/* 콜카드 프로파일 */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex flex-col gap-3">
-              <div>
-                <h2 className="font-semibold text-gray-900 text-sm">콜카드 프로파일 계산</h2>
-                <p className="text-xs text-gray-400 mt-0.5">callcard_mbti 집계 → callcard_profile</p>
-              </div>
-              {callcardProfileError && (
-                <div className="text-xs text-red-700 bg-red-50 rounded px-2 py-1.5">{callcardProfileError}</div>
-              )}
-              {callcardProfileResult && (
-                <div className="text-xs text-green-700 bg-green-50 rounded px-2 py-1.5">
-                  ASP {callcardProfileResult.asp_count}개 · {callcardProfileResult.total_calls_read.toLocaleString()}건
-                </div>
-              )}
-              <button
-                onClick={handleCallcardProfile}
-                disabled={callcardProfileLoading || anyRunning}
-                className="mt-auto w-full py-2 px-3 bg-orange-600 text-white font-medium rounded-lg hover:bg-orange-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-xs"
-              >
-                {callcardProfileLoading ? '계산 중…' : '프로파일 계산'}
-              </button>
-            </div>
-
-            {/* 기사 MBTI */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex flex-col gap-3">
-              <div>
-                <h2 className="font-semibold text-gray-900 text-sm">기사 MBTI 계산</h2>
-                <p className="text-xs text-gray-400 mt-0.5">driver_daily_logs 집계 → driver_mbti</p>
-              </div>
-              {driverMbtiError && (
-                <div className="text-xs text-red-700 bg-red-50 rounded px-2 py-1.5">{driverMbtiError}</div>
-              )}
-              {driverMbtiResult && (
-                <div className="text-xs text-green-700 bg-green-50 rounded px-2 py-1.5">
-                  기사 {driverMbtiResult.driver_count.toLocaleString()}명 계산됨
-                </div>
-              )}
-              <button
-                onClick={handleDriverMbti}
-                disabled={driverMbtiLoading || anyRunning}
-                className="mt-auto w-full py-2 px-3 bg-sky-600 text-white font-medium rounded-lg hover:bg-sky-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-xs"
-              >
-                {driverMbtiLoading ? '계산 중…' : '기사 MBTI 계산'}
-              </button>
-            </div>
-
-            {/* 매칭 */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex flex-col gap-3">
-              <div>
-                <h2 className="font-semibold text-gray-900 text-sm">매칭 계산</h2>
-                <p className="text-xs text-gray-400 mt-0.5">코사인 유사도 TOP 10 → matching_scores</p>
-              </div>
-              {matchingError && (
-                <div className="text-xs text-red-700 bg-red-50 rounded px-2 py-1.5">{matchingError}</div>
-              )}
-              {matchingResult && (
-                <div className="text-xs text-green-700 bg-green-50 rounded px-2 py-1.5">
-                  <div>{matchingResult.match_count.toLocaleString()}건 저장</div>
-                  <div className="text-green-600">콜 {matchingResult.call_count.toLocaleString()}개 × 기사 {matchingResult.driver_count.toLocaleString()}명</div>
-                </div>
-              )}
-              <button
-                onClick={handleMatching}
-                disabled={matchingLoading || !dateReady || anyRunning}
-                className="mt-auto w-full py-2 px-3 bg-rose-600 text-white font-medium rounded-lg hover:bg-rose-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-xs"
-              >
-                {matchingLoading ? '매칭 중…' : '매칭 계산'}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* ASP 분석 상세 결과 */}
-        {analyzeResult && (
-          <div className="space-y-4">
-            <h2 className="text-lg font-semibold text-gray-900">
-              분석 결과
-              <span className="ml-3 text-sm font-normal text-gray-500">
-                {analyzeResult.service_date} · ASP {analyzeResult.asp_count}개
-              </span>
-            </h2>
-            {analyzeResult.results.map((row) => (
-              <div key={row.asp_id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="font-semibold text-gray-900">ASP #{row.asp_id}</span>
-                  <span className={`text-sm font-medium px-2 py-0.5 rounded-full ${
-                    row.success_rate >= 0.8 ? 'bg-green-100 text-green-700' :
-                    row.success_rate >= 0.5 ? 'bg-yellow-100 text-yellow-700' :
-                    'bg-red-100 text-red-700'
-                  }`}>
-                    수락률 {(row.success_rate * 100).toFixed(1)}%
-                  </span>
-                </div>
-                <div className="grid grid-cols-5 gap-2 mb-4">
-                  {[
-                    { label: '총 콜', value: row.total_calls },
-                    { label: '수락', value: row.success_count },
-                    { label: '만료', value: row.expired_count },
-                    { label: '취소', value: row.canceled_count },
-                    { label: '서지 콜', value: row.surge_call_cnt },
-                  ].map(({ label, value }) => (
-                    <div key={label} className="text-center bg-gray-50 rounded-lg py-2">
-                      <div className="text-lg font-bold text-gray-900">{value}</div>
-                      <div className="text-xs text-gray-500">{label}</div>
-                    </div>
-                  ))}
-                </div>
-                {row.ai_summary && (
-                  <div className="bg-blue-50 border border-blue-100 rounded-lg px-4 py-3 text-sm text-gray-700 leading-relaxed">
-                    <span className="text-blue-500 font-medium text-xs block mb-1">AI 요약</span>
-                    {row.ai_summary}
-                  </div>
+                {analyzeDebug && (
+                  <pre style={{ fontSize: 11, color: C.muted, background: 'rgba(244,63,94,.05)', borderRadius: 6, padding: '8px', overflow: 'auto', maxHeight: 80 }}>
+                    {JSON.stringify(analyzeDebug, null, 2)}
+                  </pre>
                 )}
+              </ActionCard>
+
+              <ActionCard
+                title="기사 로그 적재"
+                desc="하루치 행동 데이터 → driver_daily_logs"
+                accentColor={C.green}
+                loading={driverLoading}
+                disabled={driverLoading || !filesReady || !dateReady || anyRunning}
+                onRun={handleDriverLogs}
+                btnLabel="기사 로그 적재"
+                error={driverError}
+                result={driverResult ? `기사 ${driverResult.driver_count}명 적재됨` : undefined}
+              >
+                {driverDebug && (
+                  <pre style={{ fontSize: 11, color: C.muted, background: 'rgba(244,63,94,.05)', borderRadius: 6, padding: '8px', overflow: 'auto', maxHeight: 80 }}>
+                    {JSON.stringify(driverDebug, null, 2)}
+                  </pre>
+                )}
+              </ActionCard>
+
+              <ActionCard
+                title="콜카드 MBTI 적재"
+                desc="콜 단위 벡터 → callcard_mbti"
+                accentColor={C.purple}
+                loading={callcardMbtiLoading}
+                disabled={callcardMbtiLoading || !filesReady || anyRunning}
+                onRun={handleCallcardMbti}
+                btnLabel="콜카드 MBTI 적재"
+                error={callcardMbtiError}
+                result={callcardMbtiResult ? `${callcardMbtiResult.callcard_count.toLocaleString()}건 적재됨` : undefined}
+              />
+
+              <ActionCard
+                title="콜카드 프로파일 계산"
+                desc="callcard_mbti 집계 → callcard_profile"
+                accentColor={C.orange}
+                loading={callcardProfileLoading}
+                disabled={callcardProfileLoading || anyRunning}
+                onRun={handleCallcardProfile}
+                btnLabel="프로파일 계산"
+                error={callcardProfileError}
+                result={callcardProfileResult ? `ASP ${callcardProfileResult.asp_count}개 · ${callcardProfileResult.total_calls_read.toLocaleString()}건` : undefined}
+              />
+
+              <ActionCard
+                title="기사 MBTI 계산"
+                desc="driver_daily_logs 집계 → driver_mbti"
+                accentColor={C.cyan}
+                loading={driverMbtiLoading}
+                disabled={driverMbtiLoading || anyRunning}
+                onRun={handleDriverMbti}
+                btnLabel="기사 MBTI 계산"
+                error={driverMbtiError}
+                result={driverMbtiResult ? `기사 ${driverMbtiResult.driver_count.toLocaleString()}명 계산됨` : undefined}
+              />
+
+              <ActionCard
+                title="매칭 계산"
+                desc="코사인 유사도 TOP 10 → matching_scores"
+                accentColor={C.red}
+                loading={matchingLoading}
+                disabled={matchingLoading || !dateReady || anyRunning}
+                onRun={handleMatching}
+                btnLabel="매칭 계산"
+                error={matchingError}
+                result={matchingResult ? (
+                  <>{matchingResult.match_count.toLocaleString()}건 저장<br />콜 {matchingResult.call_count.toLocaleString()}개 × 기사 {matchingResult.driver_count.toLocaleString()}명</>
+                ) : undefined}
+              />
+            </div>
+          </section>
+
+          {/* ASP 분석 상세 결과 */}
+          {analyzeResult && (
+            <section>
+              <div className="section-title">
+                <h2>분석 결과</h2>
+                <span style={{ fontSize: 12, color: C.muted }}>{analyzeResult.service_date} · ASP {analyzeResult.asp_count}개</span>
               </div>
-            ))}
-          </div>
-        )}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {analyzeResult.results.map((row) => (
+                  <div key={row.asp_id} className="h-card" style={{ ...CARD, padding: '24px 28px' }}>
+                    <div style={{
+                      position: 'absolute', top: 0, left: 0, right: 0, height: 3,
+                      background: row.success_rate >= 0.8 ? C.green : row.success_rate >= 0.5 ? C.yellow : C.red,
+                    }} />
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                      <span style={{ fontSize: 15, fontWeight: 700, color: C.text }}>ASP #{row.asp_id}</span>
+                      <span style={{
+                        fontSize: 12, fontWeight: 700, padding: '4px 12px', borderRadius: 20,
+                        background: row.success_rate >= 0.8 ? 'rgba(16,185,129,.12)' : row.success_rate >= 0.5 ? 'rgba(245,158,11,.12)' : 'rgba(244,63,94,.12)',
+                        color: row.success_rate >= 0.8 ? C.green : row.success_rate >= 0.5 ? C.yellow : C.red,
+                        border: `1px solid ${row.success_rate >= 0.8 ? 'rgba(16,185,129,.3)' : row.success_rate >= 0.5 ? 'rgba(245,158,11,.3)' : 'rgba(244,63,94,.3)'}`,
+                      }}>
+                        수락률 {(row.success_rate * 100).toFixed(1)}%
+                      </span>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8, marginBottom: row.ai_summary ? 16 : 0 }}>
+                      {[
+                        { label: '총 콜', value: row.total_calls, color: C.text },
+                        { label: '수락', value: row.success_count, color: C.green },
+                        { label: '만료', value: row.expired_count, color: C.red },
+                        { label: '취소', value: row.canceled_count, color: C.yellow },
+                        { label: '서지 콜', value: row.surge_call_cnt, color: C.cyan },
+                      ].map(({ label, value, color }) => (
+                        <div key={label} style={{
+                          textAlign: 'center', background: 'rgba(255,255,255,.02)',
+                          border: `1px solid ${C.border}`, borderRadius: 10, padding: '12px 8px',
+                        }}>
+                          <div style={{ fontSize: 20, fontWeight: 800, color, marginBottom: 4, fontVariantNumeric: 'tabular-nums' }}>{value.toLocaleString()}</div>
+                          <div style={{ fontSize: 11, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</div>
+                        </div>
+                      ))}
+                    </div>
+                    {row.ai_summary && (
+                      <div style={{
+                        background: 'rgba(34,211,238,.06)', border: `1px solid rgba(34,211,238,.15)`,
+                        borderRadius: 10, padding: '14px 16px',
+                      }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.cyan, display: 'block', marginBottom: 8 }}>AI 요약</span>
+                        <p style={{ fontSize: 13, color: C.sub, lineHeight: 1.7 }}>{row.ai_summary}</p>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+        </div>
       </div>
-    </div>
+    </>
   )
 }
