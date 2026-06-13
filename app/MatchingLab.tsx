@@ -41,15 +41,19 @@ interface MeterStatusResponse {
 interface DriverLinkStatus {
   source?: string
   meterDriverRows?: number
+  meterDriverRowsFetched?: number
   meterDistinctDriverKeys?: number
+  meterDistinctPlateCandidates?: number
   driverDailyRows?: number
+  driverDailyRowsFetched?: number
   driverDistinctIds?: number
   directMatchCount?: number
   directMatchRate?: number
   meterDateRange?: { min: string | null; max: string | null }
   overlappingDates?: string[]
-  samples?: { meterDriverKeys?: string[]; driverIds?: string[]; directMatches?: string[] }
+  samples?: { meterDriverKeys?: string[]; meterPlateCandidates?: string[]; driverIds?: string[]; directMatches?: string[] }
   conclusion?: string
+  nextAction?: string
   error?: string
 }
 
@@ -477,10 +481,10 @@ function DataLoadTab() {
           <MiniMetric label="앱미터 기사키" value={driverLink?.meterDistinctDriverKeys ?? 0} />
           <MiniMetric label="기사 ID" value={driverLink?.driverDistinctIds ?? 0} />
           <MiniMetric label="직접 매칭" value={driverLink?.directMatchCount ?? 0} />
-          <MiniMetric label="겹친 날짜" value={driverLink?.overlappingDates?.length ?? 0} />
+          <MiniMetric label="차량번호 후보" value={driverLink?.meterDistinctPlateCandidates ?? 0} />
         </div>
         <div style={{ padding: 12, borderRadius: 8, background: driverLink?.directMatchCount ? 'rgba(16,185,129,.08)' : 'rgba(245,158,11,.08)', border: `1px solid ${driverLink?.directMatchCount ? 'rgba(16,185,129,.25)' : 'rgba(245,158,11,.25)'}`, color: driverLink?.directMatchCount ? C.green : C.yellow, lineHeight: 1.55 }}>
-          {driverLink?.conclusion ?? '진단 중'}
+          {driverLink?.conclusion ?? '진단 중'}{driverLink?.nextAction ? ` ${driverLink.nextAction}` : ''}
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 14 }}>
           <div style={{ color: C.sub }}>
@@ -488,7 +492,8 @@ function DataLoadTab() {
             <div style={{ marginTop: 6, fontFamily: 'monospace', color: C.muted }}>{driverLink?.samples?.meterDriverKeys?.join(', ') || '-'}</div>
           </div>
           <div style={{ color: C.sub }}>
-            <strong style={{ color: C.text }}>호출/기사 driver_id 예시</strong>
+            <strong style={{ color: C.text }}>차량번호 후보 / driver_id 예시</strong>
+            <div style={{ marginTop: 6, fontFamily: 'monospace', color: C.muted }}>{driverLink?.samples?.meterPlateCandidates?.join(', ') || '-'}</div>
             <div style={{ marginTop: 6, fontFamily: 'monospace', color: C.muted }}>{driverLink?.samples?.driverIds?.join(', ') || '-'}</div>
           </div>
         </div>
@@ -1064,6 +1069,7 @@ export default function MatchingLab({ initialTab = 'load' }: { initialTab?: TabK
     </div>
   )
 }
+
 
 
 
