@@ -57,6 +57,28 @@ interface DriverLinkStatus {
   error?: string
 }
 
+interface LinkReadinessCheck {
+  key: string
+  label: string
+  table: string
+  column?: string
+  status: 'ok' | 'missing' | 'error'
+  message: string
+  code?: string
+}
+
+interface LinkReadinessStatus {
+  source?: string
+  readyCount?: number
+  missingCount?: number
+  errorCount?: number
+  canLinkWithoutSchemaChange?: boolean
+  checks?: LinkReadinessCheck[]
+  conclusion?: string
+  minimumPlan?: string[]
+  error?: string
+}
+
 interface CallcardRow {
   callcard_id: string
   asp_id: number
@@ -335,6 +357,7 @@ function DataLoadTab() {
   const [dateCounts, setDateCounts] = useState<DateCountRow[]>([])
   const [meterDateCounts, setMeterDateCounts] = useState<MeterStatusResponse['dateCounts']>([])
   const [driverLink, setDriverLink] = useState<DriverLinkStatus | null>(null)
+  const [linkReadiness, setLinkReadiness] = useState<LinkReadinessStatus | null>(null)
   const [loading, setLoading] = useState(true)
 
   async function tableStatus(table: string, label: string, dateColumn?: string): Promise<TableStat> {
@@ -383,6 +406,16 @@ function DataLoadTab() {
     }
   }
 
+  async function loadLinkReadiness() {
+    try {
+      const res = await fetch('/api/link-readiness', { cache: 'no-store' })
+      const json = await res.json() as LinkReadinessStatus
+      setLinkReadiness(json)
+    } catch {
+      setLinkReadiness({ error: '연결 준비도 조회 실패' })
+    }
+  }
+
   async function loadMeterStatus(): Promise<TableStat[]> {
     try {
       const res = await fetch('/api/meter-status', { cache: 'no-store' })
@@ -410,7 +443,7 @@ function DataLoadTab() {
     ])
     const next = [baseStats[0], ...meterStats, ...baseStats.slice(1)]
     setStats(next)
-    await Promise.all([loadDateCounts(next), loadDriverLinkStatus()])
+    await Promise.all([loadDateCounts(next), loadDriverLinkStatus(), loadLinkReadiness()])
     setLoading(false)
   }
 
@@ -496,6 +529,30 @@ function DataLoadTab() {
             <div style={{ marginTop: 6, fontFamily: 'monospace', color: C.muted }}>{driverLink?.samples?.meterPlateCandidates?.join(', ') || '-'}</div>
             <div style={{ marginTop: 6, fontFamily: 'monospace', color: C.muted }}>{driverLink?.samples?.driverIds?.join(', ') || '-'}</div>
           </div>
+        </div>
+      </Panel>
+
+      <Panel>
+        <SectionHeader title="연결 키 준비도" desc="vehicle_id 보존, 앱미터 driver_id, 매핑 테이블 존재 여부를 읽기 전용으로 확인합니다." />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 14 }}>
+          <MiniMetric label="준비됨" value={linkReadiness?.readyCount ?? 0} />
+          <MiniMetric label="누락" value={linkReadiness?.missingCount ?? 0} />
+          <MiniMetric label="오류" value={linkReadiness?.errorCount ?? 0} />
+          <MiniMetric label="무스키마 가능" value={linkReadiness?.canLinkWithoutSchemaChange ? 1 : 0} />
+        </div>
+        <div style={{ padding: 12, borderRadius: 8, background: linkReadiness?.canLinkWithoutSchemaChange ? 'rgba(16,185,129,.08)' : 'rgba(245,158,11,.08)', border: `1px solid ${linkReadiness?.canLinkWithoutSchemaChange ? 'rgba(16,185,129,.25)' : 'rgba(245,158,11,.25)'}`, color: linkReadiness?.canLinkWithoutSchemaChange ? C.green : C.yellow, lineHeight: 1.55 }}>
+          {linkReadiness?.conclusion ?? '진단 중'}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 14 }}>
+          {(linkReadiness?.checks ?? []).map((item) => (
+            <div key={item.key} style={{ padding: 12, borderRadius: 8, background: '#0B1222', border: `1px solid ${item.status === 'ok' ? 'rgba(16,185,129,.35)' : item.status === 'missing' ? 'rgba(245,158,11,.35)' : 'rgba(244,63,94,.35)'}` }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+                <strong style={{ color: C.text }}>{item.label}</strong>
+                <span style={{ color: item.status === 'ok' ? C.green : item.status === 'missing' ? C.yellow : C.red, fontWeight: 800 }}>{item.status}</span>
+              </div>
+              <div style={{ color: C.muted, marginTop: 6, fontFamily: 'monospace' }}>{item.table}{item.column ? `.${item.column}` : ''}</div>
+            </div>
+          ))}
         </div>
       </Panel>
 
@@ -1069,6 +1126,9 @@ export default function MatchingLab({ initialTab = 'load' }: { initialTab?: TabK
     </div>
   )
 }
+
+
+
 
 
 
