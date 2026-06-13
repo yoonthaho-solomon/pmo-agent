@@ -10,6 +10,12 @@ type MeterTableStatus = {
   error?: string
 }
 
+type MeterDateCount = {
+  date: string
+  hourly: number | null
+  driver: number | null
+}
+
 async function tableStatus(
   supabase: SupabaseClient,
   table: string,
@@ -31,6 +37,22 @@ async function tableStatus(
   return { table, label, count: count ?? 0, minDate, maxDate, error: rangeError }
 }
 
+async function countByDate(supabase: SupabaseClient, table: string, column: string, date: string): Promise<number | null> {
+  const { count, error } = await supabase.from(table).select('*', { count: 'exact', head: true }).eq(column, date)
+  return error ? null : count ?? 0
+}
+
+async function meterDateCounts(supabase: SupabaseClient, tables: MeterTableStatus[]): Promise<MeterDateCount[]> {
+  const hourly = tables.find((item) => item.table === 'meter_hourly_logs')
+  const driver = tables.find((item) => item.table === 'meter_driver_logs')
+  const dates = Array.from(new Set(['2026-06-08', hourly?.maxDate, driver?.maxDate].filter(Boolean) as string[]))
+  return Promise.all(dates.map(async (date) => ({
+    date,
+    hourly: await countByDate(supabase, 'meter_hourly_logs', 'log_date', date),
+    driver: await countByDate(supabase, 'meter_driver_logs', 'log_date', date),
+  })))
+}
+
 export async function GET() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -47,5 +69,7 @@ export async function GET() {
     tableStatus(supabase, 'meter_driver_logs', '앱미터 기사별', 'log_date'),
   ])
 
-  return NextResponse.json({ source, tables })
+  const dateCounts = await meterDateCounts(supabase, tables)
+
+  return NextResponse.json({ source, tables, dateCounts })
 }

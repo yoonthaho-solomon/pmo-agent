@@ -27,11 +27,14 @@ interface DateCountRow {
   callcards: number | null
   driverLogs: number | null
   matches: number | null
+  meterHourly?: number | null
+  meterDrivers?: number | null
 }
 
 interface MeterStatusResponse {
   source?: string
   tables?: TableStat[]
+  dateCounts?: { date: string; hourly: number | null; driver: number | null }[]
   error?: string
 }
 
@@ -311,6 +314,7 @@ function VectorBars({ values }: { values: number[] }) {
 function DataLoadTab() {
   const [stats, setStats] = useState<TableStat[]>([])
   const [dateCounts, setDateCounts] = useState<DateCountRow[]>([])
+  const [meterDateCounts, setMeterDateCounts] = useState<MeterStatusResponse['dateCounts']>([])
   const [loading, setLoading] = useState(true)
 
   async function tableStatus(table: string, label: string, dateColumn?: string): Promise<TableStat> {
@@ -353,8 +357,10 @@ function DataLoadTab() {
     try {
       const res = await fetch('/api/meter-status', { cache: 'no-store' })
       const json = await res.json() as MeterStatusResponse
+      setMeterDateCounts(json.dateCounts ?? [])
       return json.tables ?? []
     } catch {
+      setMeterDateCounts([])
       return []
     }
   }
@@ -390,6 +396,17 @@ function DataLoadTab() {
   const driverVectors = stats.find((item) => item.table === 'driver_mbti')
   const matching = stats.find((item) => item.table === 'matching_scores')
   const vectorRate = driverDaily?.count ? Math.min(1, (driverVectors?.count ?? 0) / driverDaily.count) : 0
+  const coverageRows = useMemo(() => {
+    const map = new Map<string, DateCountRow>()
+    for (const row of dateCounts) map.set(row.date, { ...row })
+    for (const row of meterDateCounts ?? []) {
+      const current = map.get(row.date) ?? { date: row.date, callcards: null, driverLogs: null, matches: null }
+      current.meterHourly = row.hourly
+      current.meterDrivers = row.driver
+      map.set(row.date, current)
+    }
+    return Array.from(map.values()).sort((a, b) => a.date.localeCompare(b.date))
+  }, [dateCounts, meterDateCounts])
 
   return (
     <div style={{ display: 'grid', gap: 18 }}>
@@ -402,23 +419,25 @@ function DataLoadTab() {
       </div>
 
       <Panel>
-        <SectionHeader title="주요 날짜 적재 확인" desc="2026-05-23 호출데이터 파일이 이미 Supabase에 있는지 빠르게 확인합니다." />
+        <SectionHeader title="주요 날짜 적재 확인" desc="호출데이터와 앱미터데이터가 이미 Supabase에 있는지 날짜별로 확인합니다." />
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
             <thead>
               <tr>
-                {['날짜', '호출데이터', '기사 로그', '매칭 Top10'].map((head) => (
+                {['날짜', '호출데이터', '기사 로그', '매칭 Top10', '앱미터 시간대', '앱미터 기사별'].map((head) => (
                   <th key={head} style={{ textAlign: 'left', color: C.muted, borderBottom: `1px solid ${C.border}`, padding: '10px 8px' }}>{head}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {dateCounts.map((row) => (
+              {coverageRows.map((row) => (
                 <tr key={row.date}>
                   <td style={tdStyle()}>{row.date}</td>
                   <td style={tdStyle(row.callcards ? C.green : C.yellow)}>{fmt(row.callcards)}</td>
                   <td style={tdStyle(row.driverLogs ? C.green : C.yellow)}>{fmt(row.driverLogs)}</td>
                   <td style={tdStyle(row.matches ? C.green : C.yellow)}>{fmt(row.matches)}</td>
+                  <td style={tdStyle(row.meterHourly ? C.green : C.yellow)}>{fmt(row.meterHourly)}</td>
+                  <td style={tdStyle(row.meterDrivers ? C.green : C.yellow)}>{fmt(row.meterDrivers)}</td>
                 </tr>
               ))}
             </tbody>
