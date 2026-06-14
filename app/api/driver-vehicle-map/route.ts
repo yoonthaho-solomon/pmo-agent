@@ -43,6 +43,7 @@ async function fetchAllCallcardIdentifiers(supabase: SupabaseClient, maxRows = 3
       .select('driver_id,vehicle_id,asp_id,call_date')
       .not('driver_id', 'is', null)
       .not('vehicle_id', 'is', null)
+      .order('callcard_id', { ascending: true })
       .range(from, from + page - 1)
     if (error) throw error
     if (!data || data.length === 0) break
@@ -59,6 +60,8 @@ async function fetchAllDriverVehicleMap(supabase: SupabaseClient, maxRows = 5000
     const { data, error } = await supabase
       .from('driver_vehicle_map')
       .select('driver_id,vehicle_id,vehicle_no,driver_key,asp_id,first_call_date,last_call_date,call_count,source,confidence')
+      .order('driver_id', { ascending: true })
+      .order('vehicle_id', { ascending: true })
       .range(from, from + page - 1)
     if (error) throw error
     if (!data || data.length === 0) break
