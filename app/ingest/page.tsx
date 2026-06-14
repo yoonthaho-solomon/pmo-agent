@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useState } from 'react'
 import Link from 'next/link'
@@ -173,7 +173,7 @@ export default function IngestPage() {
           </section>
 
           <section style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 8, padding: 20 }}>
-            <h2 style={{ fontSize: 20, margin: '0 0 14px' }}>앱미터데이터</h2>
+            <h2 style={{ fontSize: 20, margin: '0 0 14px' }}>앱미터데이터 · 시장 기준</h2>
             <FilePicker label="앱미터 엑셀" file={meterFile} onChange={setMeterFile} />
             <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
               <Button
@@ -202,7 +202,7 @@ export default function IngestPage() {
               </Button>
             </div>
             <div style={{ marginTop: 14, padding: 12, borderRadius: 8, background: 'rgba(245,158,11,.08)', border: `1px solid rgba(245,158,11,.25)`, color: C.yellow, lineHeight: 1.55 }}>
-              일별 적재는 <strong>meter_daily_logs</strong>에 저장하는 기존 경로입니다. 2시트 적재는 <strong>meter_hourly_logs</strong>, <strong>meter_driver_logs</strong>를 사용하므로 Supabase 테이블 존재 여부를 먼저 확인해야 합니다.
+              앱미터는 기사 MBTI의 주 원천이 아니라 천안 택시 흐름, 수입, 운행량을 보는 보조 시장 기준 데이터입니다. 일별 적재는 <strong>meter_daily_logs</strong>, 2시트 적재는 <strong>meter_hourly_logs</strong>, <strong>meter_driver_logs</strong>를 사용합니다.
             </div>
           </section>
         </div>

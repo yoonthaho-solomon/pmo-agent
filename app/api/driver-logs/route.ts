@@ -106,12 +106,15 @@ function getRemappedAspId(row: RemappedRow): number {
   return Number(row.ASP_ID ?? row.asp_id ?? 0)
 }
 
+const ACCEPTED_STATUSES = new Set(['FINISHED', 'FINISH', 'DROP', 'ACCEPTED'])
+const EXPIRED_STATUSES = new Set(['EXPIRED'])
+
 function isAccepted(status: string): boolean {
-  return status === 'FINISHED' || status === 'DROP'
+  return ACCEPTED_STATUSES.has(status)
 }
 
 function isExpired(status: string): boolean {
-  return status === 'EXPIRED'
+  return EXPIRED_STATUSES.has(status)
 }
 
 function getProductType(

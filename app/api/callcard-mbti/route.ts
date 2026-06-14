@@ -8,43 +8,7 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
-interface CallcardEtaRow {
-  call_id?: string | number
-  CALL_ID?: string | number
-  asp_id?: string | number
-  ASP_ID?: string | number
-  request_datetime?: string | number
-  s_area?: string
-  d_area?: string
-  passenger_hexagon_id?: string | number
-  dest_hexagon_id?: string | number
-  expected_distance?: string | number
-  expected_fare_amt?: string | number
-  call_fee?: string | number
-  accept_eta?: string | number
-  ACCEPTED_TAXI_ETA?: string | number
-  service_info_name?: string
-  driver_id?: string | number
-  DRIVER_ID?: string | number
-  vehicle_id?: string | number
-  VEHICLE_ID?: string | number
-  surge_price_A?: string | number
-  [key: string]: unknown
-}
-
-interface RemappedRow {
-  call_id?: string | number
-  CALL_ID?: string | number
-  passenger_hexagon_id?: string | number
-  dest_hexagon_id?: string | number
-  service_info_name?: string
-  driver_id?: string | number
-  DRIVER_ID?: string | number
-  vehicle_id?: string | number
-  VEHICLE_ID?: string | number
-  surge_price_A?: string | number
-  [key: string]: unknown
-}
+type SourceRow = Record<string, unknown>
 
 interface CallcardMbti {
   callcard_id: string
@@ -63,9 +27,46 @@ interface CallcardMbti {
   product_type: string
   is_surge: boolean
   urgency_score: number
+  status?: string | null
+  status_group?: string | null
+  passenger_id?: string | null
+  payment_method?: string | null
+  passenger_addr?: string | null
+  dest_addr?: string | null
+  passenger_lat?: number | null
+  passenger_lng?: number | null
+  dest_lat?: number | null
+  dest_lng?: number | null
+  request_datetime?: string | null
+  alloc_datetime?: string | null
+  cancel_datetime?: string | null
+  pickup_datetime?: string | null
+  drop_datetime?: string | null
+  call_fee?: number | null
   driver_id: string | null
   vehicle_id: string | null
 }
+
+const SOURCE_FIELD_COLUMNS = [
+  'status',
+  'status_group',
+  'passenger_id',
+  'payment_method',
+  'passenger_addr',
+  'dest_addr',
+  'passenger_lat',
+  'passenger_lng',
+  'dest_lat',
+  'dest_lng',
+  'request_datetime',
+  'alloc_datetime',
+  'cancel_datetime',
+  'pickup_datetime',
+  'drop_datetime',
+  'call_fee',
+] as const
+
+type SourceFieldColumn = typeof SOURCE_FIELD_COLUMNS[number]
 
 function parseSheet<T>(buffer: ArrayBuffer): T[] {
   const workbook = XLSX.read(buffer, { type: 'array' })
@@ -73,8 +74,16 @@ function parseSheet<T>(buffer: ArrayBuffer): T[] {
   return XLSX.utils.sheet_to_json<T>(sheet)
 }
 
-function getCallcardId(row: CallcardEtaRow | RemappedRow): string {
-  return String(row.call_id ?? row.CALL_ID ?? '').trim()
+function field(row: SourceRow | undefined, ...keys: string[]): unknown {
+  if (!row) return undefined
+  for (const key of keys) {
+    if (row[key] != null) return row[key]
+  }
+  return undefined
+}
+
+function getCallcardId(row: SourceRow): string {
+  return String(field(row, 'call_id', 'CALL_ID') ?? '').trim()
 }
 
 function sourceIdentifier(raw: unknown): string | null {
@@ -85,14 +94,25 @@ function sourceIdentifier(raw: unknown): string | null {
   return value
 }
 
-// JS getDay(): 0=Sun..6=Sat → 0=Mon..6=Sun
+function nullableText(raw: unknown): string | null {
+  if (raw == null) return null
+  const value = String(raw).trim()
+  return value ? value : null
+}
+
+function nullableNumber(raw: unknown): number | null {
+  if (raw == null || raw === '') return null
+  const value = Number(raw)
+  return Number.isFinite(value) ? value : null
+}
+
+// JS getDay(): 0=Sun..6=Sat -> 0=Mon..6=Sun
 function jsWeekdayToMon0(jsDay: number): number {
   return (jsDay + 6) % 7
 }
 
-function parseDatetime(raw: string | number | undefined): Date | null {
+function parseDatetime(raw: unknown): Date | null {
   if (raw == null || raw === '') return null
-  // Excel serial number
   if (typeof raw === 'number') {
     const date = XLSX.SSF.parse_date_code(raw)
     if (!date) return null
@@ -104,50 +124,100 @@ function parseDatetime(raw: string | number | undefined): Date | null {
   return isNaN(d.getTime()) ? null : d
 }
 
-function buildVector(
-  row: CallcardEtaRow,
-  remapped: RemappedRow | undefined
-): CallcardMbti | null {
+function datetimeIso(raw: unknown): string | null {
+  const parsed = parseDatetime(raw)
+  return parsed ? parsed.toISOString() : null
+}
+
+function normalizeStatus(row: SourceRow, remapped: SourceRow | undefined): string | null {
+  const value = nullableText(field(row, 'status', 'STATUS') ?? field(remapped, 'status', 'STATUS'))
+  return value ? value.toUpperCase() : null
+}
+
+function statusGroup(status: string | null): string | null {
+  if (!status) return null
+  if (['FINISHED', 'FINISH', 'DROP', 'ACCEPTED'].includes(status)) return 'accepted'
+  if (status === 'EXPIRED') return 'expired'
+  if (['CANCELED', 'D_CANCELED', 'SYS_CANCELED', 'CC_CANCELED'].includes(status)) return 'canceled'
+  if (status === 'PICKUP') return 'pickup'
+  return 'other'
+}
+
+function buildVector(row: SourceRow, remapped: SourceRow | undefined): CallcardMbti | null {
   const callcardId = getCallcardId(row)
   if (!callcardId) return null
 
-  const dt = parseDatetime(row.request_datetime)
+  const requestDatetime = field(row, 'request_datetime', 'REQUEST_DATETIME')
+  const dt = parseDatetime(requestDatetime)
   const hour_slot = dt ? dt.getHours() : 0
   const weekday = dt ? jsWeekdayToMon0(dt.getDay()) : 0
   const call_date = dt
     ? `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
     : ''
 
-  const sHex = String(row.passenger_hexagon_id ?? remapped?.passenger_hexagon_id ?? '').trim()
-  const dHex = String(row.dest_hexagon_id ?? remapped?.dest_hexagon_id ?? '').trim()
-  const productType = String(row.service_info_name ?? remapped?.service_info_name ?? '').trim()
-  const surgeRaw = row.surge_price_A ?? remapped?.surge_price_A ?? 0
-
-  const etaRaw = row.accept_eta ?? row.ACCEPTED_TAXI_ETA ?? null
+  const sHex = String(field(row, 'passenger_hexagon_id', 'PASSENGER_HEXAGON_ID') ?? field(remapped, 'passenger_hexagon_id', 'PASSENGER_HEXAGON_ID') ?? '').trim()
+  const dHex = String(field(row, 'dest_hexagon_id', 'DEST_HEXAGON_ID') ?? field(remapped, 'dest_hexagon_id', 'DEST_HEXAGON_ID') ?? '').trim()
+  const productType = String(field(row, 'service_info_name', 'SERVICE_INFO_NAME') ?? field(remapped, 'service_info_name', 'SERVICE_INFO_NAME') ?? '').trim()
+  const surgeRaw = field(row, 'surge_price_A', 'SURGE_PRICE_A', 'SURGE_PRICE') ?? field(remapped, 'surge_price_A', 'SURGE_PRICE_A', 'SURGE_PRICE') ?? 0
+  const etaRaw = field(row, 'accept_eta', 'ACCEPTED_TAXI_ETA') ?? null
   const etaVal = etaRaw != null ? Number(etaRaw) : null
-  const driverId = sourceIdentifier(row.driver_id ?? row.DRIVER_ID)
-  const vehicleId = sourceIdentifier(row.vehicle_id ?? row.VEHICLE_ID)
+  const callFee = nullableNumber(field(row, 'call_fee', 'CALL_FEE'))
+  const status = normalizeStatus(row, remapped)
 
   return {
     callcard_id: callcardId,
-    asp_id: Number(row.asp_id ?? row.ASP_ID ?? 0),
+    asp_id: Number(field(row, 'asp_id', 'ASP_ID') ?? 0),
     call_date,
     hour_slot,
     weekday,
-    s_area: String(row.s_area ?? '').trim() || null,
+    s_area: nullableText(field(row, 's_area', 'S_AREA')),
     s_hexagon: sHex,
-    d_area: String(row.d_area ?? '').trim() || null,
+    d_area: nullableText(field(row, 'd_area', 'D_AREA')),
     d_hexagon: dHex,
-    expected_distance: Number(row.expected_distance ?? 0),
-    expected_fare: Number(row.expected_fare_amt ?? 0),
-    is_paid: Number(row.call_fee ?? 0) > 0,
+    expected_distance: Number(field(row, 'expected_distance', 'EXPECTED_DISTANCE') ?? 0),
+    expected_fare: Number(field(row, 'expected_fare_amt', 'EXPECTED_FARE_AMT') ?? 0),
+    is_paid: Number(callFee ?? 0) > 0,
     eta_distance: etaVal != null && etaVal > 0 ? etaVal : null,
     product_type: productType,
     is_surge: Number(surgeRaw) > 0,
     urgency_score: 0.0,
-    driver_id: driverId,
-    vehicle_id: vehicleId,
+    status,
+    status_group: statusGroup(status),
+    passenger_id: nullableText(field(row, 'passenger_id', 'PASSENGER_ID')),
+    payment_method: nullableText(field(row, 'payment_method', 'PAYMENT_METHOD')),
+    passenger_addr: nullableText(field(row, 'passenger_addr', 'PASSENGER_ADDR')),
+    dest_addr: nullableText(field(row, 'dest_addr', 'DEST_ADDR')),
+    passenger_lat: nullableNumber(field(row, 'dec_enc_passenger_latitude', 'DEC_ENC_PASSENGER_LATITUDE')),
+    passenger_lng: nullableNumber(field(row, 'dec_enc_passenger_longitude', 'DEC_ENC_PASSENGER_LONGITUDE')),
+    dest_lat: nullableNumber(field(row, 'dec_enc_dest_latitude', 'DEC_ENC_DEST_LATITUDE')),
+    dest_lng: nullableNumber(field(row, 'dec_enc_dest_longitude', 'DEC_ENC_DEST_LONGITUDE')),
+    request_datetime: datetimeIso(requestDatetime),
+    alloc_datetime: datetimeIso(field(row, 'alloc_datetime', 'ALLOC_DATETIME')),
+    cancel_datetime: datetimeIso(field(row, 'cancel_datetime', 'CANCEL_DATETIME')),
+    pickup_datetime: datetimeIso(field(row, 'pickup_datetime', 'PICKUP_DATETIME')),
+    drop_datetime: datetimeIso(field(row, 'drop_datetime', 'DROP_DATETIME')),
+    call_fee: callFee,
+    driver_id: sourceIdentifier(field(row, 'driver_id', 'DRIVER_ID')),
+    vehicle_id: sourceIdentifier(field(row, 'vehicle_id', 'VEHICLE_ID')),
   }
+}
+
+async function availableSourceColumns(): Promise<Set<SourceFieldColumn>> {
+  const checks = await Promise.all(
+    SOURCE_FIELD_COLUMNS.map(async (column) => {
+      const { error } = await supabase.from('callcard_mbti').select(column).limit(1)
+      return error ? null : column
+    })
+  )
+  return new Set(checks.filter(Boolean) as SourceFieldColumn[])
+}
+
+function stripUnavailableSourceColumns(row: CallcardMbti, available: Set<SourceFieldColumn>): CallcardMbti {
+  const next = { ...row } as Record<string, unknown>
+  for (const column of SOURCE_FIELD_COLUMNS) {
+    if (!available.has(column)) delete next[column]
+  }
+  return next as unknown as CallcardMbti
 }
 
 export async function POST(request: NextRequest) {
@@ -175,19 +245,18 @@ export async function POST(request: NextRequest) {
     remappedFile.arrayBuffer(),
   ])
 
-  let callcardRows: CallcardEtaRow[]
-  let remappedRows: RemappedRow[]
+  let callcardRows: SourceRow[]
+  let remappedRows: SourceRow[]
   try {
-    callcardRows = parseSheet<CallcardEtaRow>(callcardBuffer)
-    remappedRows = parseSheet<RemappedRow>(remappedBuffer)
+    callcardRows = parseSheet<SourceRow>(callcardBuffer)
+    remappedRows = parseSheet<SourceRow>(remappedBuffer)
   } catch (err) {
     return NextResponse.json({ error: '엑셀 파싱 실패', detail: String(err) }, { status: 422 })
   }
 
   inputRows = callcardRows.length
 
-  // remapped를 callcard_id로 인덱싱
-  const remappedMap = new Map<string, RemappedRow>()
+  const remappedMap = new Map<string, SourceRow>()
   for (const row of remappedRows) {
     const id = getCallcardId(row)
     if (id) remappedMap.set(id, row)
@@ -217,9 +286,12 @@ export async function POST(request: NextRequest) {
     )
   }
 
+  const sourceColumns = await availableSourceColumns()
+  const upsertVectors = vectors.map((row) => stripUnavailableSourceColumns(row, sourceColumns))
+
   const BATCH = 500
-  for (let i = 0; i < vectors.length; i += BATCH) {
-    const chunk = vectors.slice(i, i + BATCH)
+  for (let i = 0; i < upsertVectors.length; i += BATCH) {
+    const chunk = upsertVectors.slice(i, i + BATCH)
     const { error } = await supabase
       .from('callcard_mbti')
       .upsert(chunk, { onConflict: 'callcard_id' })
@@ -246,5 +318,9 @@ export async function POST(request: NextRequest) {
     total_rows_read: callcardRows.length,
     remapped_rows_read: remappedRows.length,
     source_identifiers: { driver_id: 'preserved', vehicle_id: 'preserved' },
+    source_fields: {
+      available_columns: Array.from(sourceColumns),
+      mode: sourceColumns.size === SOURCE_FIELD_COLUMNS.length ? 'preserved' : 'schema_not_applied',
+    },
   })
 }

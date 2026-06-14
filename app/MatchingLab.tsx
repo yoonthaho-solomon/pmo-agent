@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
@@ -575,9 +575,9 @@ function DataLoadTab() {
       </Panel>
 
       <Panel>
-        <SectionHeader title="앱미터 기사 연결 진단" desc="앱미터 driver_key가 호출/매칭의 driver_id와 직접 연결되는지 읽기 전용으로 확인합니다." />
+        <SectionHeader title="앱미터 시장 기준 데이터" desc="앱미터는 기사 MBTI 정답지가 아니라 천안 택시 흐름과 수입을 보는 보조 기준 데이터로 확인합니다." />
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 14 }}>
-          <MiniMetric label="앱미터 기사키" value={driverLink?.meterDistinctDriverKeys ?? 0} />
+          <MiniMetric label="앱미터 driver_key" value={driverLink?.meterDistinctDriverKeys ?? 0} />
           <MiniMetric label="기사 ID" value={driverLink?.driverDistinctIds ?? 0} />
           <MiniMetric label="직접 매칭" value={driverLink?.directMatchCount ?? 0} />
           <MiniMetric label="차량번호 후보" value={driverLink?.meterDistinctPlateCandidates ?? 0} />
@@ -599,7 +599,7 @@ function DataLoadTab() {
       </Panel>
 
       <Panel>
-        <SectionHeader title="연결 키 준비도" desc="vehicle_id 보존, 앱미터 driver_id, 매핑 테이블 존재 여부를 읽기 전용으로 확인합니다." />
+        <SectionHeader title="보조 데이터 준비도" desc="호출 원천 보존과 선택적 앱미터 보강 가능성을 읽기 전용으로 확인합니다." />
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 14 }}>
           <MiniMetric label="준비됨" value={linkReadiness?.readyCount ?? 0} />
           <MiniMetric label="누락" value={linkReadiness?.missingCount ?? 0} />
@@ -623,7 +623,7 @@ function DataLoadTab() {
       </Panel>
 
       <Panel>
-        <SectionHeader title="기사-차량 매핑 보강" desc="기존 driver_id + vehicle_id 매핑에 실제 차량번호와 앱미터 driver_key를 보강합니다. 새 행을 만들지 않고 기존 매핑 행만 업데이트합니다." />
+        <SectionHeader title="기사-차량 매핑 보강" desc="호출데이터의 driver_id + vehicle_id 매핑에 실제 차량번호와 앱미터 driver_key를 선택적으로 보강합니다. 새 행을 만들지 않고 기존 매핑 행만 업데이트합니다." />
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 14 }}>
           <MiniMetric label="매핑 행" value={vehicleMap?.count ?? vehicleMap?.table_rows ?? 0} />
           <MiniMetric label="차량번호 보강" value={vehicleMap?.vehicle_no_rows ?? 0} />
@@ -687,7 +687,7 @@ function DataLoadTab() {
               기사 프로필/벡터는 <strong style={{ color: C.text }}>driver_daily_logs</strong>와 <strong style={{ color: C.text }}>driver_mbti</strong> 기준으로 확인합니다.
             </div>
             <div style={{ padding: 12, borderRadius: 8, background: 'rgba(245,158,11,.08)', border: `1px solid rgba(245,158,11,.25)`, color: C.yellow }}>
-              앱미터 상태는 서버 API <strong>/api/meter-status</strong>를 통해 읽기 전용으로 확인합니다. 운영 환경에서는 service role이 있으면 RLS에 막히지 않는 실제 적재 건수를 표시합니다.
+              앱미터 상태는 서버 API <strong>/api/meter-status</strong>를 통해 읽기 전용으로 확인합니다. 앱미터는 기사 MBTI의 주 원천이 아니라 시장 흐름과 표준 운행량을 보는 보조 데이터입니다.
             </div>
             <Link href="/ingest" style={{ color: C.cyan, textDecoration: 'none', border: `1px solid ${C.cyan}`, borderRadius: 8, padding: '10px 12px', fontWeight: 850, textAlign: 'center' }}>
               적재 관리 화면으로 이동
@@ -1261,4 +1261,3 @@ export default function MatchingLab({ initialTab = 'load' }: { initialTab?: TabK
     </div>
   )
 }
-

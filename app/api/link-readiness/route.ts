@@ -67,8 +67,8 @@ export async function GET() {
     Promise.all([
       checkColumn(supabase, 'callcard_driver_id', '호출 원천 driver_id 보존', 'callcard_mbti', 'driver_id'),
       checkColumn(supabase, 'callcard_vehicle_id', '호출 원천 vehicle_id 보존', 'callcard_mbti', 'vehicle_id'),
-      checkColumn(supabase, 'meter_driver_id', '앱미터 일별 driver_id 연결', 'meter_daily_logs', 'driver_id'),
-      checkColumn(supabase, 'meter_driver_key', '앱미터 기사별 driver_key', 'meter_driver_logs', 'driver_key'),
+      checkColumn(supabase, 'meter_driver_id', '앱미터 일별 보조 driver_id', 'meter_daily_logs', 'driver_id'),
+      checkColumn(supabase, 'meter_driver_key', '앱미터 시장 기준 driver_key', 'meter_driver_logs', 'driver_key'),
       checkTable(supabase, 'driver_vehicle_map', 'driver_id-차량번호 매핑 테이블', 'driver_vehicle_map'),
       checkColumn(supabase, 'map_driver_id', '매핑 driver_id 컬럼', 'driver_vehicle_map', 'driver_id'),
       checkColumn(supabase, 'map_vehicle_id', '매핑 vehicle_id 컬럼', 'driver_vehicle_map', 'vehicle_id'),
