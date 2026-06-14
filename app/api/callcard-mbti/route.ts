@@ -111,22 +111,84 @@ function jsWeekdayToMon0(jsDay: number): number {
   return (jsDay + 6) % 7
 }
 
-function parseDatetime(raw: unknown): Date | null {
+interface LocalDatetime {
+  year: number
+  month: number
+  day: number
+  hour: number
+  minute: number
+  second: number
+  date: string
+  weekday: number
+}
+
+function pad2(value: number): string {
+  return String(value).padStart(2, '0')
+}
+
+function parseLocalDatetime(raw: unknown): LocalDatetime | null {
   if (raw == null || raw === '') return null
+
   if (typeof raw === 'number') {
     const date = XLSX.SSF.parse_date_code(raw)
     if (!date) return null
-    return new Date(Date.UTC(date.y, date.m - 1, date.d, date.H, date.M, date.S))
+    const weekday = jsWeekdayToMon0(new Date(Date.UTC(date.y, date.m - 1, date.d)).getUTCDay())
+    return {
+      year: date.y,
+      month: date.m,
+      day: date.d,
+      hour: date.H,
+      minute: date.M,
+      second: date.S,
+      date: `${date.y}-${pad2(date.m)}-${pad2(date.d)}`,
+      weekday,
+    }
   }
-  const str = String(raw).trim()
-  if (!str) return null
-  const d = new Date(str.replace(' ', 'T'))
-  return isNaN(d.getTime()) ? null : d
+
+  const value = String(raw).trim()
+  if (!value) return null
+  const match = value.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/)
+  if (!match) return null
+
+  const year = Number(match[1])
+  const month = Number(match[2])
+  const day = Number(match[3])
+  const hour = Number(match[4] ?? 0)
+  const minute = Number(match[5] ?? 0)
+  const second = Number(match[6] ?? 0)
+  const weekday = jsWeekdayToMon0(new Date(Date.UTC(year, month - 1, day)).getUTCDay())
+
+  return {
+    year,
+    month,
+    day,
+    hour,
+    minute,
+    second,
+    date: `${year}-${pad2(month)}-${pad2(day)}`,
+    weekday,
+  }
 }
 
-function datetimeIso(raw: unknown): string | null {
-  const parsed = parseDatetime(raw)
-  return parsed ? parsed.toISOString() : null
+
+function parseServiceDate(raw: unknown): { date: string; weekday: number } | null {
+  if (raw == null || raw === '') return null
+  const value = String(raw).trim().replace(/-/g, '')
+  const match = value.match(/^(\d{4})(\d{2})(\d{2})$/)
+  if (!match) return null
+  const year = Number(match[1])
+  const month = Number(match[2])
+  const day = Number(match[3])
+  return {
+    date: `${year}-${pad2(month)}-${pad2(day)}`,
+    weekday: jsWeekdayToMon0(new Date(Date.UTC(year, month - 1, day)).getUTCDay()),
+  }
+}
+function localTimestamp(raw: unknown): string | null {
+  const parsed = parseLocalDatetime(raw)
+  return parsed
+    ? `${parsed.date}T${pad2(parsed.hour)}:${pad2(parsed.minute)}:${pad2(parsed.second)}+09:00`
+    : null
 }
 
 function normalizeStatus(row: SourceRow, remapped: SourceRow | undefined): string | null {
@@ -148,12 +210,11 @@ function buildVector(row: SourceRow, remapped: SourceRow | undefined): CallcardM
   if (!callcardId) return null
 
   const requestDatetime = field(row, 'request_datetime', 'REQUEST_DATETIME')
-  const dt = parseDatetime(requestDatetime)
-  const hour_slot = dt ? dt.getHours() : 0
-  const weekday = dt ? jsWeekdayToMon0(dt.getDay()) : 0
-  const call_date = dt
-    ? `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
-    : ''
+  const localRequest = parseLocalDatetime(requestDatetime)
+  const serviceDate = parseServiceDate(field(row, 'service_date', 'SERVICE_DATE'))
+  const hour_slot = localRequest ? localRequest.hour : 0
+  const weekday = serviceDate?.weekday ?? localRequest?.weekday ?? 0
+  const call_date = serviceDate?.date ?? localRequest?.date ?? ''
 
   const sHex = String(field(row, 'passenger_hexagon_id', 'PASSENGER_HEXAGON_ID') ?? field(remapped, 'passenger_hexagon_id', 'PASSENGER_HEXAGON_ID') ?? '').trim()
   const dHex = String(field(row, 'dest_hexagon_id', 'DEST_HEXAGON_ID') ?? field(remapped, 'dest_hexagon_id', 'DEST_HEXAGON_ID') ?? '').trim()
@@ -191,11 +252,11 @@ function buildVector(row: SourceRow, remapped: SourceRow | undefined): CallcardM
     passenger_lng: nullableNumber(field(row, 'dec_enc_passenger_longitude', 'DEC_ENC_PASSENGER_LONGITUDE')),
     dest_lat: nullableNumber(field(row, 'dec_enc_dest_latitude', 'DEC_ENC_DEST_LATITUDE')),
     dest_lng: nullableNumber(field(row, 'dec_enc_dest_longitude', 'DEC_ENC_DEST_LONGITUDE')),
-    request_datetime: datetimeIso(requestDatetime),
-    alloc_datetime: datetimeIso(field(row, 'alloc_datetime', 'ALLOC_DATETIME')),
-    cancel_datetime: datetimeIso(field(row, 'cancel_datetime', 'CANCEL_DATETIME')),
-    pickup_datetime: datetimeIso(field(row, 'pickup_datetime', 'PICKUP_DATETIME')),
-    drop_datetime: datetimeIso(field(row, 'drop_datetime', 'DROP_DATETIME')),
+    request_datetime: localTimestamp(requestDatetime),
+    alloc_datetime: localTimestamp(field(row, 'alloc_datetime', 'ALLOC_DATETIME')),
+    cancel_datetime: localTimestamp(field(row, 'cancel_datetime', 'CANCEL_DATETIME')),
+    pickup_datetime: localTimestamp(field(row, 'pickup_datetime', 'PICKUP_DATETIME')),
+    drop_datetime: localTimestamp(field(row, 'drop_datetime', 'DROP_DATETIME')),
     call_fee: callFee,
     driver_id: sourceIdentifier(field(row, 'driver_id', 'DRIVER_ID')),
     vehicle_id: sourceIdentifier(field(row, 'vehicle_id', 'VEHICLE_ID')),
