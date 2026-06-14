@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
@@ -79,6 +79,30 @@ interface LinkReadinessStatus {
   error?: string
 }
 
+
+interface DriverVehicleMapStatus {
+  source?: string
+  count?: number
+  input_rows?: number
+  expected_map_rows?: number
+  table_rows?: number
+  stale_rows?: number
+  missing_rows?: number
+  vehicle_no_rows?: number
+  driver_key_rows?: number
+  error?: unknown
+}
+
+interface MappingImportResult {
+  source?: string
+  parsed_rows?: number
+  accepted_rows?: number
+  updated_rows?: number
+  missing_rows?: number
+  rejected_rows?: number
+  message?: string
+  error?: unknown
+}
 interface CallcardRow {
   callcard_id: string
   asp_id: number
@@ -358,6 +382,10 @@ function DataLoadTab() {
   const [meterDateCounts, setMeterDateCounts] = useState<MeterStatusResponse['dateCounts']>([])
   const [driverLink, setDriverLink] = useState<DriverLinkStatus | null>(null)
   const [linkReadiness, setLinkReadiness] = useState<LinkReadinessStatus | null>(null)
+  const [vehicleMap, setVehicleMap] = useState<DriverVehicleMapStatus | null>(null)
+  const [mappingFile, setMappingFile] = useState<File | null>(null)
+  const [mappingUploading, setMappingUploading] = useState(false)
+  const [mappingImport, setMappingImport] = useState<MappingImportResult | null>(null)
   const [loading, setLoading] = useState(true)
 
   async function tableStatus(table: string, label: string, dateColumn?: string): Promise<TableStat> {
@@ -416,6 +444,15 @@ function DataLoadTab() {
     }
   }
 
+  async function loadVehicleMapStatus() {
+    try {
+      const res = await fetch('/api/driver-vehicle-map', { cache: 'no-store' })
+      const json = await res.json() as DriverVehicleMapStatus
+      setVehicleMap(json)
+    } catch {
+      setVehicleMap({ error: '기사-차량 매핑 조회 실패' })
+    }
+  }
   async function loadMeterStatus(): Promise<TableStat[]> {
     try {
       const res = await fetch('/api/meter-status', { cache: 'no-store' })
@@ -443,8 +480,26 @@ function DataLoadTab() {
     ])
     const next = [baseStats[0], ...meterStats, ...baseStats.slice(1)]
     setStats(next)
-    await Promise.all([loadDateCounts(next), loadDriverLinkStatus(), loadLinkReadiness()])
+    await Promise.all([loadDateCounts(next), loadDriverLinkStatus(), loadLinkReadiness(), loadVehicleMapStatus()])
     setLoading(false)
+  }
+
+  async function uploadMappingFile() {
+    if (!mappingFile || mappingUploading) return
+    setMappingUploading(true)
+    setMappingImport(null)
+    try {
+      const formData = new FormData()
+      formData.append('file', mappingFile)
+      const res = await fetch('/api/driver-vehicle-map', { method: 'PATCH', body: formData })
+      const json = await res.json() as MappingImportResult
+      setMappingImport(json)
+      await loadVehicleMapStatus()
+    } catch {
+      setMappingImport({ error: '매핑 파일 업로드 실패' })
+    } finally {
+      setMappingUploading(false)
+    }
   }
 
   useEffect(() => {
@@ -556,6 +611,38 @@ function DataLoadTab() {
         </div>
       </Panel>
 
+      <Panel>
+        <SectionHeader title="기사-차량 매핑 보강" desc="기존 driver_id + vehicle_id 매핑에 실제 차량번호와 앱미터 driver_key를 보강합니다. 새 행을 만들지 않고 기존 매핑 행만 업데이트합니다." />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 14 }}>
+          <MiniMetric label="매핑 행" value={vehicleMap?.count ?? vehicleMap?.table_rows ?? 0} />
+          <MiniMetric label="차량번호 보강" value={vehicleMap?.vehicle_no_rows ?? 0} />
+          <MiniMetric label="앱미터 키 보강" value={vehicleMap?.driver_key_rows ?? 0} />
+          <MiniMetric label="업로드 반영" value={mappingImport?.updated_rows ?? 0} />
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 12, alignItems: 'center' }}>
+          <input
+            type="file"
+            accept=".csv,.xlsx,.xls"
+            onChange={(event) => setMappingFile(event.target.files?.[0] ?? null)}
+            style={{
+              minHeight: 40,
+              borderRadius: 8,
+              border: `1px solid ${C.border}`,
+              background: '#0B1222',
+              color: C.text,
+              padding: 8,
+              fontSize: 15,
+            }}
+          />
+          <Button tone="green" onClick={uploadMappingFile} disabled={!mappingFile || mappingUploading}>{mappingUploading ? '업로드 중' : '매핑 보강'}</Button>
+        </div>
+        <div style={{ marginTop: 12, padding: 12, borderRadius: 8, background: '#0B1222', border: `1px solid ${C.border}`, color: C.sub, lineHeight: 1.55 }}>
+          필요한 컬럼은 <strong style={{ color: C.text }}>driver_id</strong>, <strong style={{ color: C.text }}>vehicle_id</strong>이며, 보강 컬럼은 <strong style={{ color: C.text }}>vehicle_no</strong> 또는 <strong style={{ color: C.text }}>driver_key</strong>입니다. 한글 헤더 차량번호, 차번, 기사키도 인식합니다.
+          {mappingImport && <div style={{ marginTop: 8, color: mappingImport.error ? C.yellow : C.green, fontWeight: 800 }}>
+            {mappingImport.error ? String(typeof mappingImport.error === 'object' ? JSON.stringify(mappingImport.error) : mappingImport.error) : `${mappingImport.message ?? '완료'}: ${fmt(mappingImport.updated_rows)}건 반영, ${fmt(mappingImport.missing_rows)}건 미연결, ${fmt(mappingImport.rejected_rows)}건 제외`}
+          </div>}
+        </div>
+      </Panel>
       <div style={{ display: 'grid', gridTemplateColumns: '1.1fr .9fr', gap: 18 }}>
         <Panel>
           <SectionHeader
@@ -1126,21 +1213,3 @@ export default function MatchingLab({ initialTab = 'load' }: { initialTab?: TabK
     </div>
   )
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
