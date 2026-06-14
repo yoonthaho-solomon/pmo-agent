@@ -1,4 +1,4 @@
-﻿import { NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
 type CallcardIdentifierRow = {
@@ -19,6 +19,19 @@ type DriverVehicleMapRow = {
   call_count: number
   source: string
   confidence: number
+}
+
+function errorPayload(err: unknown) {
+  if (err && typeof err === 'object') {
+    const record = err as Record<string, unknown>
+    return {
+      message: typeof record.message === 'string' ? record.message : JSON.stringify(record),
+      code: typeof record.code === 'string' ? record.code : undefined,
+      hint: typeof record.hint === 'string' ? record.hint : undefined,
+      details: typeof record.details === 'string' ? record.details : undefined,
+    }
+  }
+  return { message: String(err) }
 }
 
 async function fetchAllCallcardIdentifiers(supabase: SupabaseClient, maxRows = 300000): Promise<CallcardIdentifierRow[]> {
