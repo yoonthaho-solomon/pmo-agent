@@ -1,4 +1,4 @@
-﻿import { NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
 type CheckStatus = 'ok' | 'missing' | 'error'
@@ -102,9 +102,8 @@ export async function GET() {
     minimumPlan: [
       'callcard_mbti 또는 별도 원천 테이블에 driver_id, vehicle_id를 보존합니다.',
       '앱미터 driver_key에서 차량번호 후보를 분리합니다.',
-      'driver_id, vehicle_id, 차량번호 후보를 연결하는 driver_vehicle_map을 만듭니다.',
+      'driver_id, vehicle_id를 driver_vehicle_map에 먼저 확정하고 차량번호 후보는 후속 매핑으로 채웁니다.',
       '매칭 점수에는 mock 없이 연결된 기사만 앱미터 신뢰도/운행패턴을 합류합니다.',
     ],
   })
 }
-

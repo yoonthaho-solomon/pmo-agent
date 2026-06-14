@@ -1,0 +1,125 @@
+﻿import { NextResponse } from 'next/server'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+
+type CallcardIdentifierRow = {
+  driver_id: string | null
+  vehicle_id: string | null
+  asp_id: number | null
+  call_date: string | null
+}
+
+type DriverVehicleMapRow = {
+  driver_id: string
+  vehicle_id: string
+  vehicle_no: string | null
+  driver_key: string | null
+  asp_id: number | null
+  first_call_date: string | null
+  last_call_date: string | null
+  call_count: number
+  source: string
+  confidence: number
+}
+
+async function fetchAllCallcardIdentifiers(supabase: SupabaseClient, maxRows = 300000): Promise<CallcardIdentifierRow[]> {
+  const all: CallcardIdentifierRow[] = []
+  const page = 1000
+  for (let from = 0; from < maxRows; from += page) {
+    const { data, error } = await supabase
+      .from('callcard_mbti')
+      .select('driver_id,vehicle_id,asp_id,call_date')
+      .not('driver_id', 'is', null)
+      .not('vehicle_id', 'is', null)
+      .range(from, from + page - 1)
+    if (error) throw error
+    if (!data || data.length === 0) break
+    all.push(...(data as CallcardIdentifierRow[]))
+    if (data.length < page) break
+  }
+  return all
+}
+
+function buildMapRows(rows: CallcardIdentifierRow[]): DriverVehicleMapRow[] {
+  const grouped = new Map<string, DriverVehicleMapRow>()
+  for (const row of rows) {
+    const driverId = row.driver_id?.trim()
+    const vehicleId = row.vehicle_id?.trim()
+    if (!driverId || !vehicleId) continue
+    const key = `${driverId}::${vehicleId}`
+    const current = grouped.get(key)
+    if (!current) {
+      grouped.set(key, {
+        driver_id: driverId,
+        vehicle_id: vehicleId,
+        vehicle_no: null,
+        driver_key: null,
+        asp_id: row.asp_id ?? null,
+        first_call_date: row.call_date ?? null,
+        last_call_date: row.call_date ?? null,
+        call_count: 1,
+        source: 'callcard_mbti',
+        confidence: 0.7,
+      })
+      continue
+    }
+    current.call_count += 1
+    if (row.call_date && (!current.first_call_date || row.call_date < current.first_call_date)) current.first_call_date = row.call_date
+    if (row.call_date && (!current.last_call_date || row.call_date > current.last_call_date)) current.last_call_date = row.call_date
+    if (current.asp_id == null && row.asp_id != null) current.asp_id = row.asp_id
+  }
+  return Array.from(grouped.values())
+}
+
+export async function GET() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  const source = process.env.SUPABASE_SERVICE_ROLE_KEY ? 'service_role' : 'anon'
+
+  if (!supabaseUrl || !supabaseKey) {
+    return NextResponse.json({ error: 'Supabase 환경변수가 설정되지 않았습니다.' }, { status: 500 })
+  }
+
+  const supabase = createClient(supabaseUrl, supabaseKey)
+  const { count, error } = await supabase.from('driver_vehicle_map').select('*', { count: 'exact', head: true })
+  if (error) return NextResponse.json({ source, error: error.message, code: error.code }, { status: 500 })
+
+  return NextResponse.json({ source, count: count ?? 0 })
+}
+
+export async function POST() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  const source = process.env.SUPABASE_SERVICE_ROLE_KEY ? 'service_role' : 'anon'
+
+  if (!supabaseUrl || !supabaseKey) {
+    return NextResponse.json({ error: 'Supabase 환경변수가 설정되지 않았습니다.' }, { status: 500 })
+  }
+
+  const supabase = createClient(supabaseUrl, supabaseKey)
+
+  try {
+    const identifiers = await fetchAllCallcardIdentifiers(supabase)
+    const mapRows = buildMapRows(identifiers)
+    const batch = 500
+    for (let i = 0; i < mapRows.length; i += batch) {
+      const chunk = mapRows.slice(i, i + batch)
+      const { error } = await supabase.from('driver_vehicle_map').upsert(chunk, { onConflict: 'driver_id,vehicle_id' })
+      if (error) throw error
+    }
+
+    const uniqueDrivers = new Set(mapRows.map((row) => row.driver_id)).size
+    const uniqueVehicles = new Set(mapRows.map((row) => row.vehicle_id)).size
+
+    return NextResponse.json({
+      source,
+      input_rows: identifiers.length,
+      map_rows: mapRows.length,
+      unique_drivers: uniqueDrivers,
+      unique_vehicles: uniqueVehicles,
+      message: 'driver_vehicle_map 생성 완료',
+    })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    return NextResponse.json({ source, error: message }, { status: 500 })
+  }
+}
