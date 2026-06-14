@@ -175,7 +175,30 @@ function applyFilters<T extends { gte: (column: string, value: string) => T; lte
   return next
 }
 
+async function fetchSequentialOutcomeRows(supabase: SupabaseClient, filters: OutcomeFilters): Promise<CallOutcomeRow[]> {
+  const page = 1000
+  const rows: CallOutcomeRow[] = []
+
+  for (let from = 0; ; from += page) {
+    const baseDataQuery: any = supabase
+      .from('callcard_mbti')
+      .select(SELECT_COLS)
+      .not('status_group', 'is', null)
+      .order('callcard_id', { ascending: true })
+      .range(from, from + page - 1)
+    const query = applyFilters(baseDataQuery, filters)
+    const { data, error } = await query
+    if (error) throw error
+    if (!data || data.length === 0) break
+    rows.push(...(data as unknown as CallOutcomeRow[]))
+    if (data.length < page) break
+  }
+
+  return rows
+}
 async function fetchOutcomeRows(supabase: SupabaseClient, filters: OutcomeFilters): Promise<CallOutcomeRow[]> {
+  if (filters.aspId != null) return fetchSequentialOutcomeRows(supabase, filters)
+
   const page = 1000
   const concurrency = 8
   const baseCountQuery: any = supabase.from('callcard_mbti').select('*', { count: 'exact', head: true }).not('status_group', 'is', null)

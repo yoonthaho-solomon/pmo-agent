@@ -196,6 +196,32 @@ interface RecommendResult {
   recommended_drivers?: RecommendedDriver[]
   error?: string
 }
+interface OutcomeStats {
+  total: number
+  accepted: number
+  expired: number
+  canceled: number
+  pickup: number
+  other: number
+  accept_rate: number
+  expired_rate: number
+  canceled_rate: number
+  problem_rate: number
+}
+
+interface OutcomeGroupStats extends OutcomeStats {
+  key: string
+  label: string
+}
+
+interface OutcomeResult {
+  filters?: { date_from?: string | null; date_to?: string | null; asp_id?: number | null; group_by?: string; limit?: number }
+  summary?: OutcomeStats
+  groups?: OutcomeGroupStats[]
+  risk_groups?: OutcomeGroupStats[]
+  notes?: string[]
+  error?: unknown
+}
 
 const C = {
   bg: '#080C18',
@@ -849,6 +875,8 @@ function SimulationTab() {
   const [verifyResult, setVerifyResult] = useState<MatchingVerifyResult | null>(null)
   const [verifyLoading, setVerifyLoading] = useState(false)
   const [recommendLoading, setRecommendLoading] = useState(false)
+  const [outcomeResult, setOutcomeResult] = useState<OutcomeResult | null>(null)
+  const [outcomeLoading, setOutcomeLoading] = useState(false)
   const [loading, setLoading] = useState(false)
 
   async function loadDrivers() {
@@ -894,6 +922,7 @@ function SimulationTab() {
     setSelectedCallId(callcardId)
     setRecommendResult(null)
     setVerifyResult(null)
+    setOutcomeResult(null)
     if (!row) return
     setHour(row.hour_slot)
     setWeekday(row.weekday)
@@ -916,6 +945,25 @@ function SimulationTab() {
       setVerifyResult({ error: '저장 Top10 검증 실패' })
     } finally {
       setVerifyLoading(false)
+    }
+  }
+
+  async function runOutcomeRisk() {
+    setOutcomeLoading(true)
+    setOutcomeResult(null)
+    try {
+      const params = new URLSearchParams({ group_by: 'hour', limit: '24' })
+      if (selectedActualCall?.call_date) {
+        params.set('date_from', selectedActualCall.call_date)
+        params.set('date_to', selectedActualCall.call_date)
+      }
+      const res = await fetch(`/api/callcard-outcomes?${params.toString()}`, { cache: 'no-store' })
+      const json = await res.json() as OutcomeResult
+      setOutcomeResult(json)
+    } catch {
+      setOutcomeResult({ error: '콜 outcome 위험도 조회 실패' })
+    } finally {
+      setOutcomeLoading(false)
     }
   }
   async function runRecommendCompare() {
@@ -973,6 +1021,7 @@ function SimulationTab() {
   const apiIds = recommendResult?.recommended_drivers?.map((r) => r.driver_id) ?? []
   const localApiIds = apiComparableTop.map((r) => r.driver.driver_id)
   const top10Overlap = apiIds.filter((id) => localApiIds.includes(id)).length
+  const currentHourRisk = outcomeResult?.groups?.find((item) => Number(item.key) === hour) ?? null
 
   return (
     <div style={{ display: 'grid', gap: 18 }}>
@@ -1017,6 +1066,7 @@ function SimulationTab() {
               <Button tone={isSurge ? 'orange' : 'cyan'} onClick={() => setIsSurge(!isSurge)}>{isSurge ? '탄력요금' : '일반요금'}</Button>
               <Button tone="green" onClick={loadDrivers}>{loading ? '조회 중' : '기사 새로고침'}</Button>
               <Button tone="purple" onClick={runRecommendCompare} disabled={recommendLoading}>{recommendLoading ? '비교 중' : '/api/recommend 비교'}</Button>
+              <Button tone="orange" onClick={runOutcomeRisk} disabled={outcomeLoading}>{outcomeLoading ? '조회 중' : '콜 위험도 조회'}</Button>
               <Button tone="orange" onClick={runSavedMatchingVerify} disabled={!selectedActualCall || verifyLoading}>{verifyLoading ? '검증 중' : '저장 Top10 검증'}</Button>
             </div>
           </div>
@@ -1045,6 +1095,57 @@ function SimulationTab() {
         </Panel>
       </div>
 
+
+      <Panel>
+        <SectionHeader title="콜 난이도 · 만료 위험" desc="과거 실제 outcome 기준으로 expired와 canceled가 많이 난 조건을 분리 표시합니다. 현재 22D 코사인 점수에는 섞지 않습니다." />
+        {!outcomeResult && <div style={{ color: C.muted }}>콜 위험도 조회를 누르면 선택 날짜 기준 시간대 outcome이 표시됩니다. ASP별 필터는 전용 인덱스 적용 후 연결합니다.</div>}
+        {Boolean(outcomeResult?.error) && <div style={{ color: C.red }}>{String(typeof outcomeResult?.error === 'object' ? JSON.stringify(outcomeResult.error) : outcomeResult?.error)}</div>}
+        {outcomeResult?.summary && (
+          <div style={{ display: 'grid', gap: 14 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>
+              <MiniMetric label="분석 콜" value={outcomeResult.summary.total} />
+              <MiniMetric label="수락" value={outcomeResult.summary.accepted} />
+              <MiniMetric label="만료" value={outcomeResult.summary.expired} />
+              <MiniMetric label="취소" value={outcomeResult.summary.canceled} />
+              <MiniMetric label="위험률" value={Math.round(outcomeResult.summary.problem_rate * 100)} />
+            </div>
+            {currentHourRisk && (
+              <div style={{ padding: 14, borderRadius: 8, background: currentHourRisk.problem_rate >= 0.6 ? 'rgba(244,63,94,.12)' : 'rgba(245,158,11,.10)', border: `1px solid ${currentHourRisk.problem_rate >= 0.6 ? 'rgba(244,63,94,.35)' : 'rgba(245,158,11,.35)'}`, color: C.text, lineHeight: 1.55 }}>
+                <strong>{hour}시 기준 위험률 {pct(currentHourRisk.problem_rate)}</strong>
+                <div style={{ color: C.sub, marginTop: 6 }}>
+                  과거 {currentHourRisk.total.toLocaleString()}건 중 expired {currentHourRisk.expired.toLocaleString()}건, canceled {currentHourRisk.canceled.toLocaleString()}건입니다.
+                </div>
+              </div>
+            )}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+              <div>
+                <div style={{ color: C.cyan, fontWeight: 900, marginBottom: 8 }}>현재 조건 그룹</div>
+                <div style={{ display: 'grid', gap: 6 }}>
+                  {(outcomeResult.groups ?? []).slice(0, 8).map((item) => (
+                    <div key={item.key} style={{ display: 'grid', gridTemplateColumns: '80px 1fr 80px', gap: 8, padding: '8px 10px', border: `1px solid ${Number(item.key) === hour ? C.cyan : C.border}`, borderRadius: 8, background: '#0B1222' }}>
+                      <strong>{item.label}</strong>
+                      <span style={{ color: C.sub }}>총 {item.total.toLocaleString()} · 만료 {pct(item.expired_rate)} · 취소 {pct(item.canceled_rate)}</span>
+                      <span style={{ color: item.problem_rate >= 0.6 ? C.red : C.yellow, fontWeight: 900 }}>{pct(item.problem_rate)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <div style={{ color: C.red, fontWeight: 900, marginBottom: 8 }}>위험도 높은 시간대</div>
+                <div style={{ display: 'grid', gap: 6 }}>
+                  {(outcomeResult.risk_groups ?? []).slice(0, 8).map((item) => (
+                    <div key={item.key} style={{ display: 'grid', gridTemplateColumns: '80px 1fr 80px', gap: 8, padding: '8px 10px', border: `1px solid ${C.border}`, borderRadius: 8, background: '#0B1222' }}>
+                      <strong>{item.label}</strong>
+                      <span style={{ color: C.sub }}>총 {item.total.toLocaleString()} · 만료 {pct(item.expired_rate)} · 취소 {pct(item.canceled_rate)}</span>
+                      <span style={{ color: item.problem_rate >= 0.6 ? C.red : C.yellow, fontWeight: 900 }}>{pct(item.problem_rate)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </Panel>
       <Panel>
         <SectionHeader title="실제 콜카드 API 추천 검증" desc="같은 공통 22D 계산 모듈로 화면 Top 10과 /api/recommend Top 10을 비교합니다. 반경/온라인 시뮬레이션 필터는 제외합니다." />
         <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr 1fr', gap: 14, alignItems: 'start' }}>
