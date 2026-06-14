@@ -24,6 +24,10 @@ interface CallcardEtaRow {
   accept_eta?: string | number
   ACCEPTED_TAXI_ETA?: string | number
   service_info_name?: string
+  driver_id?: string | number
+  DRIVER_ID?: string | number
+  vehicle_id?: string | number
+  VEHICLE_ID?: string | number
   surge_price_A?: string | number
   [key: string]: unknown
 }
@@ -34,6 +38,10 @@ interface RemappedRow {
   passenger_hexagon_id?: string | number
   dest_hexagon_id?: string | number
   service_info_name?: string
+  driver_id?: string | number
+  DRIVER_ID?: string | number
+  vehicle_id?: string | number
+  VEHICLE_ID?: string | number
   surge_price_A?: string | number
   [key: string]: unknown
 }
@@ -55,6 +63,8 @@ interface CallcardMbti {
   product_type: string
   is_surge: boolean
   urgency_score: number
+  driver_id: string | null
+  vehicle_id: string | null
 }
 
 function parseSheet<T>(buffer: ArrayBuffer): T[] {
@@ -107,6 +117,8 @@ function buildVector(
 
   const etaRaw = row.accept_eta ?? row.ACCEPTED_TAXI_ETA ?? null
   const etaVal = etaRaw != null ? Number(etaRaw) : null
+  const driverId = String(row.driver_id ?? row.DRIVER_ID ?? '').trim() || null
+  const vehicleId = String(row.vehicle_id ?? row.VEHICLE_ID ?? '').trim() || null
 
   return {
     callcard_id: callcardId,
@@ -125,6 +137,8 @@ function buildVector(
     product_type: productType,
     is_surge: Number(surgeRaw) > 0,
     urgency_score: 0.0,
+    driver_id: driverId,
+    vehicle_id: vehicleId,
   }
 }
 
@@ -223,5 +237,6 @@ export async function POST(request: NextRequest) {
     callcard_count: vectors.length,
     total_rows_read: callcardRows.length,
     remapped_rows_read: remappedRows.length,
+    source_identifiers: { driver_id: 'preserved', vehicle_id: 'preserved' },
   })
 }
