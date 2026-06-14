@@ -306,7 +306,7 @@ function acceptanceEstimate(d: DriverRow, call: ReturnType<typeof callVector>) {
 
 const shellStyle: React.CSSProperties = {
   minHeight: '100vh',
-  background: C.bg,
+  background: 'linear-gradient(180deg, #080C18 0%, #0B1020 48%, #080C18 100%)',
   color: C.text,
   fontFamily: 'Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
 }
@@ -318,14 +318,14 @@ const cardStyle: React.CSSProperties = {
 }
 
 function Panel({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
-  return <div style={{ ...cardStyle, padding: 20, ...style }}>{children}</div>
+  return <div style={{ ...cardStyle, padding: 24, ...style }}>{children}</div>
 }
 
 function Stat({ label, value, tone = 'neutral' }: { label: string; value: React.ReactNode; tone?: StatusTone }) {
   return (
-    <Panel style={{ minHeight: 92 }}>
-      <div style={{ fontSize: 14, color: C.muted, marginBottom: 10, fontWeight: 700 }}>{label}</div>
-      <div style={{ fontSize: 26, fontWeight: 800, color: toneColor(tone), fontVariantNumeric: 'tabular-nums' }}>{value}</div>
+    <Panel style={{ minHeight: 108 }}>
+      <div style={{ fontSize: 15, color: C.sub, marginBottom: 12, fontWeight: 750 }}>{label}</div>
+      <div style={{ fontSize: 31, fontWeight: 900, color: toneColor(tone), fontVariantNumeric: 'tabular-nums', lineHeight: 1.05 }}>{value}</div>
     </Panel>
   )
 }
@@ -347,12 +347,12 @@ function Button({
       onClick={onClick}
       disabled={disabled}
       style={{
-        height: 36,
+        height: 42,
         borderRadius: 8,
         border: `1px solid ${disabled ? C.border : color}`,
         background: disabled ? 'transparent' : `${color}22`,
         color: disabled ? C.muted : color,
-        padding: '0 14px',
+        padding: '0 16px',
         fontWeight: 800,
         cursor: disabled ? 'not-allowed' : 'pointer',
       }}
@@ -364,9 +364,9 @@ function Button({
 
 function SectionHeader({ title, desc }: { title: string; desc?: string }) {
   return (
-    <div style={{ marginBottom: 14 }}>
-      <h2 style={{ fontSize: 18, fontWeight: 850 }}>{title}</h2>
-      {desc && <p style={{ marginTop: 6, color: C.sub, fontSize: 14, lineHeight: 1.5 }}>{desc}</p>}
+    <div style={{ marginBottom: 18 }}>
+      <h2 style={{ fontSize: 22, fontWeight: 900, margin: 0 }}>{title}</h2>
+      {desc && <p style={{ marginTop: 8, color: C.sub, fontSize: 16, lineHeight: 1.55 }}>{desc}</p>}
     </div>
   )
 }
@@ -376,11 +376,11 @@ function VectorBars({ values }: { values: number[] }) {
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8 }}>
       {FACTORS.map((f, i) => (
         <div key={String(f.key)} style={{ display: 'grid', gridTemplateColumns: '64px 1fr 44px', gap: 8, alignItems: 'center' }}>
-          <span style={{ fontSize: 14, color: C.sub }}>{f.label}</span>
-          <div style={{ height: 7, background: '#19243A', borderRadius: 999, overflow: 'hidden' }}>
+          <span style={{ fontSize: 15, color: C.sub, fontWeight: 700 }}>{f.label}</span>
+          <div style={{ height: 8, background: '#19243A', borderRadius: 999, overflow: 'hidden' }}>
             <div style={{ width: `${Math.min(1, values[i] ?? 0) * 100}%`, height: '100%', background: f.color }} />
           </div>
-          <span style={{ fontSize: 14, color: C.muted, textAlign: 'right' }}>{((values[i] ?? 0) * 100).toFixed(0)}%</span>
+          <span style={{ fontSize: 15, color: C.muted, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{((values[i] ?? 0) * 100).toFixed(0)}%</span>
         </div>
       ))}
     </div>
@@ -550,7 +550,7 @@ function DataLoadTab() {
       <Panel>
         <SectionHeader title="주요 날짜 적재 확인" desc="호출데이터와 앱미터데이터가 이미 Supabase에 있는지 날짜별로 확인합니다." />
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 15, lineHeight: 1.45 }}>
             <thead>
               <tr>
                 {['날짜', '호출데이터', '기사 로그', '매칭 Top10', '앱미터 시간대', '앱미터 기사별'].map((head) => (
@@ -660,17 +660,17 @@ function DataLoadTab() {
             title="데이터 적재 현황"
             desc="이 화면은 읽기 전용입니다. 파일 업로드와 재처리는 별도 적재 관리 화면에서만 실행합니다."
           />
-          <div style={{ display: 'grid', gap: 8 }}>
+          <div style={{ display: 'grid', gap: 10 }}>
             {stats.map((item) => (
               <div key={item.table} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 12, padding: '12px 0', borderBottom: `1px solid ${C.border}` }}>
                 <div>
                   <div style={{ fontWeight: 850 }}>{item.label}</div>
-                  <div style={{ color: C.muted, fontSize: 14 }}>{item.table}</div>
+                  <div style={{ color: C.muted, fontSize: 15 }}>{item.table}</div>
                   {(item.minDate || item.maxDate) && <div style={{ color: C.sub, marginTop: 4 }}>{item.minDate ?? '-'} ~ {item.maxDate ?? '-'}</div>}
                 </div>
                 <div style={{ textAlign: 'right' }}>
                   <div style={{ color: item.error ? C.yellow : C.text, fontWeight: 900 }}>{item.error ? '확인 필요' : fmt(item.count)}</div>
-                  {item.error && <div style={{ maxWidth: 260, color: C.yellow, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.error}</div>}
+                  {item.error && <div style={{ maxWidth: 260, color: C.yellow, fontSize: 15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.error}</div>}
                 </div>
               </div>
             ))}
@@ -741,9 +741,9 @@ function EntitiesTab() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h2 style={{ fontSize: 22, fontWeight: 900 }}>콜카드·기사 데이터 탐색</h2>
-          <p style={{ color: C.sub, marginTop: 6, fontSize: 14 }}>실제 Supabase의 `callcard_mbti`, `driver_mbti`를 읽어 22차원 벡터를 확인합니다.</p>
+          <p style={{ color: C.sub, marginTop: 8, fontSize: 16, lineHeight: 1.55 }}>실제 Supabase의 `callcard_mbti`, `driver_mbti`를 읽어 22차원 벡터를 확인합니다.</p>
         </div>
-        <select value={aspId} onChange={(e) => setAspId(Number(e.target.value))} style={{ height: 36, background: C.panel, color: C.text, border: `1px solid ${C.border}`, borderRadius: 8, padding: '0 10px' }}>
+        <select value={aspId} onChange={(e) => setAspId(Number(e.target.value))} style={{ height: 42, background: C.panel, color: C.text, border: `1px solid ${C.border}`, borderRadius: 8, padding: '0 10px' }}>
           {ASP_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
       </div>
@@ -767,7 +767,7 @@ function EntitiesTab() {
                     <strong style={{ fontFamily: 'monospace' }}>{c.callcard_id}</strong>
                     <span style={{ color: C.sub }}>{c.call_date} {c.hour_slot}시</span>
                   </div>
-                  <div style={{ color: C.muted, marginTop: 6, fontSize: 14 }}>
+                  <div style={{ color: C.muted, marginTop: 6, fontSize: 15 }}>
                     {fmt(c.expected_distance)}m · {fmt(c.expected_fare)}원 · {c.is_paid ? '유료' : '무료'} · {c.is_surge ? '탄력' : '일반'}
                   </div>
                 </button>
@@ -794,7 +794,7 @@ function EntitiesTab() {
                     <strong style={{ fontFamily: 'monospace' }}>{d.driver_id}</strong>
                     <span style={{ color: d.reliability >= 0.3 ? C.green : C.yellow }}>신뢰도 {pct(d.reliability)}</span>
                   </div>
-                  <div style={{ color: C.muted, marginTop: 6, fontSize: 14 }}>
+                  <div style={{ color: C.muted, marginTop: 6, fontSize: 15 }}>
                     데이터 {d.data_days}일 · 선호 출발 {d.pref_s_hexagons?.[0] ?? '-'} · 선호 도착 {d.pref_d_hexagons?.[0] ?? '-'}
                   </div>
                 </button>
@@ -809,7 +809,7 @@ function EntitiesTab() {
           <SectionHeader title="콜카드 22차원 벡터" />
           {selectedCall ? (
             <>
-              <div style={{ marginBottom: 12, color: C.sub, fontSize: 14 }}>
+              <div style={{ marginBottom: 12, color: C.sub, fontSize: 15 }}>
                 {selectedCall.callcard_id} · ETA near {etaToNear(selectedCall.eta_distance).toFixed(2)}
               </div>
               <VectorBars values={callVec} />
@@ -820,7 +820,7 @@ function EntitiesTab() {
           <SectionHeader title="기사 22차원 벡터" />
           {selectedDriver ? (
             <>
-              <div style={{ marginBottom: 12, color: C.sub, fontSize: 14 }}>
+              <div style={{ marginBottom: 12, color: C.sub, fontSize: 15 }}>
                 {selectedDriver.driver_id} · 데이터 {selectedDriver.data_days}일 · 신뢰도 {pct(selectedDriver.reliability)}
               </div>
               <VectorBars values={driverVec} />
@@ -980,7 +980,7 @@ function SimulationTab() {
         <Panel>
           <SectionHeader title="콜카드 조건 입력" desc="22D 벡터와 반경 탐색 조건을 조합합니다." />
           <div style={{ display: 'grid', gap: 12 }}>
-            <label style={{ display: 'grid', gap: 6, color: C.sub, fontSize: 14, fontWeight: 800 }}>
+            <label style={{ display: 'grid', gap: 8, color: C.sub, fontSize: 16, fontWeight: 800 }}>
               ASP
               <select value={aspId} onChange={(e) => setAspId(Number(e.target.value))} style={inputStyle()}>
                 {ASP_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -1039,7 +1039,7 @@ function SimulationTab() {
               </div>
             ))}
           </div>
-          <div style={{ marginTop: 14, padding: 12, borderRadius: 8, background: 'rgba(34,211,238,.08)', border: `1px solid rgba(34,211,238,.25)`, color: C.cyan, fontSize: 14, lineHeight: 1.5 }}>
+          <div style={{ marginTop: 14, padding: 12, borderRadius: 8, background: 'rgba(34,211,238,.08)', border: `1px solid rgba(34,211,238,.25)`, color: C.cyan, fontSize: 15, lineHeight: 1.5 }}>
             실제 배차 API 계약 전까지 거리, ETA, 온라인, 공차, 위치 최신성은 배차 로직에 저장하거나 전송하지 않습니다. 이 화면은 정책 비교용 Matching Lab입니다.
           </div>
         </Panel>
@@ -1048,7 +1048,7 @@ function SimulationTab() {
       <Panel>
         <SectionHeader title="실제 콜카드 API 추천 검증" desc="같은 공통 22D 계산 모듈로 화면 Top 10과 /api/recommend Top 10을 비교합니다. 반경/온라인 시뮬레이션 필터는 제외합니다." />
         <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr 1fr', gap: 14, alignItems: 'start' }}>
-          <div style={{ ...cardStyle, padding: 14, background: '#0B1222' }}>
+          <div style={{ ...cardStyle, padding: 16, background: '#0B1222' }}>
             <div style={{ color: C.muted, fontWeight: 800, marginBottom: 8 }}>Top 10 일치</div>
             <div style={{ fontSize: 28, fontWeight: 900, color: recommendResult?.error ? C.red : C.green }}>
               {recommendResult ? `${top10Overlap}/10` : '-'}
@@ -1115,7 +1115,7 @@ function SimulationTab() {
       <Panel>
         <SectionHeader title="점수 구성요소 매트릭스" desc="최종 배차점수는 아직 정책 확정 전이므로 preview로만 표시합니다." />
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 15, lineHeight: 1.45 }}>
             <thead>
               <tr>
                 {['기사', '거리', 'ETA', 'cosine', 'ETA 점수', '예상 수락확률', '신뢰도', '도착지역 가치', '배차 균형', 'preview'].map((h) => (
@@ -1148,22 +1148,22 @@ function SimulationTab() {
 
 function MiniMetric({ label, value }: { label: string; value: number }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', color: C.sub, fontSize: 14 }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, color: C.sub, fontSize: 15, lineHeight: 1.45 }}>
       <span>{label}</span>
-      <strong style={{ color: C.text }}>{value.toLocaleString()}</strong>
+      <strong style={{ color: C.text, fontSize: 16 }}>{value.toLocaleString()}</strong>
     </div>
   )
 }
 
 function CandidateTable({ rows, mode }: { rows: RankedCandidate[]; mode: 'distance' | 'similarity' }) {
   return (
-    <div style={{ display: 'grid', gap: 8 }}>
+    <div style={{ display: 'grid', gap: 10 }}>
       {rows.length === 0 ? <p style={{ color: C.muted }}>조건에 맞는 후보가 없습니다.</p> : rows.map((r, i) => (
-        <div key={r.driver.driver_id} style={{ display: 'grid', gridTemplateColumns: '34px 1fr 70px 70px 70px', gap: 10, alignItems: 'center', padding: 10, borderRadius: 8, background: '#0B1222', border: `1px solid ${C.border}` }}>
+        <div key={r.driver.driver_id} style={{ display: 'grid', gridTemplateColumns: '34px 1fr 70px 70px 70px', gap: 10, alignItems: 'center', padding: 12, borderRadius: 8, background: '#0B1222', border: `1px solid ${C.border}` }}>
           <strong style={{ color: i < 3 ? C.yellow : C.sub }}>{i + 1}</strong>
           <div>
             <div style={{ fontFamily: 'monospace', fontWeight: 800 }}>{r.driver.driver_id}</div>
-            <div style={{ fontSize: 14, color: C.muted }}>online {r.state.online ? 'Y' : 'N'} · empty {r.state.empty ? 'Y' : 'N'} · fresh {r.state.fresh ? 'Y' : 'N'}</div>
+            <div style={{ fontSize: 15, color: C.muted, marginTop: 3 }}>online {r.state.online ? 'Y' : 'N'} · empty {r.state.empty ? 'Y' : 'N'} · fresh {r.state.fresh ? 'Y' : 'N'}</div>
           </div>
           <span style={{ color: C.sub }}>{r.state.distanceKm}km</span>
           <span style={{ color: C.blue }}>{r.state.etaMin}분</span>
@@ -1177,7 +1177,7 @@ function CandidateTable({ rows, mode }: { rows: RankedCandidate[]; mode: 'distan
 function inputStyle(): React.CSSProperties {
   return {
     width: '100%',
-    height: 36,
+    height: 42,
     background: '#0B1222',
     color: C.text,
     border: `1px solid ${C.border}`,
@@ -1188,7 +1188,7 @@ function inputStyle(): React.CSSProperties {
 }
 
 function labelStyle(): React.CSSProperties {
-  return { display: 'grid', gap: 6, color: C.sub, fontSize: 14, fontWeight: 800 }
+  return { display: 'grid', gap: 8, color: C.sub, fontSize: 16, fontWeight: 800 }
 }
 
 function tdStyle(color = C.text): React.CSSProperties {
@@ -1212,34 +1212,35 @@ export default function MatchingLab({ initialTab = 'load' }: { initialTab?: TabK
         select option { background: ${C.panel}; color: ${C.text}; }
       `}</style>
 
-      <header style={{ height: 56, borderBottom: `1px solid ${C.border}`, background: 'rgba(8,12,24,.95)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px', position: 'sticky', top: 0, zIndex: 10 }}>
+      <header style={{ height: 64, borderBottom: `1px solid ${C.border}`, background: 'rgba(8,12,24,.95)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 28px', position: 'sticky', top: 0, zIndex: 10 }}>
         <div>
-          <div style={{ fontSize: 15, fontWeight: 900 }}>PMO Matching Lab</div>
-          <div style={{ color: C.muted, fontSize: 14 }}>Grab × Uber × DiDi 운영 검증 콘솔</div>
+          <div style={{ fontSize: 18, fontWeight: 900 }}>PMO Matching Lab</div>
+          <div style={{ color: C.sub, fontSize: 15, marginTop: 2 }}>Grab × Uber × DiDi 운영 검증 콘솔</div>
         </div>
         <nav style={{ display: 'flex', gap: 8 }}>
-          <Link href="/dashboard" style={{ color: C.sub, textDecoration: 'none', border: `1px solid ${C.border}`, borderRadius: 8, padding: '7px 10px', fontSize: 14 }}>대시보드</Link>
-          <Link href="/simulator" style={{ color: C.sub, textDecoration: 'none', border: `1px solid ${C.border}`, borderRadius: 8, padding: '7px 10px', fontSize: 14 }}>시뮬레이터</Link>
-          <Link href="/ingest" style={{ color: C.sub, textDecoration: 'none', border: `1px solid ${C.border}`, borderRadius: 8, padding: '7px 10px', fontSize: 14 }}>적재 관리</Link>
+          <Link href="/dashboard" style={{ color: C.sub, textDecoration: 'none', border: `1px solid ${C.border}`, borderRadius: 8, padding: '9px 13px', fontSize: 15 }}>대시보드</Link>
+          <Link href="/simulator" style={{ color: C.sub, textDecoration: 'none', border: `1px solid ${C.border}`, borderRadius: 8, padding: '9px 13px', fontSize: 15 }}>시뮬레이터</Link>
+          <Link href="/ingest" style={{ color: C.sub, textDecoration: 'none', border: `1px solid ${C.border}`, borderRadius: 8, padding: '9px 13px', fontSize: 15 }}>적재 관리</Link>
         </nav>
       </header>
 
-      <main style={{ maxWidth: 1440, margin: '0 auto', padding: 24 }}>
-        <section style={{ marginBottom: 18 }}>
-          <h1 style={{ fontSize: 30, margin: 0, letterSpacing: '-0.02em' }}>배차 정책 검증 워크벤치</h1>
-          <p style={{ color: C.sub, margin: '8px 0 0', lineHeight: 1.5 }}>
+      <main style={{ maxWidth: 1480, margin: '0 auto', padding: '30px 28px 42px' }}>
+        <section style={{ marginBottom: 22 }}>
+          <h1 style={{ fontSize: 36, margin: 0, letterSpacing: 0, lineHeight: 1.15 }}>배차 정책 검증 워크벤치</h1>
+          <p style={{ color: C.sub, margin: '10px 0 0', lineHeight: 1.6, fontSize: 17, maxWidth: 920 }}>
             기존 22차원 벡터와 코사인 유사도를 유지하면서 데이터 적재, 콜·기사 탐색, 반경 확장 시뮬레이션을 분리했습니다.
           </p>
         </section>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 18 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 22 }}>
           {tabs.map((t) => (
             <button
               key={t.key}
               onClick={() => setTab(t.key)}
               style={{
                 ...cardStyle,
-                padding: 14,
+                padding: 18,
+                minHeight: 92,
                 textAlign: 'left',
                 color: tab === t.key ? C.text : C.sub,
                 borderColor: tab === t.key ? C.cyan : C.border,
@@ -1247,8 +1248,8 @@ export default function MatchingLab({ initialTab = 'load' }: { initialTab?: TabK
                 cursor: 'pointer',
               }}
             >
-              <div style={{ fontWeight: 900 }}>{t.label}</div>
-              <div style={{ fontSize: 14, color: C.muted, marginTop: 4 }}>{t.desc}</div>
+              <div style={{ fontWeight: 900, fontSize: 18 }}>{t.label}</div>
+              <div style={{ fontSize: 15, color: C.sub, marginTop: 6 }}>{t.desc}</div>
             </button>
           ))}
         </div>
@@ -1260,9 +1261,4 @@ export default function MatchingLab({ initialTab = 'load' }: { initialTab?: TabK
     </div>
   )
 }
-
-
-
-
-
 
