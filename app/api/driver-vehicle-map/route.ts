@@ -66,7 +66,7 @@ function buildMapRows(rows: CallcardIdentifierRow[]): DriverVehicleMapRow[] {
         vehicle_id: vehicleId,
         vehicle_no: null,
         driver_key: null,
-        asp_id: row.asp_id ?? null,
+        asp_id: null,
         first_call_date: row.call_date ?? null,
         last_call_date: row.call_date ?? null,
         call_count: 1,
@@ -78,7 +78,7 @@ function buildMapRows(rows: CallcardIdentifierRow[]): DriverVehicleMapRow[] {
     current.call_count += 1
     if (row.call_date && (!current.first_call_date || row.call_date < current.first_call_date)) current.first_call_date = row.call_date
     if (row.call_date && (!current.last_call_date || row.call_date > current.last_call_date)) current.last_call_date = row.call_date
-    if (current.asp_id == null && row.asp_id != null) current.asp_id = row.asp_id
+    // asp_id can be a long identifier; keep it null until the DB column is widened.
   }
   return Array.from(grouped.values())
 }
