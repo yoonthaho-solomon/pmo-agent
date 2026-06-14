@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
 type CallcardIdentifierRow = {
@@ -52,13 +52,33 @@ async function fetchAllCallcardIdentifiers(supabase: SupabaseClient, maxRows = 3
   return all
 }
 
+async function fetchAllDriverVehicleMap(supabase: SupabaseClient, maxRows = 50000): Promise<DriverVehicleMapRow[]> {
+  const all: DriverVehicleMapRow[] = []
+  const page = 1000
+  for (let from = 0; from < maxRows; from += page) {
+    const { data, error } = await supabase
+      .from('driver_vehicle_map')
+      .select('driver_id,vehicle_id,vehicle_no,driver_key,asp_id,first_call_date,last_call_date,call_count,source,confidence')
+      .range(from, from + page - 1)
+    if (error) throw error
+    if (!data || data.length === 0) break
+    all.push(...(data as DriverVehicleMapRow[]))
+    if (data.length < page) break
+  }
+  return all
+}
+
+function mapKey(driverId: string, vehicleId: string) {
+  return `${driverId}::${vehicleId}`
+}
+
 function buildMapRows(rows: CallcardIdentifierRow[]): DriverVehicleMapRow[] {
   const grouped = new Map<string, DriverVehicleMapRow>()
   for (const row of rows) {
     const driverId = row.driver_id?.trim()
     const vehicleId = row.vehicle_id?.trim()
     if (!driverId || !vehicleId) continue
-    const key = `${driverId}::${vehicleId}`
+    const key = mapKey(driverId, vehicleId)
     const current = grouped.get(key)
     if (!current) {
       grouped.set(key, {
@@ -78,12 +98,11 @@ function buildMapRows(rows: CallcardIdentifierRow[]): DriverVehicleMapRow[] {
     current.call_count += 1
     if (row.call_date && (!current.first_call_date || row.call_date < current.first_call_date)) current.first_call_date = row.call_date
     if (row.call_date && (!current.last_call_date || row.call_date > current.last_call_date)) current.last_call_date = row.call_date
-    // asp_id can be a long identifier; keep it null until the DB column is widened.
   }
   return Array.from(grouped.values())
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   const source = process.env.SUPABASE_SERVICE_ROLE_KEY ? 'service_role' : 'anon'
@@ -93,10 +112,38 @@ export async function GET() {
   }
 
   const supabase = createClient(supabaseUrl, supabaseKey)
-  const { count, error } = await supabase.from('driver_vehicle_map').select('driver_id,vehicle_id', { count: 'exact', head: true })
-  if (error) return NextResponse.json({ source, error: errorPayload(error) }, { status: 500 })
+  const detail = request.nextUrl.searchParams.get('detail') === '1'
 
-  return NextResponse.json({ source, count: count ?? 0 })
+  try {
+    const { count, error } = await supabase.from('driver_vehicle_map').select('driver_id,vehicle_id', { count: 'exact', head: true })
+    if (error) throw error
+    if (!detail) return NextResponse.json({ source, count: count ?? 0 })
+
+    const [identifiers, tableRows] = await Promise.all([
+      fetchAllCallcardIdentifiers(supabase),
+      fetchAllDriverVehicleMap(supabase),
+    ])
+    const expectedRows = buildMapRows(identifiers)
+    const expectedKeys = new Set(expectedRows.map((row) => mapKey(row.driver_id, row.vehicle_id)))
+    const tableKeys = new Set(tableRows.map((row) => mapKey(row.driver_id, row.vehicle_id)))
+    const staleRows = tableRows.filter((row) => !expectedKeys.has(mapKey(row.driver_id, row.vehicle_id)))
+    const missingRows = expectedRows.filter((row) => !tableKeys.has(mapKey(row.driver_id, row.vehicle_id)))
+
+    return NextResponse.json({
+      source,
+      input_rows: identifiers.length,
+      expected_map_rows: expectedRows.length,
+      table_rows: tableRows.length,
+      stale_rows: staleRows.length,
+      missing_rows: missingRows.length,
+      stale_sample: staleRows.slice(0, 10),
+      missing_sample: missingRows.slice(0, 10),
+      vehicle_no_rows: tableRows.filter((row) => row.vehicle_no).length,
+      driver_key_rows: tableRows.filter((row) => row.driver_key).length,
+    })
+  } catch (err) {
+    return NextResponse.json({ source, error: errorPayload(err) }, { status: 500 })
+  }
 }
 
 export async function POST() {
