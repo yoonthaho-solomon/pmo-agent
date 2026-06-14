@@ -1,6 +1,6 @@
 ﻿import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { scoreDriverForCall, type CallVectorInput, type DriverVectorRow } from '@/lib/matching-vector'
+import { callToVector, cosineSimilarity, driverToVector, scoreDriverForCall, type CallVectorInput, type DriverVectorRow } from '@/lib/matching-vector'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -179,13 +179,23 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const scored = drivers.map((d) => ({ driver: d, score: scoreDriverForCall(call, d) }))
+  const call_vector = callToVector(call)
+  const scored = drivers.map((d) => {
+    const driver_vector = driverToVector(d)
+    const cosine = cosineSimilarity(call_vector, driver_vector)
+    const start_area_bonus = call.s_hexagon && d.pref_s_hexagons?.includes(call.s_hexagon) ? 0.1 : 0
+    const score = scoreDriverForCall(call, d)
+    return { driver: d, score, cosine, start_area_bonus }
+  })
 
   scored.sort((a, b) => b.score - a.score)
 
   const recommended_drivers = scored.slice(0, 10).map((item, i) => ({
     driver_id:    item.driver.driver_id,
     cosine_score: parseFloat(item.score.toFixed(4)),
+    vector_cosine: parseFloat(item.cosine.toFixed(4)),
+    start_area_bonus: parseFloat(item.start_area_bonus.toFixed(4)),
+    final_score: parseFloat(item.score.toFixed(4)),
     rank:         i + 1,
     match_reason: buildMatchReason(call, item.driver),
   }))
@@ -193,8 +203,12 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({
     asp_id,
     driver_pool_size: drivers.length,
+    call_vector,
+    score_formula: 'final_score = min(vector_cosine + start_area_bonus, 1)',
     recommended_drivers,
   })
 }
+
+
 
 

@@ -1,13 +1,14 @@
-import { NextRequest, NextResponse } from 'next/server'
+﻿import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { logAgentRun } from '@/lib/agent-logger'
+import { scoreDriverForCall, type CallVectorInput, type DriverVectorRow } from '@/lib/matching-vector'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
-interface CallcardRow {
+interface CallcardRow extends CallVectorInput {
   callcard_id: string
   asp_id: number
   call_date: string
@@ -19,9 +20,10 @@ interface CallcardRow {
   eta_distance: number | null
   is_surge: boolean
   s_hexagon: string
+  d_hexagon: string | null
 }
 
-interface DriverRow {
+interface DriverRow extends DriverVectorRow {
   driver_id: string
   asp_id: number
   score_dawn: number
@@ -63,7 +65,7 @@ interface MatchScore {
 const CALLCARD_COLS = [
   'callcard_id', 'asp_id', 'call_date',
   'hour_slot', 'weekday', 'expected_distance', 'expected_fare',
-  'is_paid', 'eta_distance', 'is_surge', 's_hexagon',
+  'is_paid', 'eta_distance', 'is_surge', 's_hexagon', 'd_hexagon',
 ].join(',')
 
 const DRIVER_COLS = [
@@ -115,68 +117,6 @@ async function fetchDrivers(): Promise<DriverRow[]> {
   return all
 }
 
-function etaToNear(eta: number | null): number {
-  if (eta == null || eta <= 0) return 0
-  if (eta <= 150) return 1.0
-  if (eta >= 600) return 0.0
-  return 1 - (eta - 150) / 450
-}
-
-function callcardToVector(row: CallcardRow): number[] {
-  const h = row.hour_slot
-  const wd = row.weekday ?? -1  // 0=mon~6=sun (callcard_mbti 기준)
-  const dist = row.expected_distance ?? 0
-  const fare = row.expected_fare ?? 0
-  return [
-    h <= 5 ? 1 : 0,                          // dawn
-    h >= 6 && h <= 11 ? 1 : 0,               // morning
-    h >= 12 && h <= 17 ? 1 : 0,              // daytime
-    h >= 18 ? 1 : 0,                          // night
-    wd === 0 ? 1 : 0,                         // mon
-    wd === 1 ? 1 : 0,                         // tue
-    wd === 2 ? 1 : 0,                         // wed
-    wd === 3 ? 1 : 0,                         // thu
-    wd === 4 ? 1 : 0,                         // fri
-    wd === 5 ? 1 : 0,                         // sat
-    wd === 6 ? 1 : 0,                         // sun
-    dist > 0 && dist <= 3000 ? 1 : 0,         // short
-    dist > 3000 && dist <= 8000 ? 1 : 0,      // medium
-    dist > 8000 ? 1 : 0,                      // long
-    fare > 0 && fare <= 10000 ? 1 : 0,        // low_fare
-    fare > 10000 && fare <= 20000 ? 1 : 0,    // mid_fare
-    fare > 20000 ? 1 : 0,                     // high_fare
-    row.is_paid ? 1 : 0,                      // paid
-    row.is_paid ? 0 : 1,                      // free
-    row.is_surge ? 1 : 0,                     // surge
-    row.is_surge ? 0 : 1,                     // normal
-    etaToNear(row.eta_distance),              // near
-  ]
-}
-
-function driverToVector(row: DriverRow): number[] {
-  return [
-    row.score_dawn,    row.score_morning,  row.score_daytime, row.score_night,
-    row.score_mon,     row.score_tue,      row.score_wed,     row.score_thu,
-    row.score_fri,     row.score_sat,      row.score_sun,
-    row.score_short,   row.score_medium,   row.score_long,
-    row.score_low_fare, row.score_mid_fare, row.score_high_fare,
-    row.score_paid,    row.score_free,
-    row.score_surge,   row.score_normal,
-    row.score_near,
-  ]
-}
-
-function cosine(a: number[], b: number[]): number {
-  let dot = 0, magA = 0, magB = 0
-  for (let i = 0; i < a.length; i++) {
-    dot  += a[i] * b[i]
-    magA += a[i] * a[i]
-    magB += b[i] * b[i]
-  }
-  const denom = Math.sqrt(magA) * Math.sqrt(magB)
-  return denom === 0 ? 0 : dot / denom
-}
-
 function computeMatches(
   callcards: CallcardRow[],
   drivers: DriverRow[],
@@ -189,25 +129,16 @@ function computeMatches(
     driversByAsp.set(d.asp_id, list)
   }
 
-  // driver_id별 벡터 사전 계산
-  const driverVecs = new Map<string, number[]>()
-  for (const d of drivers) {
-    driverVecs.set(d.driver_id, driverToVector(d))
-  }
-
   const results: MatchScore[] = []
 
   for (const call of callcards) {
     const pool = driversByAsp.get(call.asp_id)
     if (!pool || pool.length === 0) continue
 
-    const callVec = callcardToVector(call)
-
-    const candidates = pool.map((d) => {
-      const cos = cosine(callVec, driverVecs.get(d.driver_id)!)
-      const bonus = d.pref_s_hexagons?.includes(call.s_hexagon) ? 0.1 : 0
-      return { driver_id: d.driver_id, score: Math.min(cos + bonus, 1.0) }
-    })
+    const candidates = pool.map((d) => ({
+      driver_id: d.driver_id,
+      score: scoreDriverForCall(call, d),
+    }))
 
     candidates.sort((a, b) => b.score - a.score)
 
@@ -395,3 +326,5 @@ export async function PATCH(request: NextRequest) {
     updated_count: updates.length,
   })
 }
+
+

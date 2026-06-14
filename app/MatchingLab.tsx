@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
@@ -172,6 +172,17 @@ interface RankedCandidate {
   finalPreview: number
 }
 
+
+interface MatchingVerifyResult {
+  source?: string
+  callcard?: { callcard_id: string; asp_id: number; call_date: string }
+  driver_pool_size?: number
+  top10_overlap?: number
+  saved_top10?: { driver_id: string; cosine_score: number; rank_in_call: number }[]
+  computed_top10?: { driver_id: string; score: number; rank: number }[]
+  conclusion?: string
+  error?: unknown
+}
 interface RecommendedDriver {
   driver_id: string
   cosine_score: number
@@ -835,6 +846,8 @@ function SimulationTab() {
   const [actualCalls, setActualCalls] = useState<CallcardRow[]>([])
   const [selectedCallId, setSelectedCallId] = useState('')
   const [recommendResult, setRecommendResult] = useState<RecommendResult | null>(null)
+  const [verifyResult, setVerifyResult] = useState<MatchingVerifyResult | null>(null)
+  const [verifyLoading, setVerifyLoading] = useState(false)
   const [recommendLoading, setRecommendLoading] = useState(false)
   const [loading, setLoading] = useState(false)
 
@@ -880,6 +893,7 @@ function SimulationTab() {
     const row = actualCalls.find((c) => c.callcard_id === callcardId)
     setSelectedCallId(callcardId)
     setRecommendResult(null)
+    setVerifyResult(null)
     if (!row) return
     setHour(row.hour_slot)
     setWeekday(row.weekday)
@@ -890,6 +904,20 @@ function SimulationTab() {
     setEta(row.eta_distance ?? '')
   }
 
+  async function runSavedMatchingVerify() {
+    if (!selectedActualCall) return
+    setVerifyLoading(true)
+    setVerifyResult(null)
+    try {
+      const res = await fetch(`/api/matching-verify?call_id=${encodeURIComponent(selectedActualCall.callcard_id)}`, { cache: 'no-store' })
+      const json = await res.json() as MatchingVerifyResult
+      setVerifyResult(json)
+    } catch {
+      setVerifyResult({ error: '저장 Top10 검증 실패' })
+    } finally {
+      setVerifyLoading(false)
+    }
+  }
   async function runRecommendCompare() {
     setRecommendLoading(true)
     setRecommendResult(null)
@@ -989,6 +1017,7 @@ function SimulationTab() {
               <Button tone={isSurge ? 'orange' : 'cyan'} onClick={() => setIsSurge(!isSurge)}>{isSurge ? '탄력요금' : '일반요금'}</Button>
               <Button tone="green" onClick={loadDrivers}>{loading ? '조회 중' : '기사 새로고침'}</Button>
               <Button tone="purple" onClick={runRecommendCompare} disabled={recommendLoading}>{recommendLoading ? '비교 중' : '/api/recommend 비교'}</Button>
+              <Button tone="orange" onClick={runSavedMatchingVerify} disabled={!selectedActualCall || verifyLoading}>{verifyLoading ? '검증 중' : '저장 Top10 검증'}</Button>
             </div>
           </div>
         </Panel>
@@ -1053,6 +1082,24 @@ function SimulationTab() {
             </div>
           </div>
         </div>
+      </Panel>
+
+      <Panel>
+        <SectionHeader title="저장 Top10 정합성" desc="matching_scores에 저장된 결과와 현재 공통 22D 계산 결과를 실제 콜 1건 기준으로 비교합니다." />
+        {!verifyResult && <div style={{ color: C.muted }}>실제 콜카드를 선택한 뒤 저장 Top10 검증을 실행하세요.</div>}
+        {Boolean(verifyResult?.error) && <div style={{ color: C.red }}>{String(typeof verifyResult?.error === 'object' ? JSON.stringify(verifyResult.error) : verifyResult?.error)}</div>}
+        {verifyResult && !verifyResult.error && (
+          <div style={{ display: 'grid', gap: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+              <MiniMetric label="일치 건수" value={verifyResult.top10_overlap ?? 0} />
+              <MiniMetric label="기사 풀" value={verifyResult.driver_pool_size ?? 0} />
+              <MiniMetric label="저장 Top10" value={verifyResult.saved_top10?.length ?? 0} />
+            </div>
+            <div style={{ padding: 12, borderRadius: 8, background: 'rgba(34,211,238,.08)', border: `1px solid rgba(34,211,238,.25)`, color: C.cyan, lineHeight: 1.5 }}>
+              {verifyResult.conclusion}
+            </div>
+          </div>
+        )}
       </Panel>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
         <Panel>
@@ -1213,3 +1260,9 @@ export default function MatchingLab({ initialTab = 'load' }: { initialTab?: TabK
     </div>
   )
 }
+
+
+
+
+
+
