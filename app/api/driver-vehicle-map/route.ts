@@ -93,8 +93,8 @@ export async function GET() {
   }
 
   const supabase = createClient(supabaseUrl, supabaseKey)
-  const { count, error } = await supabase.from('driver_vehicle_map').select('*', { count: 'exact', head: true })
-  if (error) return NextResponse.json({ source, error: error.message, code: error.code }, { status: 500 })
+  const { count, error } = await supabase.from('driver_vehicle_map').select('driver_id,vehicle_id', { count: 'exact', head: true })
+  if (error) return NextResponse.json({ source, error: errorPayload(error) }, { status: 500 })
 
   return NextResponse.json({ source, count: count ?? 0 })
 }
@@ -132,7 +132,6 @@ export async function POST() {
       message: 'driver_vehicle_map 생성 완료',
     })
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
-    return NextResponse.json({ source, error: message }, { status: 500 })
+    return NextResponse.json({ source, error: errorPayload(err) }, { status: 500 })
   }
 }
