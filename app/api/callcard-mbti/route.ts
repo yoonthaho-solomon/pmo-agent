@@ -77,6 +77,14 @@ function getCallcardId(row: CallcardEtaRow | RemappedRow): string {
   return String(row.call_id ?? row.CALL_ID ?? '').trim()
 }
 
+function sourceIdentifier(raw: unknown): string | null {
+  if (raw == null) return null
+  const value = String(raw).trim()
+  if (!value) return null
+  if (['NONE', 'NULL', 'N/A', 'NA', '-'].includes(value.toUpperCase())) return null
+  return value
+}
+
 // JS getDay(): 0=Sun..6=Sat → 0=Mon..6=Sun
 function jsWeekdayToMon0(jsDay: number): number {
   return (jsDay + 6) % 7
@@ -117,8 +125,8 @@ function buildVector(
 
   const etaRaw = row.accept_eta ?? row.ACCEPTED_TAXI_ETA ?? null
   const etaVal = etaRaw != null ? Number(etaRaw) : null
-  const driverId = String(row.driver_id ?? row.DRIVER_ID ?? '').trim() || null
-  const vehicleId = String(row.vehicle_id ?? row.VEHICLE_ID ?? '').trim() || null
+  const driverId = sourceIdentifier(row.driver_id ?? row.DRIVER_ID)
+  const vehicleId = sourceIdentifier(row.vehicle_id ?? row.VEHICLE_ID)
 
   return {
     callcard_id: callcardId,
