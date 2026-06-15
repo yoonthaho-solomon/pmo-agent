@@ -1,85 +1,122 @@
-﻿# 1 To 6 Implementation Status
+# 1 To 6 Implementation Status
 
-작성일: 2026-06-14
+작성일: 2026-06-15
 
-## 1. 기사-차량-앱미터 연결 완성
+## 전체 위치
 
-완료:
+현재는 1~3번이 대부분 완료됐고, 4~5번은 검증/시뮬레이션 단계까지 진행됐다. 다음 큰 작업은 4번의 실제 기사 상태 데이터 구조 정의와 5번의 반경 확장 실데이터화다.
 
-- `callcard_mbti.driver_id`, `callcard_mbti.vehicle_id` 보존.
-- `driver_vehicle_map` 생성 및 정합성 검증 API 구축.
-- CSV/XLSX 업로드로 기존 `driver_id + vehicle_id` 행에 `vehicle_no`, `driver_key`를 보강하는 `PATCH /api/driver-vehicle-map` 추가.
-- 대시보드 데이터 적재 탭에 매핑 보강 UI 추가.
-
-남음:
-
-- 실제 `vehicle_no` 또는 앱미터 `driver_key`가 포함된 매핑 원천 파일 필요.
-- 현재 확인된 앱미터 엑셀에는 `driver_key`는 있으나 콜카드 `driver_id/vehicle_id`와 직접 연결되는 차량번호 컬럼은 확인되지 않음.
-
-## 2. 기사 22차원 벡터 재계산 고도화
+## 1. Supabase 인덱스 적용 및 ASP별 outcome 조회
 
 완료:
 
-- 기사 벡터 순서와 계산 기준을 `lib/matching-vector.ts`로 공통화.
-- `/api/matching`의 중복 벡터 계산을 제거하고 공통 모듈 사용으로 변경.
-- 기사 데이터 신뢰도는 UI와 시뮬레이터 점수 구성요소로 분리 표시.
+- `callcard_mbti` outcome 조회용 인덱스 적용 확인.
+- ASP별 `GET /api/callcard-outcomes` 조회를 시뮬레이터에서 다시 활성화.
+- 운영 Vercel에서 `hour`, `distance`, `fare`, `paid`, `surge`, `s_area`, `d_area` 조회 200 확인.
 
-남음:
+상태: 완료.
 
-- 앱미터 `driver_key`가 실제 기사에 연결된 뒤 운행패턴 기반 기사 벡터 재학습/보강 필요.
-
-## 3. 콜카드 22차원 벡터 검증/보강
+## 2. 시뮬레이터 위험도 고도화
 
 완료:
 
-- `callToVector` 기준 콜카드 22차원 계산식 문서화.
-- `/api/recommend` 응답에 `call_vector`와 점수 공식 추가.
-- ETA near 계산식 명시.
-
-남음:
-
-- 라이브 콜카드 입력에서 `expected_distance`, `expected_fare`, `eta_distance`, `is_paid`, `is_surge`의 소스 계약 확정 필요.
-
-## 4. 실데이터 추천 검증
-
-완료:
-
-- `GET /api/matching-verify?call_id=...` 추가.
-- 실제 콜 1건 기준으로 `matching_scores` 저장 Top 10과 현재 즉시 계산 Top 10을 비교.
-- 시뮬레이터에 저장 Top10 검증 버튼과 결과 패널 추가.
+- 시간대 위험도 표시.
+- 거리 구간 위험도 표시.
+- 요금 구간 위험도 표시.
+- 유료/무료 위험도 표시.
+- 탄력/일반 위험도 표시.
+- 출발권역, 도착권역 위험도 표시.
+- `s_area`, `d_area`가 비어 있으면 경위도를 0.01도 격자로 묶어 읽기 계산.
 
 주의:
 
-- 저장 Top10이 과거 계산식으로 저장된 경우 현재 공통 계산 결과와 차이가 날 수 있음.
-- 차이가 나면 `/api/matching` 재계산 시점과 계산식 버전을 확인해야 함.
+- 권역별 top risk는 표본이 작은 경우 `problem_rate=100%`가 쉽게 나온다.
+- 실전 점수화 전 최소 표본 수와 smoothing이 필요하다.
 
-## 5. 시뮬레이터 운영형 전환
+상태: 1차 완료. 다음은 smoothing/신뢰도 보정.
+
+## 3. 콜 난이도 점수 분리 설계
 
 완료:
 
-- 실제 콜카드 선택 후 조건 자동 적용.
-- `/api/recommend`와 화면 공통 계산 Top 10 비교.
-- 저장 Top10 검증 추가.
-- 반경 확장, 온라인/공차/위치 최신성/수신 가능 필터는 시뮬레이션용 값으로 명시.
-- 최종 배차점수는 고정하지 않고 ETA 점수, 코사인 유사도, 예상 수락확률, 기사 신뢰도, 향후 도착지역 가치, 향후 배차 균형 점수로 분리 표시.
+- `call_risk_score`를 시뮬레이터에 추가.
+- 현재 계산식: `0.35*time + 0.20*distance + 0.20*fare + 0.15*paid + 0.10*surge`.
+- 추천 순위에는 섞지 않고 설명용 독립 지표로 표시.
+- 위험도 기여 상위 조건을 화면에 표시.
+
+상태: 완료. 다음은 정책 검증 후 최종 점수 반영 여부 결정.
+
+## 4. 기사 실시간 상태 데이터 구조 정의
+
+진행:
+
+- `handoff/LIVE_DISPATCH_API_CONTRACT.md`에 `driver_realtime_state` 초안 정의.
+- 필요한 필드: 온라인, 공차, lat/lng, 위치 업데이트 시각, 콜 수신 가능, 현재 운행 상태.
+- 상태 필터 규칙 초안 작성.
 
 남음:
 
-- 실제 기사 위치/온라인 상태 데이터가 들어오면 시뮬레이션 값을 제거하고 실데이터 필터로 교체.
+- Supabase 테이블로 만들지 외부 기사앱/관제 API에서 읽을지 결정.
+- 위치 인덱스를 PostGIS로 갈지 앱 서버 haversine 계산으로 시작할지 결정.
+- 실제 기사 위치/상태 샘플 데이터 필요.
 
-## 6. 라이브 배차 API 계약 설계
+상태: 계약 초안 완료, 구현 전.
 
-완료:
+## 5. 반경 확장 시뮬레이션 실데이터화
 
-- `handoff/LIVE_DISPATCH_API_CONTRACT.md` 작성.
-- `/api/recommend`, `/api/matching`, `/api/matching-verify`, `/api/driver-vehicle-map` 계약 초안 정리.
-- 운영 배차 API 후보 흐름과 아직 필요한 데이터 항목 명시.
+현재:
 
-## 다음 최소 구현 단계
+- `/simulator`에는 1차/2차/3차 반경 확장 화면이 있음.
+- 거리, ETA, 온라인, 공차, 위치 최신성, 수신 가능 상태는 아직 시뮬레이션 값.
 
-1. 실제 매핑 원천 파일 확보: `driver_id`, `vehicle_id`, `vehicle_no`, `driver_key`.
-2. 대시보드에서 매핑 보강 업로드.
-3. `vehicle_no_rows`, `driver_key_rows` 증가 확인.
-4. 앱미터 운행패턴을 `driver_vehicle_map.driver_key` 기준으로 기사 벡터 재계산에 반영.
-5. 실제 위치/온라인 상태 테이블 또는 API 계약 확정.
-6. 운영용 `/api/dispatch/recommend`를 별도 신규 API로 설계/구현.
+남음:
+
+- `driver_realtime_state` 또는 외부 상태 API 연결.
+- 호출 위치 기준 실제 반경 후보 생성.
+- 위치 최신성 필터 적용.
+- 후보 부족 또는 미수락 시 2차/3차 반경 확장.
+
+상태: UI/정책 흐름 있음, 실데이터 연결 전.
+
+## 6. 라이브 배차 API 계약 구체화
+
+진행:
+
+- `POST /api/dispatch/recommend` 제안 계약 작성.
+- 입력: 콜카드, 위치, 요금, 거리, 상품, 출발/도착 정보.
+- 처리: 후보 생성 → 상태 필터 → 반경 확장 → 22D 유사도 → 위험도 참고 → Top N.
+- 출력: 기사 후보, 점수 구성요소, 발송 순서.
+
+남음:
+
+- 실제 상태 데이터 소스 확정.
+- 최종 점수 버전 정책 확정.
+- 운영 배차 발송/수락/미수락 이벤트 저장 계약 추가.
+
+상태: API 계약 초안 완료, 구현 전.
+
+## Uber / Grab / DiDi 반영 위치
+
+Grab:
+
+- Matching Lab, 기존/신규 결과 비교, 점수 구성요소 설명은 이미 시뮬레이터에 일부 반영.
+- 다음은 정책별 수락률, 배차시간, expired 비교 리포트가 필요.
+
+Uber:
+
+- 주변 기사 후보 검색과 상태 필터는 `driver_realtime_state`가 생겨야 진짜가 된다.
+- 현재는 시뮬레이션 값으로만 표현 중.
+
+DiDi:
+
+- 22D 기사 벡터와 콜 벡터가 기사 누적 성향 반영의 시작점.
+- 다음은 도착지역 가치, 다음 콜 효율, 기사 장기 패턴 보강.
+
+## 다음 최소 구현 순서
+
+1. `driver_realtime_state` Supabase migration 초안 작성.
+2. 실제 DB 적용 전, 시뮬레이터가 읽을 수 있는 mock 전용 seed 또는 read-only fixture 설계.
+3. `/api/dispatch/recommend` skeleton 생성. 처음에는 저장/발송 없이 읽기 계산만 한다.
+4. 기사 상태 필터를 실제 데이터 또는 fixture로 교체.
+5. 반경 3/6/9km 후보 생성 결과를 시뮬레이터에 표시.
+6. 권역 위험도 smoothing과 최소 표본 수 기준 적용.
