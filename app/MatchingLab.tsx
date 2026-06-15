@@ -202,6 +202,27 @@ interface RecommendResult {
   recommended_drivers?: RecommendedDriver[]
   error?: string
 }
+interface DispatchResult {
+  status?: string
+  simulation_mode?: boolean
+  radius_step_used_km?: number
+  candidate_counts?: { realtime_state_rows?: number; nearby?: number; profile_joined?: number; ranked?: number }
+  recommended_drivers?: {
+    rank: number
+    driver_id: string
+    distance_km: number
+    eta_seconds: number
+    vector_cosine: number
+    eta_score: number
+    driver_reliability: number
+    final_score: number
+    status_snapshot?: { source?: string | null }
+  }[]
+  notes?: string[]
+  error?: unknown
+  next_step?: string
+}
+
 interface OutcomeStats {
   total: number
   accepted: number
@@ -903,6 +924,8 @@ function SimulationTab() {
   const [actualCalls, setActualCalls] = useState<CallcardRow[]>([])
   const [selectedCallId, setSelectedCallId] = useState('')
   const [recommendResult, setRecommendResult] = useState<RecommendResult | null>(null)
+  const [dispatchResult, setDispatchResult] = useState<DispatchResult | null>(null)
+  const [dispatchLoading, setDispatchLoading] = useState(false)
   const [verifyResult, setVerifyResult] = useState<MatchingVerifyResult | null>(null)
   const [verifyLoading, setVerifyLoading] = useState(false)
   const [recommendLoading, setRecommendLoading] = useState(false)
@@ -1048,6 +1071,33 @@ function SimulationTab() {
     setRecommendLoading(false)
   }
 
+  async function runDispatchSimulation() {
+    setDispatchLoading(true)
+    setDispatchResult(null)
+    try {
+      const res = await fetch('/api/dispatch/recommend', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          asp_id: aspId,
+          ...call,
+          passenger_lat: selectedActualCall?.passenger_lat ?? 37.56,
+          passenger_lng: selectedActualCall?.passenger_lng ?? 126.93,
+          dest_lat: selectedActualCall?.dest_lat ?? null,
+          dest_lng: selectedActualCall?.dest_lng ?? null,
+          radius_steps_km: [baseRadius, baseRadius * 2, baseRadius * 3],
+          max_candidates: 10,
+          simulation_mode: true,
+        }),
+      })
+      const json = await res.json() as DispatchResult
+      setDispatchResult(json)
+    } catch {
+      setDispatchResult({ error: '라이브 배차 API 모의검증 실패' })
+    } finally {
+      setDispatchLoading(false)
+    }
+  }
   const cv = useMemo(() => callVector(call), [call])
 
   const ranked = useMemo<RankedCandidate[]>(() => {
@@ -1159,6 +1209,7 @@ function SimulationTab() {
               <Button tone="purple" onClick={runRecommendCompare} disabled={recommendLoading}>{recommendLoading ? '비교 중' : '/api/recommend 비교'}</Button>
               <Button tone="orange" onClick={runOutcomeRisk} disabled={outcomeLoading}>{outcomeLoading ? '조회 중' : '콜 위험도 조회'}</Button>
               <Button tone="orange" onClick={runSavedMatchingVerify} disabled={!selectedActualCall || verifyLoading}>{verifyLoading ? '검증 중' : '저장 Top10 검증'}</Button>
+              <Button tone="green" onClick={runDispatchSimulation} disabled={dispatchLoading}>{dispatchLoading ? '검증 중' : '라이브 API 모의검증'}</Button>
             </div>
           </div>
         </Panel>
@@ -1315,6 +1366,38 @@ function SimulationTab() {
         </div>
       </Panel>
 
+      <Panel>
+        <SectionHeader title="라이브 배차 API 모의검증" desc="/api/dispatch/recommend를 simulation_mode로 호출해 후보 생성, 상태 필터, 반경 확장, 22D 랭킹 흐름을 확인합니다. 운영 배차에는 사용하지 않는 시뮬레이션입니다." />
+        {!dispatchResult && <div style={{ color: C.muted }}>라이브 API 모의검증을 누르면 driver_mbti 기반 가상 위치/상태로 결과가 표시됩니다.</div>}
+        {Boolean(dispatchResult?.error) && <div style={{ color: C.red }}>{String(typeof dispatchResult?.error === 'object' ? JSON.stringify(dispatchResult.error) : dispatchResult?.error)}</div>}
+        {dispatchResult && !dispatchResult.error && (
+          <div style={{ display: 'grid', gap: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+              <MiniMetric label="상태" value={dispatchResult.status === 'simulated' ? 1 : 0} />
+              <MiniMetric label="사용 반경 km" value={dispatchResult.radius_step_used_km ?? 0} />
+              <MiniMetric label="근처 후보" value={dispatchResult.candidate_counts?.nearby ?? 0} />
+              <MiniMetric label="랭킹 후보" value={dispatchResult.candidate_counts?.ranked ?? 0} />
+            </div>
+            {dispatchResult.simulation_mode && (
+              <div style={{ padding: 12, borderRadius: 8, background: 'rgba(245,158,11,.10)', border: '1px solid rgba(245,158,11,.35)', color: C.yellow, lineHeight: 1.5 }}>
+                simulation_mode=true 결과입니다. 기사 위치/온라인/공차/수신 가능 상태는 driver_mbti에서 결정론적으로 만든 검증용 값이며 운영 배차로 쓰지 않습니다.
+              </div>
+            )}
+            <div style={{ display: 'grid', gap: 6 }}>
+              {(dispatchResult.recommended_drivers ?? []).slice(0, 10).map((r) => (
+                <div key={r.driver_id} style={{ display: 'grid', gridTemplateColumns: '32px 1fr 70px 70px 70px 70px', gap: 8, padding: '8px 10px', border: `1px solid ${C.border}`, borderRadius: 8, background: '#0B1222' }}>
+                  <strong style={{ color: r.rank <= 3 ? C.yellow : C.sub }}>{r.rank}</strong>
+                  <span style={{ fontFamily: 'monospace' }}>{r.driver_id}</span>
+                  <span style={{ color: C.cyan }}>{r.distance_km}km</span>
+                  <span style={{ color: C.blue }}>{Math.round(r.eta_seconds / 60)}분</span>
+                  <span style={{ color: C.purple }}>{pct(r.vector_cosine)}</span>
+                  <span style={{ color: C.green }}>{pct(r.final_score)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </Panel>
       <Panel>
         <SectionHeader title="저장 Top10 정합성" desc="matching_scores에 저장된 결과와 현재 공통 22D 계산 결과를 실제 콜 1건 기준으로 비교합니다." />
         {!verifyResult && <div style={{ color: C.muted }}>실제 콜카드를 선택한 뒤 저장 Top10 검증을 실행하세요.</div>}

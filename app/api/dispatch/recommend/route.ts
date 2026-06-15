@@ -12,6 +12,7 @@ type DispatchRequest = Partial<CallVectorInput> & {
   dest_lng?: number | null
   max_candidates?: number
   radius_steps_km?: number[]
+  simulation_mode?: boolean
 }
 
 type NormalizedDispatchCall = CallVectorInput & {
@@ -23,6 +24,7 @@ type NormalizedDispatchCall = CallVectorInput & {
   dest_lng?: number | null
   max_candidates: number
   radius_steps_km: number[]
+  simulation_mode: boolean
 }
 
 type DriverStateRow = {
@@ -140,6 +142,7 @@ function normalizeRequest(input: DispatchRequest): { call?: NormalizedDispatchCa
       d_hexagon: input.d_hexagon ?? null,
       max_candidates: Math.min(Math.max(Number(input.max_candidates ?? 10), 1), 50),
       radius_steps_km: radiusSteps,
+      simulation_mode: Boolean(input.simulation_mode),
     },
   }
 }
@@ -164,6 +167,56 @@ function etaScore(etaSeconds: number): number {
   return Math.max(0, 1 - etaSeconds / 1800)
 }
 
+function hashNumber(input: string, salt = 0): number {
+  let h = 2166136261 + salt
+  for (let i = 0; i < input.length; i++) {
+    h ^= input.charCodeAt(i)
+    h = Math.imul(h, 16777619)
+  }
+  return Math.abs(h >>> 0)
+}
+
+function seededUnit(input: string, salt = 0): number {
+  return (hashNumber(input, salt) % 10000) / 10000
+}
+
+function offsetCoordinate(lat: number, lng: number, distanceKm: number, bearingRad: number): { lat: number; lng: number } {
+  const northKm = Math.cos(bearingRad) * distanceKm
+  const eastKm = Math.sin(bearingRad) * distanceKm
+  return {
+    lat: lat + northKm / 111,
+    lng: lng + eastKm / (111 * Math.cos(lat * Math.PI / 180)),
+  }
+}
+
+function buildSimulationStates(call: NormalizedDispatchCall, drivers: DriverRow[]): DriverStateRow[] {
+  const now = new Date().toISOString()
+  return drivers.slice(0, 5000).map((driver) => {
+    const unit = seededUnit(driver.driver_id, 17)
+    const distanceKm = 0.4 + unit * 8.6
+    const bearing = seededUnit(driver.driver_id, 29) * Math.PI * 2
+    const point = offsetCoordinate(call.passenger_lat, call.passenger_lng, distanceKm, bearing)
+    const online = seededUnit(driver.driver_id, 41) >= 0.08
+    const empty = seededUnit(driver.driver_id, 43) >= 0.18
+    const canReceive = seededUnit(driver.driver_id, 47) >= 0.12
+    return {
+      driver_id: driver.driver_id,
+      asp_id: call.asp_id,
+      vehicle_id: null,
+      vehicle_no: null,
+      lat: point.lat,
+      lng: point.lng,
+      location_updated_at: now,
+      online_status: online,
+      empty_status: empty,
+      can_receive_call: canReceive,
+      current_trip_status: online ? (empty ? 'idle' : 'on_trip') : 'offline',
+      last_call_id: null,
+      source: 'simulation_mode',
+    }
+  }).filter((state) => state.online_status && state.empty_status && state.can_receive_call)
+}
+
 async function fetchRealtimeStates(supabase: SupabaseClient, aspId: number): Promise<{ rows?: DriverStateRow[]; schemaMissing?: boolean; error?: unknown }> {
   const freshSince = new Date(Date.now() - 90 * 1000).toISOString()
   const { data, error } = await supabase
@@ -182,6 +235,24 @@ async function fetchRealtimeStates(supabase: SupabaseClient, aspId: number): Pro
     return { error: payload }
   }
   return { rows: (data ?? []) as unknown as DriverStateRow[] }
+}
+
+async function fetchDriversByAsp(supabase: SupabaseClient, aspId: number): Promise<DriverRow[]> {
+  const all: DriverRow[] = []
+  const page = 1000
+  for (let from = 0; ; from += page) {
+    const { data, error } = await supabase
+      .from('driver_mbti')
+      .select(DRIVER_COLS)
+      .eq('asp_id', aspId)
+      .order('driver_id', { ascending: true })
+      .range(from, from + page - 1)
+    if (error) throw error
+    if (!data || data.length === 0) break
+    all.push(...(data as unknown as DriverRow[]))
+    if (data.length < page) break
+  }
+  return all
 }
 
 async function fetchDriversByIds(supabase: SupabaseClient, aspId: number, driverIds: string[]): Promise<DriverRow[]> {
@@ -211,19 +282,31 @@ export async function POST(request: NextRequest) {
   if (!normalized.call) return NextResponse.json({ source, error: normalized.error }, { status: 400 })
   const call = normalized.call
 
-  const stateResult = await fetchRealtimeStates(supabase, call.asp_id)
-  if (stateResult.schemaMissing) {
-    return NextResponse.json({
-      source,
-      status: 'schema_missing',
-      error: 'driver_realtime_state 테이블이 아직 적용되지 않았습니다.',
-      next_step: 'supabase/migrations/20260615_driver_realtime_state.sql 적용 후 다시 호출하세요.',
-      detail: stateResult.error,
-    }, { status: 501 })
-  }
-  if (stateResult.error) return NextResponse.json({ source, error: stateResult.error }, { status: 500 })
+  let states: DriverStateRow[] = []
+  let simulationDrivers: DriverRow[] | null = null
 
-  const states = stateResult.rows ?? []
+  if (call.simulation_mode) {
+    try {
+      simulationDrivers = await fetchDriversByAsp(supabase, call.asp_id)
+      states = buildSimulationStates(call, simulationDrivers)
+    } catch (err) {
+      return NextResponse.json({ source, error: 'simulation driver_mbti 조회 실패', detail: errorPayload(err) }, { status: 500 })
+    }
+  } else {
+    const stateResult = await fetchRealtimeStates(supabase, call.asp_id)
+    if (stateResult.schemaMissing) {
+      return NextResponse.json({
+        source,
+        status: 'schema_missing',
+        error: 'driver_realtime_state 테이블이 아직 적용되지 않았습니다.',
+        next_step: 'supabase/migrations/20260615_driver_realtime_state.sql 적용 후 다시 호출하세요.',
+        simulation_hint: 'DB 적용 전 화면 검증은 request body에 simulation_mode: true를 명시해 호출하세요.',
+        detail: stateResult.error,
+      }, { status: 501 })
+    }
+    if (stateResult.error) return NextResponse.json({ source, error: stateResult.error }, { status: 500 })
+    states = stateResult.rows ?? []
+  }
   const statesWithDistance = states.map((state) => ({
     state,
     distance_km: haversineKm(call.passenger_lat, call.passenger_lng, state.lat, state.lng),
@@ -243,7 +326,12 @@ export async function POST(request: NextRequest) {
   const driverIds = nearby.map((item) => item.state.driver_id)
   let drivers: DriverRow[]
   try {
-    drivers = await fetchDriversByIds(supabase, call.asp_id, driverIds)
+    if (simulationDrivers) {
+      const idSet = new Set(driverIds)
+      drivers = simulationDrivers.filter((driver) => idSet.has(driver.driver_id))
+    } else {
+      drivers = await fetchDriversByIds(supabase, call.asp_id, driverIds)
+    }
   } catch (err) {
     return NextResponse.json({ source, error: 'driver_mbti 조회 실패', detail: errorPayload(err) }, { status: 500 })
   }
@@ -297,7 +385,8 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({
     source,
-    status: 'ok',
+    status: call.simulation_mode ? 'simulated' : 'ok',
+    simulation_mode: call.simulation_mode,
     callcard_id: call.callcard_id ?? null,
     asp_id: call.asp_id,
     radius_step_used_km: radiusStepUsed,
@@ -313,6 +402,7 @@ export async function POST(request: NextRequest) {
     score_formula_version: 'dispatch_v0_cosine_only_explainable_components',
     notes: [
       '읽기 전용 dispatch skeleton입니다. 배차 발송/저장은 하지 않습니다.',
+      call.simulation_mode ? 'simulation_mode=true: driver_mbti에서 결정론적 가상 위치/상태를 생성한 결과입니다. 운영 배차에 사용하지 마세요.' : 'driver_realtime_state 실데이터 기준 결과입니다.',
       'final_score는 초기 버전에서 22D vector_cosine만 사용합니다.',
       'ETA, 신뢰도, 수락확률, 콜 위험도는 구성요소로 분리 노출합니다.',
     ],
