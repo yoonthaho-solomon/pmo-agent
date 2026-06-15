@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { createClient } from '@supabase/supabase-js'
-import { PmoShell } from '@/app/components/PmoShell'
 import {
   VECTOR_DIMENSIONS,
   callToVector,
@@ -42,61 +42,69 @@ type RankedDriver = {
   vector: number[]
   cosine: number
   grade: string
+  fit: number
 }
 
 const C = {
-  panel: '#0F1628',
-  panel2: '#111A2E',
-  border: '#1E2D4A',
-  text: '#F1F5F9',
-  sub: '#A9B7CC',
-  muted: '#6C7D99',
+  bg: '#070A12',
+  ink: '#F5F7FB',
+  sub: '#AAB7CB',
+  muted: '#657189',
+  panel: 'rgba(9,14,26,.92)',
+  panel2: 'rgba(15,22,40,.94)',
+  border: '#22314F',
   cyan: '#22D3EE',
   green: '#10B981',
   yellow: '#F59E0B',
-  purple: '#8B5CF6',
-  red: '#F43F5E',
   orange: '#FB923C',
+  red: '#F43F5E',
+  purple: '#8B5CF6',
 }
 
-const WEEKDAYS = ['월', '화', '수', '목', '금', '토', '일']
+const weekdays = ['월', '화', '수', '목', '금', '토', '일']
+const groups = ['시간대', '요일', '거리', '요금', '콜유형', '상품', 'ETA']
+const groupColors: Record<string, string> = {
+  시간대: C.cyan,
+  요일: C.purple,
+  거리: C.green,
+  요금: C.orange,
+  콜유형: C.yellow,
+  상품: C.red,
+  ETA: C.cyan,
+}
 
-const FACTOR_GROUPS = [
-  { key: '시간대', color: C.cyan },
-  { key: '요일', color: C.purple },
-  { key: '거리', color: C.green },
-  { key: '요금', color: C.orange },
-  { key: '콜유형', color: C.yellow },
-  { key: '상품', color: C.red },
-  { key: 'ETA', color: C.cyan },
-]
-
-const networkSlots = [
-  { x: 18, y: 20 },
-  { x: 76, y: 18 },
-  { x: 88, y: 42 },
-  { x: 72, y: 72 },
-  { x: 25, y: 76 },
-  { x: 10, y: 48 },
-  { x: 36, y: 12 },
-  { x: 60, y: 88 },
-  { x: 92, y: 66 },
-  { x: 8, y: 72 },
+const slots = [
+  { x: 20, y: 20 },
+  { x: 78, y: 18 },
+  { x: 90, y: 42 },
+  { x: 74, y: 76 },
+  { x: 47, y: 86 },
+  { x: 22, y: 76 },
+  { x: 10, y: 47 },
+  { x: 38, y: 13 },
+  { x: 62, y: 12 },
+  { x: 90, y: 68 },
 ]
 
 function pct(n: number | null | undefined) {
-  return n == null ? '-' : `${(n * 100).toFixed(1)}%`
+  return n == null ? '-' : `${Math.round(n * 100)}%`
 }
 
-function fmt(n: number | null | undefined) {
-  return n == null ? '-' : n.toLocaleString()
+function money(n: number | null | undefined) {
+  if (n == null) return '-'
+  return `${Math.round(n).toLocaleString()}원`
 }
 
-function grade(score: number) {
-  if (score >= 0.86) return 'S'
-  if (score >= 0.76) return 'A'
+function meters(n: number | null | undefined) {
+  if (n == null) return '-'
+  return n >= 1000 ? `${(n / 1000).toFixed(1)}km` : `${Math.round(n)}m`
+}
+
+function scoreGrade(score: number) {
+  if (score >= 0.88) return 'S'
+  if (score >= 0.78) return 'A'
   if (score >= 0.66) return 'B'
-  if (score >= 0.55) return 'C'
+  if (score >= 0.54) return 'C'
   return 'D'
 }
 
@@ -105,20 +113,17 @@ function groupAverage(values: number[], group: string) {
     .map((dim, index) => ({ dim, index }))
     .filter((item) => item.dim.group === group)
     .map((item) => item.index)
-  if (indexes.length === 0) return 0
-  return indexes.reduce((sum, index) => sum + (values[index] ?? 0), 0) / indexes.length
+  if (!indexes.length) return 0
+  return indexes.reduce((sum, index) => sum + Number(values[index] ?? 0), 0) / indexes.length
 }
 
-function distanceLabel(meters: number) {
-  if (meters <= 3000) return '단거리'
-  if (meters <= 8000) return '중거리'
-  return '장거리'
-}
-
-function fareLabel(fare: number) {
-  if (fare <= 10000) return '저요금'
-  if (fare <= 20000) return '중요금'
-  return '고요금'
+function callSummary(call?: CallRow) {
+  if (!call) return '콜카드 없음'
+  const time = `${call.hour_slot}시 ${weekdays[call.weekday] ?? '-'}`
+  const dist = meters(call.expected_distance)
+  const fare = money(call.expected_fare)
+  const paid = call.is_paid ? '유료콜' : '무료콜'
+  return `${time} · ${dist} · ${fare} · ${paid}`
 }
 
 export default function VectorsPage() {
@@ -131,6 +136,7 @@ export default function VectorsPage() {
 
   useEffect(() => {
     let cancelled = false
+
     async function load() {
       setLoading(true)
       const [callRes, driverRes] = await Promise.all([
@@ -138,13 +144,14 @@ export default function VectorsPage() {
           .from('callcard_mbti')
           .select('callcard_id,asp_id,call_date,hour_slot,weekday,expected_distance,expected_fare,is_paid,is_surge,eta_distance,product_type')
           .order('call_date', { ascending: false })
-          .limit(40),
+          .limit(80),
         supabase
           .from('driver_mbti')
           .select('*')
           .order('reliability', { ascending: false })
-          .limit(1200),
+          .limit(1500),
       ])
+
       if (cancelled) return
       const nextCalls = (callRes.data ?? []) as CallRow[]
       setCalls(nextCalls)
@@ -152,6 +159,7 @@ export default function VectorsPage() {
       setSelectedCallId(nextCalls[0]?.callcard_id ?? '')
       setLoading(false)
     }
+
     load()
     return () => {
       cancelled = true
@@ -159,16 +167,23 @@ export default function VectorsPage() {
   }, [])
 
   const selectedCall = calls.find((row) => row.callcard_id === selectedCallId) ?? calls[0]
-  const callVector = useMemo(() => selectedCall ? callToVector(selectedCall) : [], [selectedCall])
+  const callVector = useMemo(() => (selectedCall ? callToVector(selectedCall) : []), [selectedCall])
 
   const ranked = useMemo<RankedDriver[]>(() => {
-    if (!selectedCall) return []
+    if (!selectedCall || !callVector.length) return []
     return drivers
       .filter((driver) => driver.asp_id === selectedCall.asp_id)
       .map((driver) => {
         const vector = driverToVector(driver)
         const cosine = cosineSimilarity(callVector, vector)
-        return { driver, vector, cosine, grade: grade(cosine) }
+        const reliability = Number(driver.reliability ?? 0)
+        return {
+          driver,
+          vector,
+          cosine,
+          grade: scoreGrade(cosine),
+          fit: cosine * 0.86 + reliability * 0.14,
+        }
       })
       .sort((a, b) => b.cosine - a.cosine)
       .slice(0, 10)
@@ -185,66 +200,127 @@ export default function VectorsPage() {
   }, [ranked, selectedDriverId])
 
   const focusedId = hoverDriverId || selectedDriverId
-  const selectedMatch = ranked.find((row) => row.driver.driver_id === focusedId) ?? ranked[0]
-  const selectedVector = selectedMatch?.vector ?? []
+  const focused = ranked.find((row) => row.driver.driver_id === focusedId) ?? ranked[0]
+  const best = ranked[0]
 
   return (
-    <PmoShell
-      active="벡터리스트"
-      kicker="INTERACTIVE MATCH GRAPH"
-      title="콜카드가 기사군에서 가장 닮은 기사를 찾아가는 화면"
-      description="콜카드가 중앙 노드가 되고, 기사 후보들이 유사도에 따라 연결됩니다. 점수가 높은 기사는 더 가까이 보이고, 선이 굵어지며, 리스트에서도 위로 도드라집니다."
-      status="그래프형 매칭"
-    >
-      {loading && <div style={{ color: C.sub, fontSize: 18, fontWeight: 850 }}>벡터 데이터를 불러오는 중입니다.</div>}
+    <main style={{ minHeight: '100vh', background: C.bg, color: C.ink, fontFamily: 'Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}>
+      <Topbar />
+      <KpiRail call={selectedCall} ranked={ranked} loading={loading} />
 
-      <section style={{ display: 'grid', gridTemplateColumns: '330px 1fr 330px', gap: 18, alignItems: 'stretch' }}>
-        <CallCard call={selectedCall} calls={calls} selectedCallId={selectedCallId} onSelect={setSelectedCallId} vector={callVector} />
-        <MatchGraph ranked={ranked} focusedId={focusedId} onFocus={setHoverDriverId} onSelect={setSelectedDriverId} />
-        <DriverCard match={selectedMatch} />
-      </section>
+      <section style={{ position: 'relative', minHeight: 'calc(100vh - 126px)', overflow: 'hidden', borderTop: `1px solid ${C.border}` }}>
+        <MapBackdrop />
 
-      <section style={{ display: 'grid', gridTemplateColumns: '420px 1fr', gap: 18, marginTop: 18 }}>
-        <Panel title="유사 기사 후보" desc="리스트에 마우스를 올리면 가운데 그래프의 선과 노드가 같이 강조됩니다.">
-          <div style={{ display: 'grid', gap: 10 }}>
-            {ranked.map((row, index) => (
-              <CandidateRow
-                key={row.driver.driver_id}
-                row={row}
-                index={index}
-                active={row.driver.driver_id === focusedId}
-                onFocus={setHoverDriverId}
-                onSelect={setSelectedDriverId}
-              />
+        <aside style={leftPanel}>
+          <PanelTitle kicker="CALLCARD" title="콜카드 팩터" />
+          <select value={selectedCallId} onChange={(event) => setSelectedCallId(event.target.value)} style={selectStyle}>
+            {calls.map((call) => (
+              <option key={call.callcard_id} value={call.callcard_id}>
+                {call.call_date} / {call.callcard_id}
+              </option>
             ))}
-          </div>
-        </Panel>
+          </select>
+          <CallPlayerCard call={selectedCall} vector={callVector} />
+        </aside>
 
-        <Panel title="22D 팩터 매칭 보드" desc="왼쪽은 콜카드 요구 조건, 오른쪽은 선택 기사 성향입니다. 가운데 판정이 초록색일수록 잘 맞습니다.">
-          <div style={{ display: 'grid', gap: 12 }}>
-            {VECTOR_DIMENSIONS.map((dim, index) => {
-              const callValue = callVector[index] ?? 0
-              const driverValue = selectedVector[index] ?? 0
-              const diff = Math.abs(callValue - driverValue)
-              return (
-                <div key={dim.key} style={{ display: 'grid', gridTemplateColumns: '110px 1fr 58px 1fr', gap: 10, alignItems: 'center' }}>
-                  <span style={{ color: C.sub, fontSize: 16, fontWeight: 850 }}>{dim.label}</span>
-                  <Bar value={callValue} color={C.cyan} align="right" />
-                  <span style={{ color: diff <= 0.25 ? C.green : diff <= 0.55 ? C.yellow : C.red, textAlign: 'center', fontWeight: 950 }}>
-                    {diff <= 0.25 ? '좋음' : diff <= 0.55 ? '보통' : '차이'}
-                  </span>
-                  <Bar value={driverValue} color={C.green} align="left" />
-                </div>
-              )
-            })}
+        <section style={stagePanel}>
+          <div style={{ position: 'relative', zIndex: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div>
+              <div style={{ color: C.cyan, fontSize: 14, fontWeight: 950, letterSpacing: '.12em' }}>VECTOR MATCHING FIELD</div>
+              <h1 style={{ margin: '8px 0 0', fontSize: 36, lineHeight: 1.08, fontWeight: 950 }}>콜 하나가 들어오면 기사군이 재정렬됩니다</h1>
+              <p style={{ margin: '12px 0 0', color: C.sub, fontSize: 16, lineHeight: 1.55, maxWidth: 620 }}>
+                기존 배차 범위 안의 기사 후보를 버리지 않고, 콜카드 22D와 기사 22D의 코사인 유사도로 먼저 받을 기사 순서를 바꿉니다.
+              </p>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ color: C.muted, fontSize: 13, fontWeight: 850 }}>BEST MATCH</div>
+              <div style={{ color: C.cyan, fontSize: 42, lineHeight: 1, fontWeight: 950 }}>{pct(best?.cosine)}</div>
+              <div style={{ color: C.sub, fontSize: 13, marginTop: 5 }}>{best?.driver.driver_id ?? '-'}</div>
+            </div>
           </div>
-        </Panel>
+
+          <MatchField ranked={ranked} focusedId={focusedId} onFocus={setHoverDriverId} onSelect={setSelectedDriverId} />
+        </section>
+
+        <aside style={rightPanel}>
+          <PanelTitle kicker="DRIVER" title="선택 기사 능력치" />
+          <DriverPlayerCard match={focused} />
+          <VectorGroups callVector={callVector} driverVector={focused?.vector ?? []} />
+        </aside>
+
+        <BottomDock ranked={ranked} focusedId={focusedId} onFocus={setHoverDriverId} onSelect={setSelectedDriverId} />
       </section>
-    </PmoShell>
+    </main>
   )
 }
 
-function MatchGraph({
+function Topbar() {
+  const nav = [
+    ['대시보드', '/dashboard'],
+    ['적재현황', '/ingest'],
+    ['벡터리스트', '/vectors'],
+    ['시뮬레이터', '/simulator'],
+    ['배차로직', '/dispatch-logic'],
+  ]
+
+  return (
+    <header style={{ height: 56, background: '#05070D', borderBottom: `1px solid ${C.border}`, display: 'grid', gridTemplateColumns: '320px 1fr 260px', alignItems: 'center', padding: '0 18px', gap: 18 }}>
+      <Link href="/dashboard" style={{ color: C.ink, textDecoration: 'none', fontSize: 18, fontWeight: 950 }}>
+        Happycall PMO <span style={{ color: C.cyan }}>AI 우선배차</span>
+      </Link>
+      <nav style={{ display: 'flex', justifyContent: 'center', gap: 8 }}>
+        {nav.map(([label, href]) => (
+          <Link key={href} href={href} style={{ color: href === '/vectors' ? C.cyan : C.sub, textDecoration: 'none', border: `1px solid ${href === '/vectors' ? C.cyan : C.border}`, borderRadius: 8, padding: '8px 12px', fontSize: 14, fontWeight: 900, background: href === '/vectors' ? 'rgba(34,211,238,.12)' : 'rgba(15,22,40,.62)' }}>
+            {label}
+          </Link>
+        ))}
+      </nav>
+      <div style={{ justifySelf: 'end', display: 'flex', gap: 8 }}>
+        <Pill color={C.green}>실데이터</Pill>
+        <Pill color={C.cyan}>22D COSINE</Pill>
+      </div>
+    </header>
+  )
+}
+
+function KpiRail({ call, ranked, loading }: { call?: CallRow; ranked: RankedDriver[]; loading: boolean }) {
+  const items = [
+    ['콜카드', call ? '1건 선택' : loading ? '로딩 중' : '없음', callSummary(call), C.cyan],
+    ['후보 기사', `${ranked.length}명`, '동일 ASP 기준 Top 10', C.green],
+    ['최고 유사도', pct(ranked[0]?.cosine), '코사인 유사도 기준', C.purple],
+    ['강한 연결', `${ranked.filter((row) => row.cosine >= 0.78).length}명`, 'A등급 이상 후보', C.yellow],
+    ['적용 방식', '우선 발송', '미수락 시 기존 순차 배차', C.orange],
+  ]
+
+  return (
+    <section style={{ height: 70, background: '#080B13', display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', borderBottom: `1px solid ${C.border}` }}>
+      {items.map(([label, value, sub, color]) => (
+        <div key={label} style={{ borderRight: `1px solid ${C.border}`, padding: '10px 18px' }}>
+          <div style={{ color: C.muted, fontSize: 13, fontWeight: 900 }}>{label}</div>
+          <div style={{ color: String(color), fontSize: 26, lineHeight: 1.05, fontWeight: 950, marginTop: 3 }}>{value}</div>
+          <div style={{ color: C.muted, fontSize: 12, marginTop: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sub}</div>
+        </div>
+      ))}
+    </section>
+  )
+}
+
+function MapBackdrop() {
+  return (
+    <div aria-hidden style={{ position: 'absolute', inset: 0 }}>
+      <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(circle at 50% 44%, rgba(34,211,238,.13), transparent 28%), linear-gradient(135deg, #121820, #080B13 68%)' }} />
+      <div style={{ position: 'absolute', inset: 0, opacity: 0.36, backgroundImage: 'linear-gradient(rgba(255,255,255,.07) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.06) 1px, transparent 1px)', backgroundSize: '56px 56px' }} />
+      <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0.5 }}>
+        <path d="M4 70 C18 52 24 31 42 42 S62 79 96 18" stroke="rgba(34,211,238,.32)" strokeWidth=".35" fill="none" />
+        <path d="M0 26 C28 20 55 22 100 74" stroke="rgba(16,185,129,.22)" strokeWidth=".42" fill="none" />
+        <path d="M26 2 L72 100" stroke="rgba(245,158,11,.22)" strokeWidth=".28" fill="none" />
+        <path d="M4 88 C24 80 58 81 100 58" stroke="rgba(139,92,246,.2)" strokeWidth=".3" fill="none" />
+      </svg>
+    </div>
+  )
+}
+
+function MatchField({
   ranked,
   focusedId,
   onFocus,
@@ -255,27 +331,14 @@ function MatchGraph({
   onFocus: (driverId: string) => void
   onSelect: (driverId: string) => void
 }) {
-  const center = { x: 50, y: 50 }
-  const top = ranked[0]
+  const center = { x: 50, y: 52 }
 
   return (
-    <section style={{ minHeight: 478, border: `1px solid ${C.border}`, borderRadius: 8, background: 'radial-gradient(circle at 50% 50%, rgba(34,211,238,.18), rgba(15,22,40,.72) 36%, #0B1222 78%)', padding: 20, position: 'relative', overflow: 'hidden' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'relative', zIndex: 2 }}>
-        <div>
-          <div style={{ color: C.sub, fontSize: 15, fontWeight: 850 }}>실시간 매칭 맵</div>
-          <div style={{ fontSize: 28, fontWeight: 950, marginTop: 4 }}>콜카드와 기사군 연결</div>
-        </div>
-        <div style={{ textAlign: 'right' }}>
-          <div style={{ color: C.muted, fontSize: 13, fontWeight: 850 }}>최고 유사도</div>
-          <div style={{ color: C.cyan, fontSize: 28, fontWeight: 950 }}>{pct(top?.cosine)}</div>
-        </div>
-      </div>
-
-      <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0.95 }}>
+    <div style={{ position: 'absolute', inset: 0 }}>
+      <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', zIndex: 1 }}>
         {ranked.map((row, index) => {
-          const slot = networkSlots[index] ?? networkSlots[0]
-          const isFocused = row.driver.driver_id === focusedId
-          const width = 0.35 + row.cosine * (isFocused ? 3.4 : 2.1)
+          const slot = slots[index]
+          const active = row.driver.driver_id === focusedId
           return (
             <line
               key={row.driver.driver_id}
@@ -283,28 +346,28 @@ function MatchGraph({
               y1={center.y}
               x2={slot.x}
               y2={slot.y}
-              stroke={isFocused ? C.cyan : index < 3 ? C.green : 'rgba(169,183,204,.34)'}
-              strokeWidth={width}
+              stroke={active ? C.cyan : index < 3 ? 'rgba(16,185,129,.82)' : 'rgba(170,183,203,.28)'}
+              strokeWidth={active ? 1.15 + row.cosine * 3.5 : 0.25 + row.cosine * 1.8}
               strokeLinecap="round"
             />
           )
         })}
       </svg>
 
-      <div style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)', zIndex: 3 }}>
-        <div style={{ width: 118, height: 118, borderRadius: 999, border: `2px solid ${C.cyan}`, background: 'rgba(8,12,24,.92)', boxShadow: `0 0 38px ${C.cyan}44`, display: 'grid', placeItems: 'center', textAlign: 'center' }}>
-          <div>
-            <div style={{ color: C.cyan, fontSize: 14, fontWeight: 950 }}>CALL</div>
-            <div style={{ color: C.text, fontSize: 28, fontWeight: 950, marginTop: 4 }}>22D</div>
-            <div style={{ color: C.muted, fontSize: 12, marginTop: 4 }}>request</div>
+      <div style={{ position: 'absolute', left: '50%', top: '52%', transform: 'translate(-50%, -50%)', zIndex: 4 }}>
+        <div style={{ width: 150, height: 150, borderRadius: 26, border: `2px solid ${C.cyan}`, background: 'linear-gradient(160deg, rgba(34,211,238,.22), rgba(8,12,24,.96))', display: 'grid', placeItems: 'center', boxShadow: `0 0 60px ${C.cyan}44` }}>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ color: C.cyan, fontSize: 16, fontWeight: 950 }}>CALLCARD</div>
+            <div style={{ color: C.ink, fontSize: 46, lineHeight: 1, fontWeight: 950, marginTop: 8 }}>22D</div>
+            <div style={{ color: C.sub, fontSize: 13, marginTop: 8 }}>요청 조건</div>
           </div>
         </div>
       </div>
 
       {ranked.map((row, index) => {
-        const slot = networkSlots[index] ?? networkSlots[0]
-        const isFocused = row.driver.driver_id === focusedId
-        const size = isFocused ? 82 : index < 3 ? 68 : 56
+        const slot = slots[index]
+        const active = row.driver.driver_id === focusedId
+        const size = active ? 94 : index < 3 ? 78 : 62
         return (
           <button
             key={row.driver.driver_id}
@@ -318,224 +381,253 @@ function MatchGraph({
               width: size,
               height: size,
               transform: 'translate(-50%, -50%)',
-              borderRadius: 999,
-              border: `2px solid ${isFocused ? C.cyan : index < 3 ? C.green : C.border}`,
-              background: isFocused ? 'rgba(34,211,238,.2)' : 'rgba(15,22,40,.96)',
-              color: C.text,
+              borderRadius: 18,
+              border: `2px solid ${active ? C.cyan : index < 3 ? C.green : C.border}`,
+              background: active ? 'linear-gradient(160deg, rgba(34,211,238,.25), rgba(10,14,24,.98))' : 'rgba(9,14,26,.96)',
+              color: C.ink,
               cursor: 'pointer',
-              zIndex: isFocused ? 5 : 4,
-              boxShadow: isFocused ? `0 0 32px ${C.cyan}55` : 'none',
-              transition: 'all 180ms ease',
+              zIndex: active ? 6 : 5,
+              boxShadow: active ? `0 0 38px ${C.cyan}55` : index < 3 ? `0 0 22px ${C.green}22` : 'none',
+              transition: 'all 170ms ease',
             }}
           >
-            <div style={{ fontSize: isFocused ? 24 : 19, fontWeight: 950, color: isFocused ? C.cyan : index < 3 ? C.green : C.sub }}>{row.grade}</div>
-            <div style={{ fontSize: 12, fontWeight: 900, marginTop: 2 }}>{Math.round(row.cosine * 100)}</div>
+            <div style={{ color: active ? C.cyan : index < 3 ? C.green : C.sub, fontSize: active ? 28 : 22, lineHeight: 1, fontWeight: 950 }}>{row.grade}</div>
+            <div style={{ fontSize: active ? 18 : 14, fontWeight: 950, marginTop: 6 }}>{pct(row.cosine)}</div>
+            <div style={{ color: C.muted, fontSize: 10, marginTop: 4 }}>#{index + 1}</div>
           </button>
         )
       })}
-
-      <div style={{ position: 'absolute', left: 20, right: 20, bottom: 18, zIndex: 3, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
-        <MiniMetric title="후보 기사" value={`${ranked.length}명`} />
-        <MiniMetric title="강한 연결" value={`${ranked.filter((row) => row.cosine >= 0.76).length}명`} />
-        <MiniMetric title="선택 기사" value={ranked.find((row) => row.driver.driver_id === focusedId)?.grade ?? '-'} />
-      </div>
-    </section>
+    </div>
   )
 }
 
-function CandidateRow({
-  row,
-  index,
-  active,
+function CallPlayerCard({ call, vector }: { call?: CallRow; vector: number[] }) {
+  const power = Math.round((groupAverage(vector, '시간대') + groupAverage(vector, '거리') + groupAverage(vector, '요금') + groupAverage(vector, '콜유형')) * 18 + 28)
+
+  return (
+    <div style={playerCard(C.cyan)}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+          <div style={{ color: C.cyan, fontSize: 13, fontWeight: 950 }}>REQUEST</div>
+          <div style={{ fontSize: 36, lineHeight: 1, fontWeight: 950, marginTop: 5 }}>{power}</div>
+        </div>
+        <div style={{ width: 78, height: 78, borderRadius: 18, background: 'rgba(34,211,238,.14)', border: `1px solid ${C.cyan}66`, display: 'grid', placeItems: 'center', color: C.cyan, fontSize: 20, fontWeight: 950 }}>CALL</div>
+      </div>
+      <div style={{ marginTop: 18, color: C.ink, fontSize: 18, fontWeight: 950 }}>{call?.callcard_id ?? '-'}</div>
+      <div style={{ color: C.sub, fontSize: 14, marginTop: 6 }}>{callSummary(call)}</div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 18 }}>
+        <Mini label="거리" value={meters(call?.expected_distance)} />
+        <Mini label="요금" value={money(call?.expected_fare)} />
+        <Mini label="ETA" value={call?.eta_distance == null ? '-' : `${Math.round(call.eta_distance)}초`} />
+        <Mini label="상품" value={call?.is_surge ? '탄력' : '일반'} />
+      </div>
+      <RadarBars values={vector} tone={C.cyan} />
+    </div>
+  )
+}
+
+function DriverPlayerCard({ match }: { match?: RankedDriver }) {
+  return (
+    <div style={playerCard(C.green)}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+          <div style={{ color: C.green, fontSize: 13, fontWeight: 950 }}>CANDIDATE</div>
+          <div style={{ fontSize: 44, lineHeight: 1, fontWeight: 950, marginTop: 5 }}>{match ? Math.round(match.cosine * 100) : '-'}</div>
+        </div>
+        <div style={{ width: 82, height: 82, borderRadius: 18, background: 'rgba(16,185,129,.14)', border: `1px solid ${C.green}66`, display: 'grid', placeItems: 'center', color: C.green, fontSize: 42, fontWeight: 950 }}>{match?.grade ?? '-'}</div>
+      </div>
+      <div style={{ marginTop: 18, color: C.ink, fontSize: 18, fontWeight: 950, overflowWrap: 'anywhere' }}>{match?.driver.driver_id ?? '선택 기사 없음'}</div>
+      <div style={{ color: C.sub, fontSize: 14, marginTop: 6 }}>기사 누적 패턴과 현재 콜카드의 22D 유사도</div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 18 }}>
+        <Mini label="유사도" value={pct(match?.cosine)} />
+        <Mini label="신뢰도" value={pct(match?.driver.reliability)} />
+        <Mini label="데이터" value={match?.driver.data_days == null ? '-' : `${match.driver.data_days}일`} />
+        <Mini label="ASP" value={match?.driver.asp_id == null ? '-' : String(match.driver.asp_id)} />
+      </div>
+      <RadarBars values={match?.vector ?? []} tone={C.green} />
+    </div>
+  )
+}
+
+function VectorGroups({ callVector, driverVector }: { callVector: number[]; driverVector: number[] }) {
+  return (
+    <div style={{ marginTop: 14, border: `1px solid ${C.border}`, borderRadius: 14, background: C.panel, padding: 16 }}>
+      <div style={{ color: C.sub, fontSize: 13, fontWeight: 950, letterSpacing: '.1em' }}>22D FACTOR MATCH</div>
+      <div style={{ display: 'grid', gap: 10, marginTop: 14 }}>
+        {groups.map((group) => {
+          const call = groupAverage(callVector, group)
+          const driver = groupAverage(driverVector, group)
+          const diff = Math.abs(call - driver)
+          return (
+            <div key={group} style={{ display: 'grid', gridTemplateColumns: '62px 1fr 42px', gap: 10, alignItems: 'center' }}>
+              <div style={{ color: groupColors[group], fontSize: 14, fontWeight: 950 }}>{group}</div>
+              <div style={{ display: 'grid', gap: 5 }}>
+                <Track value={call} color={C.cyan} />
+                <Track value={driver} color={C.green} />
+              </div>
+              <div style={{ color: diff < 0.22 ? C.green : diff < 0.48 ? C.yellow : C.red, fontSize: 13, textAlign: 'right', fontWeight: 950 }}>
+                {diff < 0.22 ? '매우맞음' : diff < 0.48 ? '보통' : '차이'}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function BottomDock({
+  ranked,
+  focusedId,
   onFocus,
   onSelect,
 }: {
-  row: RankedDriver
-  index: number
-  active: boolean
+  ranked: RankedDriver[]
+  focusedId: string
   onFocus: (driverId: string) => void
   onSelect: (driverId: string) => void
 }) {
   return (
-    <button
-      onMouseEnter={() => onFocus(row.driver.driver_id)}
-      onMouseLeave={() => onFocus('')}
-      onClick={() => onSelect(row.driver.driver_id)}
-      style={{
-        display: 'grid',
-        gridTemplateColumns: '38px 1fr 64px 82px',
-        gap: 10,
-        alignItems: 'center',
-        width: '100%',
-        border: `1px solid ${active ? C.cyan : C.border}`,
-        borderRadius: 8,
-        padding: active ? 14 : 12,
-        background: active ? 'rgba(34,211,238,.13)' : '#0B1222',
-        color: C.text,
-        cursor: 'pointer',
-        textAlign: 'left',
-        transform: active ? 'translateX(4px)' : 'none',
-        transition: 'all 160ms ease',
-      }}
-    >
-      <strong style={{ color: index < 3 ? C.yellow : C.sub, fontSize: 19 }}>{index + 1}</strong>
-      <span style={{ fontFamily: 'monospace', fontWeight: 900, overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.driver.driver_id}</span>
-      <span style={{ color: C.yellow, fontSize: 20, fontWeight: 950 }}>{row.grade}</span>
-      <span style={{ color: C.cyan, fontSize: 17, fontWeight: 950 }}>{pct(row.cosine)}</span>
-    </button>
-  )
-}
-
-function CallCard({
-  call,
-  calls,
-  selectedCallId,
-  onSelect,
-  vector,
-}: {
-  call?: CallRow
-  calls: CallRow[]
-  selectedCallId: string
-  onSelect: (value: string) => void
-  vector: number[]
-}) {
-  return (
-    <section style={playerCard(C.cyan)}>
-      <div style={{ color: C.cyan, fontSize: 15, fontWeight: 950 }}>CALL CARD</div>
-      <select value={selectedCallId} onChange={(event) => onSelect(event.target.value)} style={selectStyle()}>
-        {calls.map((item) => (
-          <option key={item.callcard_id} value={item.callcard_id}>{item.call_date} / {item.callcard_id}</option>
-        ))}
-      </select>
-
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16 }}>
-        <div>
-          <div style={{ fontSize: 18, color: C.sub, fontWeight: 850 }}>콜 성향</div>
-          <div style={{ fontSize: 52, lineHeight: 1, fontWeight: 950 }}>{Math.round(groupAverage(vector, '시간대') * 20 + groupAverage(vector, '거리') * 35 + groupAverage(vector, '요금') * 25 + 20)}</div>
-        </div>
-        <div style={{ width: 96, height: 96, borderRadius: 12, background: 'linear-gradient(160deg, #12335F, #0E172A)', border: `1px solid ${C.border}`, display: 'grid', placeItems: 'center', color: C.cyan, fontSize: 32, fontWeight: 950 }}>
-          CALL
-        </div>
+    <section style={{ position: 'absolute', left: 350, right: 350, bottom: 18, minHeight: 112, border: `1px solid ${C.border}`, borderRadius: 18, background: 'linear-gradient(90deg, rgba(9,14,26,.96), rgba(9,14,26,.76))', boxShadow: '0 20px 70px rgba(0,0,0,.32)', zIndex: 8, padding: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
+        {ranked.slice(0, 5).map((row, index) => {
+          const active = row.driver.driver_id === focusedId
+          return (
+            <button
+              key={row.driver.driver_id}
+              onMouseEnter={() => onFocus(row.driver.driver_id)}
+              onMouseLeave={() => onFocus('')}
+              onClick={() => onSelect(row.driver.driver_id)}
+              style={{
+                border: `1px solid ${active ? C.cyan : C.border}`,
+                borderRadius: 12,
+                background: active ? 'rgba(34,211,238,.14)' : 'rgba(15,22,40,.88)',
+                color: C.ink,
+                padding: 12,
+                textAlign: 'left',
+                cursor: 'pointer',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ color: index < 3 ? C.yellow : C.sub, fontSize: 13, fontWeight: 950 }}>#{index + 1}</span>
+                <span style={{ color: active ? C.cyan : C.green, fontSize: 18, fontWeight: 950 }}>{row.grade}</span>
+              </div>
+              <div style={{ marginTop: 8, fontSize: 13, fontFamily: 'monospace', fontWeight: 900, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.driver.driver_id}</div>
+              <div style={{ marginTop: 7, color: C.cyan, fontSize: 20, fontWeight: 950 }}>{pct(row.cosine)}</div>
+            </button>
+          )
+        })}
       </div>
-
-      {call && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 18 }}>
-          <Badge label="시간" value={`${call.hour_slot}시 ${WEEKDAYS[call.weekday] ?? '-'}`} />
-          <Badge label="거리" value={distanceLabel(call.expected_distance)} />
-          <Badge label="요금" value={fareLabel(call.expected_fare)} />
-          <Badge label="유형" value={call.is_paid ? '유료콜' : '무료콜'} />
-          <Badge label="상품" value={call.is_surge ? '탄력' : '일반'} />
-          <Badge label="ETA" value={`${fmt(call.eta_distance)}초`} />
-        </div>
-      )}
-      <GroupStats values={vector} tone={C.cyan} />
     </section>
   )
 }
 
-function DriverCard({ match }: { match?: RankedDriver }) {
-  const driver = match?.driver
+function RadarBars({ values, tone }: { values: number[]; tone: string }) {
   return (
-    <section style={playerCard(C.green)}>
-      <div style={{ color: C.green, fontSize: 15, fontWeight: 950 }}>DRIVER CARD</div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16 }}>
-        <div>
-          <div style={{ fontSize: 18, color: C.sub, fontWeight: 850 }}>적합도</div>
-          <div style={{ fontSize: 60, lineHeight: 1, fontWeight: 950 }}>{match ? Math.round(match.cosine * 100) : '-'}</div>
-        </div>
-        <div style={{ width: 96, height: 96, borderRadius: 12, background: 'linear-gradient(160deg, #0B3B2D, #0E172A)', border: `1px solid ${C.border}`, display: 'grid', placeItems: 'center', color: C.green, fontSize: 46, fontWeight: 950 }}>
-          {match?.grade ?? '-'}
-        </div>
-      </div>
-
-      <div style={{ marginTop: 16, fontFamily: 'monospace', fontSize: 18, fontWeight: 900, overflowWrap: 'anywhere' }}>
-        {driver?.driver_id ?? '기사 후보 없음'}
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 16 }}>
-        <Badge label="신뢰도" value={pct(driver?.reliability ?? 0)} />
-        <Badge label="데이터일수" value={`${fmt(driver?.data_days)}일`} />
-        <Badge label="지역" value={driver ? String(driver.asp_id) : '-'} />
-        <Badge label="유사도" value={pct(match?.cosine)} />
-      </div>
-      <GroupStats values={match?.vector ?? []} tone={C.green} />
-    </section>
-  )
-}
-
-function GroupStats({ values, tone }: { values: number[]; tone: string }) {
-  return (
-    <div style={{ display: 'grid', gap: 10, marginTop: 18 }}>
-      {FACTOR_GROUPS.map((group) => (
-        <div key={group.key} style={{ display: 'grid', gridTemplateColumns: '70px 1fr 44px', gap: 10, alignItems: 'center' }}>
-          <span style={{ color: C.sub, fontSize: 15, fontWeight: 850 }}>{group.key}</span>
-          <div style={{ height: 10, background: '#1A263D', borderRadius: 999, overflow: 'hidden' }}>
-            <div style={{ width: `${groupAverage(values, group.key) * 100}%`, height: '100%', background: tone }} />
-          </div>
-          <span style={{ color: C.muted, fontSize: 14, textAlign: 'right' }}>{Math.round(groupAverage(values, group.key) * 100)}</span>
+    <div style={{ display: 'grid', gap: 9, marginTop: 18 }}>
+      {groups.map((group) => (
+        <div key={group} style={{ display: 'grid', gridTemplateColumns: '58px 1fr 34px', gap: 9, alignItems: 'center' }}>
+          <span style={{ color: C.sub, fontSize: 13, fontWeight: 850 }}>{group}</span>
+          <Track value={groupAverage(values, group)} color={tone} />
+          <span style={{ color: C.muted, fontSize: 12, textAlign: 'right' }}>{Math.round(groupAverage(values, group) * 100)}</span>
         </div>
       ))}
     </div>
   )
 }
 
-function MiniMetric({ title, value }: { title: string; value: string }) {
+function Track({ value, color }: { value: number; color: string }) {
   return (
-    <div style={{ border: `1px solid ${C.border}`, borderRadius: 8, background: 'rgba(8,12,24,.76)', padding: 12 }}>
-      <div style={{ color: C.muted, fontSize: 13, fontWeight: 850 }}>{title}</div>
-      <div style={{ color: C.text, fontSize: 20, fontWeight: 950, marginTop: 4 }}>{value}</div>
+    <div style={{ height: 9, background: '#1A2439', borderRadius: 999, overflow: 'hidden' }}>
+      <div style={{ width: `${Math.max(0, Math.min(1, value)) * 100}%`, height: '100%', background: color, borderRadius: 999 }} />
     </div>
   )
 }
 
-function Panel({ title, desc, children }: { title: string; desc: string; children: React.ReactNode }) {
+function PanelTitle({ kicker, title }: { kicker: string; title: string }) {
   return (
-    <section style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 8, padding: 20 }}>
-      <h2 style={{ fontSize: 23, margin: 0, fontWeight: 950 }}>{title}</h2>
-      <p style={{ color: C.sub, fontSize: 16, lineHeight: 1.55, margin: '8px 0 16px' }}>{desc}</p>
-      {children}
-    </section>
-  )
-}
-
-function Badge({ label, value }: { label: string; value: string }) {
-  return (
-    <div style={{ background: '#0B1222', border: `1px solid ${C.border}`, borderRadius: 8, padding: 10, minHeight: 66 }}>
-      <div style={{ color: C.muted, fontSize: 14, fontWeight: 850 }}>{label}</div>
-      <div style={{ color: C.text, fontSize: 17, fontWeight: 950, marginTop: 6 }}>{value}</div>
+    <div>
+      <div style={{ color: C.muted, fontSize: 13, fontWeight: 950, letterSpacing: '.12em' }}>{kicker}</div>
+      <h2 style={{ margin: '6px 0 0', fontSize: 24, fontWeight: 950 }}>{title}</h2>
     </div>
   )
 }
 
-function Bar({ value, color, align }: { value: number; color: string; align: 'left' | 'right' }) {
+function Mini({ label, value }: { label: string; value: string }) {
   return (
-    <div style={{ height: 12, background: '#1A263D', borderRadius: 999, overflow: 'hidden', display: 'flex', justifyContent: align === 'right' ? 'flex-end' : 'flex-start' }}>
-      <div style={{ width: `${Math.min(1, value) * 100}%`, background: color, height: '100%' }} />
+    <div style={{ border: `1px solid ${C.border}`, borderRadius: 10, background: 'rgba(8,12,24,.72)', padding: 10 }}>
+      <div style={{ color: C.muted, fontSize: 12, fontWeight: 850 }}>{label}</div>
+      <div style={{ color: C.ink, fontSize: 16, fontWeight: 950, marginTop: 5 }}>{value}</div>
     </div>
   )
+}
+
+function Pill({ children, color }: { children: ReactNode; color: string }) {
+  return <span style={{ color, border: `1px solid ${color}66`, background: `${color}18`, borderRadius: 8, padding: '7px 10px', fontSize: 12, fontWeight: 950 }}>{children}</span>
+}
+
+const leftPanel: React.CSSProperties = {
+  position: 'absolute',
+  left: 18,
+  top: 18,
+  bottom: 18,
+  width: 306,
+  zIndex: 7,
+  border: `1px solid ${C.border}`,
+  borderRadius: 18,
+  background: C.panel,
+  padding: 18,
+  boxShadow: '0 20px 70px rgba(0,0,0,.35)',
+}
+
+const rightPanel: React.CSSProperties = {
+  position: 'absolute',
+  right: 18,
+  top: 18,
+  bottom: 18,
+  width: 306,
+  zIndex: 7,
+  border: `1px solid ${C.border}`,
+  borderRadius: 18,
+  background: C.panel,
+  padding: 18,
+  boxShadow: '0 20px 70px rgba(0,0,0,.35)',
+}
+
+const stagePanel: React.CSSProperties = {
+  position: 'absolute',
+  left: 342,
+  right: 342,
+  top: 18,
+  bottom: 148,
+  zIndex: 4,
+  border: `1px solid rgba(34,211,238,.22)`,
+  borderRadius: 22,
+  background: 'rgba(7,10,18,.28)',
+  padding: 24,
+  overflow: 'hidden',
+}
+
+const selectStyle: React.CSSProperties = {
+  width: '100%',
+  height: 42,
+  borderRadius: 10,
+  border: `1px solid ${C.border}`,
+  background: '#0B1222',
+  color: C.ink,
+  padding: '0 10px',
+  fontSize: 14,
+  marginTop: 14,
 }
 
 function playerCard(color: string): React.CSSProperties {
   return {
-    minHeight: 478,
-    background: `linear-gradient(160deg, ${color}24, ${C.panel} 36%, #0B1222)`,
-    border: `1px solid ${color}66`,
-    borderRadius: 8,
-    padding: 20,
-    boxShadow: `0 0 0 1px rgba(255,255,255,.03), 0 18px 42px rgba(0,0,0,.18)`,
-  }
-}
-
-function selectStyle(): React.CSSProperties {
-  return {
-    width: '100%',
-    height: 44,
-    borderRadius: 8,
-    border: `1px solid ${C.border}`,
-    background: '#0B1222',
-    color: C.text,
-    padding: '0 10px',
-    fontSize: 16,
-    marginTop: 12,
+    marginTop: 14,
+    border: `1px solid ${color}77`,
+    borderRadius: 18,
+    background: `linear-gradient(160deg, ${color}22, rgba(9,14,26,.96) 42%, rgba(11,18,34,.98))`,
+    padding: 16,
+    boxShadow: `0 0 32px ${color}18`,
   }
 }
