@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import Link from 'next/link'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
@@ -183,7 +183,6 @@ export default function IngestPage() {
 
 function Topbar() {
   const nav = [
-    ['대시보드', '/dashboard'],
     ['적재현황', '/ingest'],
     ['벡터리스트', '/vectors'],
     ['시뮬레이터', '/simulator'],
@@ -360,3 +359,4 @@ const stagePanel: React.CSSProperties = {
   padding: 24,
   overflow: 'hidden',
 }
+

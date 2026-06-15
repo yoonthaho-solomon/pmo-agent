@@ -1,4 +1,4 @@
-import Link from 'next/link'
+﻿import Link from 'next/link'
 import type { ReactNode } from 'react'
 
 const C = {
@@ -80,7 +80,6 @@ export default function DispatchLogicPage() {
 
 function Topbar() {
   const nav = [
-    ['대시보드', '/dashboard'],
     ['적재현황', '/ingest'],
     ['벡터리스트', '/vectors'],
     ['시뮬레이터', '/simulator'],
@@ -247,3 +246,4 @@ const stagePanel: React.CSSProperties = {
   padding: 24,
   overflow: 'hidden',
 }
+
