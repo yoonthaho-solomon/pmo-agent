@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "call:pipeline": "node scripts/run-call-pipeline-local.js",
+    "call:watch": "node scripts/watch-call-pipeline-local.js",
     "lint": "eslint"
   },
   "dependencies": {
