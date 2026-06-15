@@ -1,5 +1,5 @@
-﻿import MatchingLab from './MatchingLab'
+import { redirect } from 'next/navigation'
 
 export default function Home() {
-  return <MatchingLab initialTab="load" />
+  redirect('/dashboard')
 }
