@@ -35,6 +35,8 @@
 - 기본 모드는 `driver_realtime_state` 실데이터를 요구.
 - `driver_realtime_state` 미적용 시 `schema_missing`으로 안전 응답.
 - `simulation_mode: true`일 때만 `driver_mbti` 기반 결정론적 가상 위치/상태로 검증 가능.
+- `/api/dispatch/recommend`는 `record_events: true` 명시 시 `candidate_generated` 이벤트 저장을 시도.
+- `dispatch_events` 미적용 시 추천 결과는 유지하고 `event_log.status = schema_missing`으로 안전 응답.
 
 ## 아직 운영 배차로 쓰면 안 되는 부분
 
@@ -105,7 +107,7 @@ final_score = vector_cosine
 2. 실제 기사 상태 샘플 100~1000건 적재 또는 외부 API mock 연결.
 3. `/api/dispatch/recommend`를 `simulation_mode=false`로 호출해 실데이터 후보가 반환되는지 확인.
 4. `/simulator`에서 dispatch simulation 패널을 실데이터 패널로 교체.
-5. 배차 이벤트 저장 테이블/API 설계.
+5. 배차 이벤트 저장 테이블/API를 적용하고 `/api/dispatch/recommend`의 `record_events: true` 저장 결과 확인.
 6. A/B 테스트 기준 정의: 기존 거리순 대비 수락률, 배차시간, expired, canceled 비교.
 
 ## 현재 운영 URL
@@ -120,6 +122,7 @@ final_score = vector_cosine
 최근 핵심 커밋:
 
 - `213355f feat: summarize policy comparison metrics`
+- `8cd5049 feat: add dispatch event logging skeleton`
 - `71fcff6 feat: compare dispatch simulation rankings`
 - `65a825a feat: smooth call outcome risk`
 - `0da4da0 feat: add dispatch simulation mode`

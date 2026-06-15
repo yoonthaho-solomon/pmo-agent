@@ -3,6 +3,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { callToVector, cosineSimilarity, driverToVector, type CallVectorInput, type DriverVectorRow } from '@/lib/matching-vector'
 
 type DispatchRequest = Partial<CallVectorInput> & {
+  dispatch_id?: string
   callcard_id?: string
   asp_id?: number
   request_datetime?: string
@@ -13,9 +14,12 @@ type DispatchRequest = Partial<CallVectorInput> & {
   max_candidates?: number
   radius_steps_km?: number[]
   simulation_mode?: boolean
+  record_events?: boolean
+  call_risk_score?: number | null
 }
 
 type NormalizedDispatchCall = CallVectorInput & {
+  dispatch_id: string
   callcard_id?: string
   asp_id: number
   passenger_lat: number
@@ -25,6 +29,8 @@ type NormalizedDispatchCall = CallVectorInput & {
   max_candidates: number
   radius_steps_km: number[]
   simulation_mode: boolean
+  record_events: boolean
+  call_risk_score: number | null
 }
 
 type DriverStateRow = {
@@ -98,6 +104,11 @@ function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value)
 }
 
+function createDispatchId(): string {
+  const random = globalThis.crypto?.randomUUID?.()
+  return random ? `dispatch_${random}` : `dispatch_${Date.now()}_${Math.random().toString(36).slice(2)}`
+}
+
 function deriveTimeFields(input: DispatchRequest): { hour_slot: number; weekday: number } | null {
   if (isFiniteNumber(input.hour_slot) && input.hour_slot >= 0 && input.hour_slot <= 23 && isFiniteNumber(input.weekday) && input.weekday >= 0 && input.weekday <= 6) {
     return { hour_slot: input.hour_slot, weekday: input.weekday }
@@ -125,6 +136,7 @@ function normalizeRequest(input: DispatchRequest): { call?: NormalizedDispatchCa
 
   return {
     call: {
+      dispatch_id: typeof input.dispatch_id === 'string' && input.dispatch_id.length > 0 ? input.dispatch_id : createDispatchId(),
       callcard_id: input.callcard_id,
       asp_id: input.asp_id,
       passenger_lat: input.passenger_lat,
@@ -143,6 +155,8 @@ function normalizeRequest(input: DispatchRequest): { call?: NormalizedDispatchCa
       max_candidates: Math.min(Math.max(Number(input.max_candidates ?? 10), 1), 50),
       radius_steps_km: radiusSteps,
       simulation_mode: Boolean(input.simulation_mode),
+      record_events: Boolean(input.record_events),
+      call_risk_score: isFiniteNumber(input.call_risk_score) ? input.call_risk_score : null,
     },
   }
 }
@@ -266,6 +280,62 @@ async function fetchDriversByIds(supabase: SupabaseClient, aspId: number, driver
   return (data ?? []) as unknown as DriverRow[]
 }
 
+function isTableMissing(err: unknown): boolean {
+  const payload = errorPayload(err)
+  return payload.code === '42P01' || payload.code === 'PGRST205'
+}
+
+async function recordCandidateGeneratedEvent(
+  supabase: SupabaseClient,
+  call: NormalizedDispatchCall,
+  radiusStepUsed: number,
+  ranked: Array<{
+    rank: number
+    driver_id: string
+    vehicle_id: string | null
+    distance_km: number
+    eta_seconds: number
+    vector_cosine: number
+    final_score: number
+    score_components: Record<string, unknown>
+    status_snapshot: Record<string, unknown>
+  }>,
+) {
+  const topCandidate = ranked[0]
+  const row = {
+    dispatch_id: call.dispatch_id,
+    callcard_id: call.callcard_id ?? null,
+    asp_id: call.asp_id,
+    driver_id: topCandidate?.driver_id ?? null,
+    vehicle_id: topCandidate?.vehicle_id ?? null,
+    event_type: 'candidate_generated',
+    event_status: 'pending',
+    rank_in_dispatch: topCandidate?.rank ?? null,
+    radius_step_km: radiusStepUsed,
+    distance_km: topCandidate?.distance_km ?? null,
+    eta_seconds: topCandidate?.eta_seconds ?? null,
+    vector_cosine: topCandidate?.vector_cosine ?? null,
+    final_score: topCandidate?.final_score ?? null,
+    call_risk_score: call.call_risk_score,
+    score_components: topCandidate?.score_components ?? null,
+    status_snapshot: topCandidate?.status_snapshot ?? null,
+    candidate_snapshot: ranked,
+    event_payload: {
+      simulation_mode: call.simulation_mode,
+      radius_steps_km: call.radius_steps_km,
+      candidate_count: ranked.length,
+      score_formula_version: 'dispatch_v0_cosine_only_explainable_components',
+    },
+  }
+
+  const { data, error } = await supabase.from('dispatch_events').insert(row).select('id, event_at').single()
+  if (error) {
+    if (isTableMissing(error)) return { status: 'schema_missing', detail: errorPayload(error) }
+    return { status: 'error', detail: errorPayload(error) }
+  }
+  return { status: 'stored', event_id: data?.id ?? null, event_at: data?.event_at ?? null }
+}
+
 export async function POST(request: NextRequest) {
   const client = createSupabase()
   if ('error' in client) return NextResponse.json({ source: client.source, error: client.error }, { status: 500 })
@@ -383,10 +453,17 @@ export async function POST(request: NextRequest) {
     .slice(0, call.max_candidates)
     .map((item, index) => ({ ...item, rank: index + 1 }))
 
+  const eventLog = call.record_events
+    ? await recordCandidateGeneratedEvent(supabase, call, radiusStepUsed, ranked)
+    : { status: 'disabled' }
+
   return NextResponse.json({
     source,
     status: call.simulation_mode ? 'simulated' : 'ok',
+    dispatch_id: call.dispatch_id,
     simulation_mode: call.simulation_mode,
+    record_events: call.record_events,
+    event_log: eventLog,
     callcard_id: call.callcard_id ?? null,
     asp_id: call.asp_id,
     radius_step_used_km: radiusStepUsed,
@@ -398,10 +475,10 @@ export async function POST(request: NextRequest) {
       ranked: ranked.length,
     },
     call_vector: callVector,
-    call_risk_score: null,
+    call_risk_score: call.call_risk_score,
     score_formula_version: 'dispatch_v0_cosine_only_explainable_components',
     notes: [
-      '읽기 전용 dispatch skeleton입니다. 배차 발송/저장은 하지 않습니다.',
+      '기본 호출은 배차 발송/저장을 하지 않습니다. record_events=true일 때만 후보 생성 이벤트 저장을 시도합니다.',
       call.simulation_mode ? 'simulation_mode=true: driver_mbti에서 결정론적 가상 위치/상태를 생성한 결과입니다. 운영 배차에 사용하지 마세요.' : 'driver_realtime_state 실데이터 기준 결과입니다.',
       'final_score는 초기 버전에서 22D vector_cosine만 사용합니다.',
       'ETA, 신뢰도, 수락확률, 콜 위험도는 구성요소로 분리 노출합니다.',
