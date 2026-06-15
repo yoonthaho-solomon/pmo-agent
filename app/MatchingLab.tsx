@@ -1147,6 +1147,36 @@ function SimulationTab() {
   const similarityIds = similarityTop.map((r) => r.driver.driver_id)
   const dispatchSimilarityOverlap = dispatchIds.filter((id) => similarityIds.includes(id)).length
   const dispatchDistanceOverlap = dispatchIds.filter((id) => distanceIds.includes(id)).length
+  const avg = (values: number[]) => values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0
+  const policySummaries = [
+    {
+      key: 'distance',
+      label: '기존 거리순',
+      tone: C.cyan,
+      candidates: distanceTop.length,
+      avgEtaMin: avg(distanceTop.map((r) => r.state.etaMin)),
+      avgCosine: avg(distanceTop.map((r) => r.cosine)),
+      avgAccept: avg(distanceTop.map((r) => r.acceptProb)),
+    },
+    {
+      key: 'similarity',
+      label: '22D 유사도순',
+      tone: C.purple,
+      candidates: similarityTop.length,
+      avgEtaMin: avg(similarityTop.map((r) => r.state.etaMin)),
+      avgCosine: avg(similarityTop.map((r) => r.cosine)),
+      avgAccept: avg(similarityTop.map((r) => r.acceptProb)),
+    },
+    {
+      key: 'dispatch',
+      label: 'dispatch simulation',
+      tone: C.green,
+      candidates: dispatchResult?.candidate_counts?.ranked ?? 0,
+      avgEtaMin: avg((dispatchResult?.recommended_drivers ?? []).map((r) => r.eta_seconds / 60)),
+      avgCosine: avg((dispatchResult?.recommended_drivers ?? []).map((r) => r.vector_cosine)),
+      avgAccept: 0,
+    },
+  ]
   const callRiskScore = useMemo(() => {
     if (outcomeBreakdowns.length === 0) return null
     const contributors = outcomeBreakdowns.map((item) => ({
@@ -1422,6 +1452,26 @@ function SimulationTab() {
           </div>
         )}
       </Panel>
+      <Panel>
+        <SectionHeader title="정책별 KPI 요약" desc="정책별 후보 수, 평균 ETA, 평균 유사도, 예상 수락률을 먼저 비교합니다. 콜 위험도는 아직 추천점수에 섞지 않습니다." />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
+          {policySummaries.map((summary) => (
+            <div key={summary.key} style={{ padding: 14, borderRadius: 8, background: '#0B1222', border: `1px solid ${C.border}` }}>
+              <div style={{ color: summary.tone, fontWeight: 900, marginBottom: 10 }}>{summary.label}</div>
+              <div style={{ display: 'grid', gap: 8 }}>
+                <MiniMetric label="후보" value={summary.candidates} />
+                <MiniMetric label="평균 ETA 분" value={Math.round(summary.avgEtaMin)} />
+                <MiniMetric label="평균 유사도 %" value={Math.round(summary.avgCosine * 100)} />
+                <MiniMetric label="예상 수락률 %" value={Math.round(summary.avgAccept * 100)} />
+              </div>
+            </div>
+          ))}
+        </div>
+        <div style={{ marginTop: 12, padding: 12, borderRadius: 8, background: 'rgba(244,63,94,.08)', border: '1px solid rgba(244,63,94,.25)', color: C.sub, lineHeight: 1.5 }}>
+          현재 콜 위험도 {callRiskScore ? pct(callRiskScore.score) : '미조회'}는 정책 비교 참고값입니다. 최종 배차점수에는 아직 반영하지 않습니다.
+        </div>
+      </Panel>
+
       <Panel>
         <SectionHeader title="정책별 Top 10 비교" desc="거리순, 22D 유사도순, 라이브 dispatch simulation 결과를 나란히 비교합니다." />
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 14 }}>
