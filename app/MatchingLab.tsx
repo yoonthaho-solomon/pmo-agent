@@ -234,6 +234,8 @@ interface OutcomeStats {
   expired_rate: number
   canceled_rate: number
   problem_rate: number
+  adjusted_problem_rate?: number
+  sample_confidence?: number
 }
 
 interface OutcomeGroupStats extends OutcomeStats {
@@ -242,7 +244,7 @@ interface OutcomeGroupStats extends OutcomeStats {
 }
 
 interface OutcomeResult {
-  filters?: { date_from?: string | null; date_to?: string | null; asp_id?: number | null; group_by?: string; limit?: number }
+  filters?: { date_from?: string | null; date_to?: string | null; asp_id?: number | null; group_by?: string; limit?: number; min_group_total?: number; prior_weight?: number }
   summary?: OutcomeStats
   groups?: OutcomeGroupStats[]
   risk_groups?: OutcomeGroupStats[]
@@ -1145,7 +1147,7 @@ function SimulationTab() {
     const contributors = outcomeBreakdowns.map((item) => ({
       ...item,
       weight: RISK_WEIGHTS[item.key] ?? 0,
-      risk: item.target?.problem_rate ?? null,
+      risk: item.target?.adjusted_problem_rate ?? item.target?.problem_rate ?? null,
     }))
     const totals = contributors.reduce(
       (acc, item) => {
@@ -1286,9 +1288,9 @@ function SimulationTab() {
                     <div style={{ color: C.text, fontWeight: 900, marginBottom: 8 }}>{item.targetLabel}</div>
                     {item.target ? (
                       <>
-                        <div style={{ fontSize: 24, fontWeight: 950, color: item.target.problem_rate >= 0.6 ? C.red : C.yellow }}>{pct(item.target.problem_rate)}</div>
+                        <div style={{ fontSize: 24, fontWeight: 950, color: (item.target.adjusted_problem_rate ?? item.target.problem_rate) >= 0.6 ? C.red : C.yellow }}>{pct(item.target.adjusted_problem_rate ?? item.target.problem_rate)}</div>
                         <div style={{ color: C.sub, marginTop: 8, lineHeight: 1.45 }}>
-                          총 {item.target.total.toLocaleString()} · 만료 {pct(item.target.expired_rate)} · 취소 {pct(item.target.canceled_rate)}
+                          원위험 {pct(item.target.problem_rate)} · 표본 {item.target.total.toLocaleString()} · 신뢰 {pct(item.target.sample_confidence ?? 1)}
                         </div>
                       </>
                     ) : (
@@ -1306,7 +1308,7 @@ function SimulationTab() {
                     <div key={item.key} style={{ display: 'grid', gridTemplateColumns: '80px 1fr 80px', gap: 8, padding: '8px 10px', border: `1px solid ${Number(item.key) === hour ? C.cyan : C.border}`, borderRadius: 8, background: '#0B1222' }}>
                       <strong>{item.label}</strong>
                       <span style={{ color: C.sub }}>총 {item.total.toLocaleString()} · 만료 {pct(item.expired_rate)} · 취소 {pct(item.canceled_rate)}</span>
-                      <span style={{ color: item.problem_rate >= 0.6 ? C.red : C.yellow, fontWeight: 900 }}>{pct(item.problem_rate)}</span>
+                      <span style={{ color: (item.adjusted_problem_rate ?? item.problem_rate) >= 0.6 ? C.red : C.yellow, fontWeight: 900 }}>{pct(item.adjusted_problem_rate ?? item.problem_rate)}</span>
                     </div>
                   ))}
                 </div>
@@ -1318,7 +1320,7 @@ function SimulationTab() {
                     <div key={item.key} style={{ display: 'grid', gridTemplateColumns: '80px 1fr 80px', gap: 8, padding: '8px 10px', border: `1px solid ${C.border}`, borderRadius: 8, background: '#0B1222' }}>
                       <strong>{item.label}</strong>
                       <span style={{ color: C.sub }}>총 {item.total.toLocaleString()} · 만료 {pct(item.expired_rate)} · 취소 {pct(item.canceled_rate)}</span>
-                      <span style={{ color: item.problem_rate >= 0.6 ? C.red : C.yellow, fontWeight: 900 }}>{pct(item.problem_rate)}</span>
+                      <span style={{ color: (item.adjusted_problem_rate ?? item.problem_rate) >= 0.6 ? C.red : C.yellow, fontWeight: 900 }}>{pct(item.adjusted_problem_rate ?? item.problem_rate)}</span>
                     </div>
                   ))}
                 </div>

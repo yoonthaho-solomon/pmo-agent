@@ -34,6 +34,8 @@ type OutcomeStats = {
   expired_rate: number
   canceled_rate: number
   problem_rate: number
+  adjusted_problem_rate?: number
+  sample_confidence?: number
 }
 
 type GroupStats = OutcomeStats & {
@@ -120,6 +122,20 @@ function finalize(stats: OutcomeStats): OutcomeStats {
     canceled_rate: roundRate(stats.canceled / total),
     problem_rate: roundRate((stats.expired + stats.canceled) / total),
   }
+}
+
+function adjustGroupRisk(stats: OutcomeStats, priorProblemRate: number, priorWeight: number, minGroupTotal: number): OutcomeStats {
+  const problems = stats.expired + stats.canceled
+  const adjusted = (problems + priorProblemRate * priorWeight) / (stats.total + priorWeight || 1)
+  return {
+    ...stats,
+    adjusted_problem_rate: roundRate(adjusted),
+    sample_confidence: roundRate(Math.min(stats.total / minGroupTotal, 1)),
+  }
+}
+
+function sortRiskValue(stats: OutcomeStats): number {
+  return stats.adjusted_problem_rate ?? stats.problem_rate
 }
 
 function distanceBucket(distance: number | null): string {
@@ -264,6 +280,8 @@ export async function GET(request: NextRequest) {
     const dateTo = params.get('date_to')
     const aspRaw = params.get('asp_id')
     const aspId = aspRaw ? Number(aspRaw) : null
+    const minGroupTotal = Math.min(Math.max(Number(params.get('min_group_total') ?? 30), 1), 1000)
+    const priorWeight = Math.min(Math.max(Number(params.get('prior_weight') ?? 50), 0), 1000)
 
     if (!['date', 'asp', 'hour', 'weekday', 's_area', 'd_area', 'distance', 'fare', 'paid', 'surge'].includes(groupBy)) {
       return NextResponse.json({ source, error: '지원하지 않는 group_by입니다.' }, { status: 400 })
@@ -284,32 +302,35 @@ export async function GET(request: NextRequest) {
       addRow(groupMap.get(key)!, row)
     }
 
+    const finalizedSummary = finalize(summary)
     const groups: GroupStats[] = Array.from(groupMap.entries()).map(([key, stats]) => ({
       key,
       label: groupLabel(key, groupBy),
-      ...finalize(stats),
+      ...adjustGroupRisk(finalize(stats), finalizedSummary.problem_rate, priorWeight, minGroupTotal),
     }))
 
     groups.sort((a, b) => {
       if (groupBy === 'date' || groupBy === 'hour' || groupBy === 'weekday') return a.key.localeCompare(b.key)
-      return b.problem_rate - a.problem_rate || b.total - a.total || a.key.localeCompare(b.key)
+      return sortRiskValue(b) - sortRiskValue(a) || b.total - a.total || a.key.localeCompare(b.key)
     })
 
     const riskGroups = groups
-      .filter((item) => item.total >= 30)
+      .filter((item) => item.total >= minGroupTotal)
       .slice()
-      .sort((a, b) => b.problem_rate - a.problem_rate || b.total - a.total)
+      .sort((a, b) => sortRiskValue(b) - sortRiskValue(a) || b.total - a.total)
       .slice(0, limit)
 
     return NextResponse.json({
       source,
-      filters: { date_from: dateFrom, date_to: dateTo, asp_id: aspId, group_by: groupBy, limit },
-      summary: finalize(summary),
+      filters: { date_from: dateFrom, date_to: dateTo, asp_id: aspId, group_by: groupBy, limit, min_group_total: minGroupTotal, prior_weight: priorWeight },
+      summary: finalizedSummary,
       groups: groups.slice(0, limit),
       risk_groups: riskGroups,
       notes: [
         'outcome은 콜의 최종 결과입니다: accepted, expired, canceled, pickup, other.',
         'problem_rate는 (expired + canceled) / total 입니다.',
+        'adjusted_problem_rate는 전체 problem_rate를 사전값으로 사용해 작은 표본을 보정한 값입니다.',
+        'sample_confidence는 min_group_total 기준 표본 신뢰도입니다.',
         '이 API는 읽기 전용이며 Supabase 데이터를 수정하지 않습니다.',
       ],
     })
