@@ -318,7 +318,7 @@ const FACTORS: { key: keyof DriverRow; label: string; group: string; color: stri
   { key: 'score_medium', label: '중거리', group: '거리', color: C.green },
   { key: 'score_long', label: '장거리', group: '거리', color: C.green },
   { key: 'score_low_fare', label: '저요금', group: '요금', color: C.orange },
-  { key: 'score_mid_fare', label: '중요금', group: '요금', color: C.orange },
+  { key: 'score_mid_fare', label: '중간요금', group: '요금', color: C.orange },
   { key: 'score_high_fare', label: '고요금', group: '요금', color: C.orange },
   { key: 'score_paid', label: '유료콜', group: '콜유형', color: C.red },
   { key: 'score_free', label: '무료콜', group: '콜유형', color: C.red },
@@ -1021,9 +1021,10 @@ function SimulationTab() {
     setOutcomeBreakdowns([])
     try {
       const common = new URLSearchParams({ limit: '100', asp_id: String(aspId) })
-      if (selectedActualCall?.call_date) {
-        common.set('date_from', selectedActualCall.call_date)
-        common.set('date_to', selectedActualCall.call_date)
+      const riskDate = selectedActualCall?.call_date ?? actualCalls[0]?.call_date ?? null
+      if (riskDate) {
+        common.set('date_from', riskDate)
+        common.set('date_to', riskDate)
       }
 
       const distanceKey = distance > 0 && distance <= 3000 ? 'short_0_3km' : distance <= 8000 ? 'medium_3_8km' : 'long_8km_plus'
@@ -1035,7 +1036,7 @@ function SimulationTab() {
       const queries = [
         { key: 'hour', title: '시간대', targetKey: String(hour).padStart(2, '0'), fallbackLabel: `${hour}시` },
         { key: 'distance', title: '거리 구간', targetKey: distanceKey, fallbackLabel: distance <= 3000 ? '단거리 0-3km' : distance <= 8000 ? '중거리 3-8km' : '장거리 8km+' },
-        { key: 'fare', title: '요금 구간', targetKey: fareKey, fallbackLabel: fare <= 10000 ? '저요금 1만원 이하' : fare <= 20000 ? '중요금 1-2만원' : '고요금 2만원 초과' },
+        { key: 'fare', title: '요금 구간', targetKey: fareKey, fallbackLabel: fare <= 10000 ? '저요금 1만원 이하' : fare <= 20000 ? '중간요금 1-2만원' : '고요금 2만원 초과' },
         { key: 'paid', title: '유료 여부', targetKey: isPaid ? 'paid' : 'free', fallbackLabel: isPaid ? '유료콜' : '무료콜' },
         { key: 'surge', title: '탄력 여부', targetKey: isSurge ? 'surge' : 'normal', fallbackLabel: isSurge ? '탄력/할증' : '일반' },
         ...routeQueries,

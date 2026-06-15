@@ -183,7 +183,7 @@ function groupLabel(key: string, groupBy: GroupBy): string {
   }
   if (groupBy === 'fare') {
     if (key === 'low_0_10k') return '저요금 1만원 이하'
-    if (key === 'mid_10_20k') return '중요금 1-2만원'
+    if (key === 'mid_10_20k') return '중간요금 1-2만원'
     if (key === 'high_20k_plus') return '고요금 2만원 초과'
   }
   if (groupBy === 'paid') return key === 'paid' ? '유료콜' : '무료콜'
