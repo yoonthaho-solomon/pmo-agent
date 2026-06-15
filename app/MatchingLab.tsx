@@ -222,6 +222,14 @@ interface OutcomeResult {
   notes?: string[]
   error?: unknown
 }
+interface OutcomeBreakdown {
+  key: string
+  title: string
+  targetKey: string
+  targetLabel: string
+  target?: OutcomeGroupStats | null
+  result?: OutcomeResult
+}
 
 const C = {
   bg: '#080C18',
@@ -876,6 +884,7 @@ function SimulationTab() {
   const [verifyLoading, setVerifyLoading] = useState(false)
   const [recommendLoading, setRecommendLoading] = useState(false)
   const [outcomeResult, setOutcomeResult] = useState<OutcomeResult | null>(null)
+  const [outcomeBreakdowns, setOutcomeBreakdowns] = useState<OutcomeBreakdown[]>([])
   const [outcomeLoading, setOutcomeLoading] = useState(false)
   const [loading, setLoading] = useState(false)
 
@@ -923,6 +932,7 @@ function SimulationTab() {
     setRecommendResult(null)
     setVerifyResult(null)
     setOutcomeResult(null)
+    setOutcomeBreakdowns([])
     if (!row) return
     setHour(row.hour_slot)
     setWeekday(row.weekday)
@@ -951,17 +961,48 @@ function SimulationTab() {
   async function runOutcomeRisk() {
     setOutcomeLoading(true)
     setOutcomeResult(null)
+    setOutcomeBreakdowns([])
     try {
-      const params = new URLSearchParams({ group_by: 'hour', limit: '24', asp_id: String(aspId) })
+      const common = new URLSearchParams({ limit: '24', asp_id: String(aspId) })
       if (selectedActualCall?.call_date) {
-        params.set('date_from', selectedActualCall.call_date)
-        params.set('date_to', selectedActualCall.call_date)
+        common.set('date_from', selectedActualCall.call_date)
+        common.set('date_to', selectedActualCall.call_date)
       }
-      const res = await fetch(`/api/callcard-outcomes?${params.toString()}`, { cache: 'no-store' })
-      const json = await res.json() as OutcomeResult
-      setOutcomeResult(json)
+
+      const distanceKey = distance > 0 && distance <= 3000 ? 'short_0_3km' : distance <= 8000 ? 'medium_3_8km' : 'long_8km_plus'
+      const fareKey = fare > 0 && fare <= 10000 ? 'low_0_10k' : fare <= 20000 ? 'mid_10_20k' : 'high_20k_plus'
+      const queries = [
+        { key: 'hour', title: '시간대', targetKey: String(hour).padStart(2, '0'), fallbackLabel: `${hour}시` },
+        { key: 'distance', title: '거리 구간', targetKey: distanceKey, fallbackLabel: distance <= 3000 ? '단거리 0-3km' : distance <= 8000 ? '중거리 3-8km' : '장거리 8km+' },
+        { key: 'fare', title: '요금 구간', targetKey: fareKey, fallbackLabel: fare <= 10000 ? '저요금 1만원 이하' : fare <= 20000 ? '중요금 1-2만원' : '고요금 2만원 초과' },
+        { key: 'paid', title: '유료 여부', targetKey: isPaid ? 'paid' : 'free', fallbackLabel: isPaid ? '유료콜' : '무료콜' },
+        { key: 'surge', title: '탄력 여부', targetKey: isSurge ? 'surge' : 'normal', fallbackLabel: isSurge ? '탄력/할증' : '일반' },
+      ]
+
+      const results = await Promise.all(queries.map(async (query) => {
+        const params = new URLSearchParams(common)
+        params.set('group_by', query.key)
+        const res = await fetch(`/api/callcard-outcomes?${params.toString()}`, { cache: 'no-store' })
+        const json = await res.json() as OutcomeResult
+        return { query, json }
+      }))
+
+      const hourResult = results.find((item) => item.query.key === 'hour')?.json ?? null
+      setOutcomeResult(hourResult)
+      setOutcomeBreakdowns(results.map(({ query, json }) => {
+        const target = json.groups?.find((item) => item.key === query.targetKey) ?? null
+        return {
+          key: query.key,
+          title: query.title,
+          targetKey: query.targetKey,
+          targetLabel: target?.label ?? query.fallbackLabel,
+          target,
+          result: json,
+        }
+      }))
     } catch {
       setOutcomeResult({ error: '콜 outcome 위험도 조회 실패' })
+      setOutcomeBreakdowns([])
     } finally {
       setOutcomeLoading(false)
     }
@@ -1115,6 +1156,26 @@ function SimulationTab() {
                 <div style={{ color: C.sub, marginTop: 6 }}>
                   과거 {currentHourRisk.total.toLocaleString()}건 중 expired {currentHourRisk.expired.toLocaleString()}건, canceled {currentHourRisk.canceled.toLocaleString()}건입니다.
                 </div>
+              </div>
+            )}
+            {outcomeBreakdowns.length > 0 && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>
+                {outcomeBreakdowns.map((item) => (
+                  <div key={item.key} style={{ padding: 12, borderRadius: 8, background: '#0B1222', border: `1px solid ${item.target && item.target.problem_rate >= 0.6 ? 'rgba(244,63,94,.45)' : C.border}` }}>
+                    <div style={{ color: C.muted, fontWeight: 850, marginBottom: 8 }}>{item.title}</div>
+                    <div style={{ color: C.text, fontWeight: 900, marginBottom: 8 }}>{item.targetLabel}</div>
+                    {item.target ? (
+                      <>
+                        <div style={{ fontSize: 24, fontWeight: 950, color: item.target.problem_rate >= 0.6 ? C.red : C.yellow }}>{pct(item.target.problem_rate)}</div>
+                        <div style={{ color: C.sub, marginTop: 8, lineHeight: 1.45 }}>
+                          총 {item.target.total.toLocaleString()} · 만료 {pct(item.target.expired_rate)} · 취소 {pct(item.target.canceled_rate)}
+                        </div>
+                      </>
+                    ) : (
+                      <div style={{ color: C.muted }}>조건 데이터 없음</div>
+                    )}
+                  </div>
+                ))}
               </div>
             )}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
