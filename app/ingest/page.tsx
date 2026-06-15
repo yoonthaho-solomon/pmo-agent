@@ -36,6 +36,13 @@ const C = {
   orange: '#FB923C',
 }
 
+const VERCEL_UPLOAD_LIMIT_BYTES = 4 * 1024 * 1024
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)}KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)}MB`
+}
+
 function Button({ children, onClick, disabled, tone = 'cyan' }: { children: React.ReactNode; onClick?: () => void; disabled?: boolean; tone?: 'cyan' | 'purple' | 'green' | 'orange' }) {
   const color = tone === 'purple' ? C.purple : tone === 'green' ? C.green : tone === 'orange' ? C.orange : C.cyan
   return (
@@ -90,6 +97,8 @@ export default function IngestPage() {
 
   const callDate = callcardFile?.name.match(/^(\d{4})(\d{2})(\d{2})/)
   const serviceDate = callDate ? `${callDate[1]}-${callDate[2]}-${callDate[3]}` : ''
+  const callUploadBytes = (callcardFile?.size ?? 0) + (remappedFile?.size ?? 0)
+  const callUploadTooLarge = callUploadBytes > VERCEL_UPLOAD_LIMIT_BYTES
 
   async function requestForm(endpoint: string, form: FormData) {
     const res = await fetch(endpoint, { method: 'POST', body: form })
@@ -200,7 +209,7 @@ export default function IngestPage() {
             </div>
             <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
               <Button
-                disabled={!callcardFile || !remappedFile || running != null}
+                disabled={!callcardFile || !remappedFile || callUploadTooLarge || running != null}
                 onClick={() => {
                   const form = callcardForm()
                   if (!form) return
@@ -211,7 +220,7 @@ export default function IngestPage() {
               </Button>
               <Button
                 tone="green"
-                disabled={!callcardFile || !remappedFile || running != null}
+                disabled={!callcardFile || !remappedFile || callUploadTooLarge || running != null}
                 onClick={() => {
                   const form = callcardForm()
                   if (!form) return
@@ -226,10 +235,18 @@ export default function IngestPage() {
               <Button tone="orange" disabled={!serviceDate || running != null} onClick={() => runJson('/api/matching', { call_date: serviceDate }, 'matching')}>
                 매칭 계산
               </Button>
-              <Button tone="green" disabled={!callcardFile || !remappedFile || !serviceDate || running != null} onClick={runCallcardPipeline}>
+              <Button tone="green" disabled={!callcardFile || !remappedFile || !serviceDate || callUploadTooLarge || running != null} onClick={runCallcardPipeline}>
                 전체 파이프라인 실행
               </Button>
             </div>
+            {callcardFile && remappedFile && (
+              <div style={{ marginTop: 12, padding: 12, borderRadius: 8, background: callUploadTooLarge ? 'rgba(244,63,94,.10)' : 'rgba(16,185,129,.08)', border: `1px solid ${callUploadTooLarge ? 'rgba(244,63,94,.35)' : 'rgba(16,185,129,.25)'}`, color: callUploadTooLarge ? C.red : C.green, lineHeight: 1.55, fontSize: 14, fontWeight: 800 }}>
+                선택한 호출데이터 합계 {formatBytes(callUploadBytes)}.
+                {callUploadTooLarge
+                  ? ' 운영 Vercel 화면 업로드 한도를 넘을 수 있어 로컬/서버 배치 적재가 필요합니다.'
+                  : ' 화면 업로드 가능 범위입니다.'}
+              </div>
+            )}
             <div style={{ marginTop: 12, color: C.sub, lineHeight: 1.55, fontSize: 14 }}>
               개별 버튼은 해당 단계만 실행합니다. 전체 파이프라인 실행은 호출데이터 적재 → 기사 로그 생성 → 기사 벡터 생성 → 매칭 계산을 순서대로 실행합니다.
             </div>
