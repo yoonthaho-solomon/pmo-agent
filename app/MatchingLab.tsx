@@ -204,7 +204,15 @@ interface RecommendResult {
 }
 interface DispatchResult {
   status?: string
+  dispatch_id?: string
   simulation_mode?: boolean
+  record_events?: boolean
+  event_log?: {
+    status?: string
+    event_id?: number | null
+    event_at?: string | null
+    detail?: unknown
+  }
   radius_step_used_km?: number
   candidate_counts?: { realtime_state_rows?: number; nearby?: number; profile_joined?: number; ranked?: number }
   recommended_drivers?: {
@@ -928,6 +936,7 @@ function SimulationTab() {
   const [recommendResult, setRecommendResult] = useState<RecommendResult | null>(null)
   const [dispatchResult, setDispatchResult] = useState<DispatchResult | null>(null)
   const [dispatchLoading, setDispatchLoading] = useState(false)
+  const [recordDispatchEvents, setRecordDispatchEvents] = useState(false)
   const [verifyResult, setVerifyResult] = useState<MatchingVerifyResult | null>(null)
   const [verifyLoading, setVerifyLoading] = useState(false)
   const [recommendLoading, setRecommendLoading] = useState(false)
@@ -1090,6 +1099,8 @@ function SimulationTab() {
           radius_steps_km: [baseRadius, baseRadius * 2, baseRadius * 3],
           max_candidates: 10,
           simulation_mode: true,
+          record_events: recordDispatchEvents,
+          call_risk_score: callRiskScore?.score ?? null,
         }),
       })
       const json = await res.json() as DispatchResult
@@ -1248,6 +1259,18 @@ function SimulationTab() {
               <Button tone="orange" onClick={runSavedMatchingVerify} disabled={!selectedActualCall || verifyLoading}>{verifyLoading ? '검증 중' : '저장 Top10 검증'}</Button>
               <Button tone="green" onClick={runDispatchSimulation} disabled={dispatchLoading}>{dispatchLoading ? '검증 중' : '라이브 API 모의검증'}</Button>
             </div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 12, borderRadius: 8, background: recordDispatchEvents ? 'rgba(34,197,94,.10)' : '#0B1222', border: `1px solid ${recordDispatchEvents ? C.green : C.border}`, color: C.sub, fontSize: 16, fontWeight: 800 }}>
+              <input
+                type="checkbox"
+                checked={recordDispatchEvents}
+                onChange={(e) => setRecordDispatchEvents(e.target.checked)}
+                style={{ width: 18, height: 18 }}
+              />
+              배차 이벤트 저장 검증
+              <span style={{ color: recordDispatchEvents ? C.green : C.muted }}>
+                {recordDispatchEvents ? 'record_events=true' : '기본 OFF'}
+              </span>
+            </label>
           </div>
         </Panel>
 
@@ -1415,6 +1438,24 @@ function SimulationTab() {
               <MiniMetric label="근처 후보" value={dispatchResult.candidate_counts?.nearby ?? 0} />
               <MiniMetric label="랭킹 후보" value={dispatchResult.candidate_counts?.ranked ?? 0} />
             </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1.3fr .7fr .7fr', gap: 12 }}>
+              <div style={{ padding: 12, borderRadius: 8, background: '#0B1222', border: `1px solid ${C.border}`, minWidth: 0 }}>
+                <div style={{ color: C.muted, fontSize: 15, fontWeight: 800, marginBottom: 6 }}>dispatch_id</div>
+                <div style={{ color: C.text, fontFamily: 'monospace', fontSize: 16, overflowWrap: 'anywhere' }}>{dispatchResult.dispatch_id ?? '-'}</div>
+              </div>
+              <MiniMetric label="이벤트 요청" value={dispatchResult.record_events ? 1 : 0} />
+              <div style={{ padding: 12, borderRadius: 8, background: '#0B1222', border: `1px solid ${dispatchResult.event_log?.status === 'stored' ? C.green : dispatchResult.event_log?.status === 'schema_missing' ? C.yellow : C.border}` }}>
+                <div style={{ color: C.muted, fontSize: 15, fontWeight: 800, marginBottom: 6 }}>event_log</div>
+                <div style={{ color: dispatchResult.event_log?.status === 'stored' ? C.green : dispatchResult.event_log?.status === 'schema_missing' ? C.yellow : C.sub, fontWeight: 900 }}>
+                  {dispatchResult.event_log?.status ?? 'disabled'}
+                </div>
+              </div>
+            </div>
+            {dispatchResult.event_log?.status === 'schema_missing' && (
+              <div style={{ padding: 12, borderRadius: 8, background: 'rgba(245,158,11,.10)', border: '1px solid rgba(245,158,11,.35)', color: C.yellow, lineHeight: 1.5 }}>
+                `dispatch_events` 테이블이 아직 Supabase에 적용되지 않았습니다. 추천 결과는 유지되며, 테이블 적용 후 같은 검증에서 stored 상태를 확인할 수 있습니다.
+              </div>
+            )}
             {dispatchResult.simulation_mode && (
               <div style={{ padding: 12, borderRadius: 8, background: 'rgba(245,158,11,.10)', border: '1px solid rgba(245,158,11,.35)', color: C.yellow, lineHeight: 1.5 }}>
                 simulation_mode=true 결과입니다. 기사 위치/온라인/공차/수신 가능 상태는 driver_mbti에서 결정론적으로 만든 검증용 값이며 운영 배차로 쓰지 않습니다.

@@ -27,6 +27,7 @@
 - 저장 Top10 정합성 검증 가능.
 - 거리순, 22D 유사도순, dispatch simulation Top10 비교 가능.
 - 정책별 KPI 요약: 후보 수, 평균 ETA, 평균 유사도, 예상 수락률 표시.
+- dispatch simulation 결과에서 `dispatch_id`, `record_events`, `event_log` 상태 확인 가능.
 
 ### 라이브 배차 API 초안
 
@@ -37,6 +38,7 @@
 - `simulation_mode: true`일 때만 `driver_mbti` 기반 결정론적 가상 위치/상태로 검증 가능.
 - `/api/dispatch/recommend`는 `record_events: true` 명시 시 `candidate_generated` 이벤트 저장을 시도.
 - `dispatch_events` 미적용 시 추천 결과는 유지하고 `event_log.status = schema_missing`으로 안전 응답.
+- `/simulator`에서 배차 이벤트 저장 검증 토글을 켜면 API 저장 상태를 화면에서 확인 가능.
 
 ## 아직 운영 배차로 쓰면 안 되는 부분
 
