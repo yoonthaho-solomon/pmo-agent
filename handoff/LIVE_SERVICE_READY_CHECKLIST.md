@@ -105,6 +105,10 @@ final_score = vector_cosine
 
 ## 개발자에게 넘길 최소 구현 순서
 
+우선 전달 문서:
+
+- `handoff/AI_PRIORITY_DISPATCH_SPEC.md`: 기존 배차 후보군에 22D 코사인 유사도 기반 AI 우선순위 정렬을 추가하기 위한 개발 명세.
+
 1. Supabase에 `20260615_driver_realtime_state.sql` 적용 여부 결정.
 2. 실제 기사 상태 샘플 100~1000건 적재 또는 외부 API mock 연결.
 3. `/api/dispatch/recommend`를 `simulation_mode=false`로 호출해 실데이터 후보가 반환되는지 확인.
