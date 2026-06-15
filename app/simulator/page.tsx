@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import Link from 'next/link'
 import { createClient } from '@supabase/supabase-js'
+import { PmoShell } from '@/app/components/PmoShell'
 import { callToVector, cosineSimilarity, driverToVector, type DriverVectorRow } from '@/lib/matching-vector'
 
 const supabase = createClient(
@@ -83,17 +83,13 @@ export default function SimulatorPage() {
     .slice(0, 10), [drivers, callVector])
 
   return (
-    <main style={{ minHeight: '100vh', background: C.bg, color: C.text, fontFamily: 'Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}>
-      <div style={{ maxWidth: 1320, margin: '0 auto', padding: '30px 28px 46px' }}>
-        <TopNav active="시뮬레이터" />
-        <header style={{ margin: '22px 0 24px' }}>
-          <h1 style={{ fontSize: 36, margin: 0, fontWeight: 950 }}>시뮬레이터</h1>
-          <p style={{ color: C.sub, fontSize: 18, lineHeight: 1.6, margin: '10px 0 0', maxWidth: 960 }}>
-            콜카드 조건을 입력하면 현재 누적된 기사 22D 벡터 중 코사인 유사도가 높은 기사 Top 10을 보여줍니다.
-            실시간 위치와 온라인 상태는 아직 배차 점수에 섞지 않습니다.
-          </p>
-        </header>
-
+    <PmoShell
+      active="시뮬레이터"
+      kicker="MATCHING SIMULATION"
+      title="콜 조건을 넣고 적합한 기사 Top 10 확인"
+      description="콜카드 조건을 입력하면 현재 누적된 기사 22D 벡터 중 코사인 유사도가 높은 기사 Top 10을 보여줍니다. 실시간 위치와 온라인 상태는 아직 배차 점수에 섞지 않습니다."
+      status="추천 결과 검증"
+    >
         <section style={{ display: 'grid', gridTemplateColumns: '390px 1fr', gap: 18 }}>
           <Panel title="콜카드 조건 입력" desc="현재 버전은 22D 코사인 유사도 검증에 집중합니다.">
             <div style={{ display: 'grid', gap: 12 }}>
@@ -153,27 +149,7 @@ export default function SimulatorPage() {
             ))}
           </div>
         </Panel>
-      </div>
-    </main>
-  )
-}
-
-function TopNav({ active }: { active: string }) {
-  const links = [
-    ['대시보드', '/dashboard'],
-    ['적재현황', '/ingest'],
-    ['벡터리스트', '/vectors'],
-    ['시뮬레이터', '/simulator'],
-    ['배차로직', '/dispatch-logic'],
-  ]
-  return (
-    <nav style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-      {links.map(([label, href]) => (
-        <Link key={href} href={href} style={{ color: label === active ? C.text : C.sub, border: `1px solid ${label === active ? C.purple : C.border}`, background: label === active ? 'rgba(139,92,246,.16)' : 'transparent', borderRadius: 8, padding: '9px 12px', textDecoration: 'none', fontWeight: 900 }}>
-          {label}
-        </Link>
-      ))}
-    </nav>
+    </PmoShell>
   )
 }
 

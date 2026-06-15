@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import Link from 'next/link'
 import { createClient } from '@supabase/supabase-js'
+import { PmoShell } from '@/app/components/PmoShell'
 import {
   VECTOR_DIMENSIONS,
   callToVector,
@@ -176,18 +176,13 @@ export default function VectorsPage() {
   const selectedDriverVector = selectedMatch?.vector ?? []
 
   return (
-    <main style={{ minHeight: '100vh', background: C.bg, color: C.text, fontFamily: 'Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}>
-      <div style={{ maxWidth: 1440, margin: '0 auto', padding: '30px 28px 46px' }}>
-        <TopNav active="벡터리스트" />
-
-        <header style={{ margin: '22px 0 22px' }}>
-          <h1 style={{ fontSize: 36, margin: 0, fontWeight: 950 }}>벡터리스트</h1>
-          <p style={{ color: C.sub, fontSize: 18, lineHeight: 1.6, margin: '10px 0 0', maxWidth: 960 }}>
-            콜카드를 하나의 경기 요청 카드로 보고, 기사는 누적 운행 성향을 가진 능력치 카드로 봅니다.
-            두 카드의 22차원 팩터가 얼마나 닮았는지를 코사인 유사도로 시각화합니다.
-          </p>
-        </header>
-
+    <PmoShell
+      active="벡터리스트"
+      kicker="22D FACTOR MATCHING"
+      title="콜카드와 기사 능력치를 카드처럼 비교"
+      description="콜카드는 경기 요청 카드, 기사는 누적 운행 성향을 가진 능력치 카드로 보여줍니다. 두 카드의 22차원 팩터가 얼마나 닮았는지를 코사인 유사도로 시각화합니다."
+      status="팩터 매칭 검증"
+    >
         {loading && <div style={{ color: C.sub, fontSize: 18, fontWeight: 850 }}>벡터 데이터를 불러오는 중입니다.</div>}
 
         <section style={{ display: 'grid', gridTemplateColumns: '330px 1fr 330px', gap: 18, alignItems: 'stretch' }}>
@@ -247,8 +242,7 @@ export default function VectorsPage() {
             </div>
           </Panel>
         </section>
-      </div>
-    </main>
+    </PmoShell>
   )
 }
 
@@ -403,25 +397,6 @@ function Panel({ title, desc, children }: { title: string; desc: string; childre
       <p style={{ color: C.sub, fontSize: 16, lineHeight: 1.55, margin: '8px 0 16px' }}>{desc}</p>
       {children}
     </section>
-  )
-}
-
-function TopNav({ active }: { active: string }) {
-  const links = [
-    ['대시보드', '/dashboard'],
-    ['적재현황', '/ingest'],
-    ['벡터리스트', '/vectors'],
-    ['시뮬레이터', '/simulator'],
-    ['배차로직', '/dispatch-logic'],
-  ]
-  return (
-    <nav style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-      {links.map(([label, href]) => (
-        <Link key={href} href={href} style={{ color: label === active ? C.text : C.sub, border: `1px solid ${label === active ? C.cyan : C.border}`, background: label === active ? 'rgba(34,211,238,.16)' : 'transparent', borderRadius: 8, padding: '9px 12px', textDecoration: 'none', fontWeight: 900 }}>
-          {label}
-        </Link>
-      ))}
-    </nav>
   )
 }
 

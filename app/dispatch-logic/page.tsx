@@ -1,4 +1,4 @@
-import Link from 'next/link'
+import { PmoShell } from '@/app/components/PmoShell'
 
 const C = {
   bg: '#080C18',
@@ -34,17 +34,13 @@ const apiRows = [
 
 export default function DispatchLogicPage() {
   return (
-    <main style={{ minHeight: '100vh', background: C.bg, color: C.text, fontFamily: 'Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}>
-      <div style={{ maxWidth: 1320, margin: '0 auto', padding: '30px 28px 46px' }}>
-        <TopNav active="배차로직" />
-        <header style={{ margin: '22px 0 24px' }}>
-          <h1 style={{ fontSize: 36, margin: 0, fontWeight: 950 }}>배차로직</h1>
-          <p style={{ color: C.sub, fontSize: 18, lineHeight: 1.6, margin: '10px 0 0', maxWidth: 980 }}>
-            개발자에게 전달할 핵심은 기존 배차 엔진을 바꾸는 것이 아닙니다. 기존 후보 기사 목록을 만든 뒤,
-            콜카드와 기사 22D 벡터의 코사인 유사도로 우선 발송 순서를 재정렬하는 것입니다.
-          </p>
-        </header>
-
+    <PmoShell
+      active="배차로직"
+      kicker="DEVELOPER HANDOFF"
+      title="기존 배차 후보를 AI 유사도 순으로 재정렬"
+      description="개발자에게 전달할 핵심은 기존 배차 엔진을 바꾸는 것이 아닙니다. 기존 후보 기사 목록을 만든 뒤, 콜카드와 기사 22D 벡터의 코사인 유사도로 우선 발송 순서를 재정렬하는 것입니다."
+      status="개발 전달 준비"
+    >
         <section style={{ display: 'grid', gridTemplateColumns: '1.1fr .9fr', gap: 18 }}>
           <Panel title="AI 우선배차 처리 흐름" desc="Uber식 후보 생성과 반경 확장은 기존 배차 엔진 또는 추후 실시간 상태 테이블에서 담당하고, 이 페이지의 핵심은 정렬 기준입니다.">
             <div style={{ display: 'grid', gap: 12 }}>
@@ -89,27 +85,7 @@ export default function DispatchLogicPage() {
             ))}
           </div>
         </Panel>
-      </div>
-    </main>
-  )
-}
-
-function TopNav({ active }: { active: string }) {
-  const links = [
-    ['대시보드', '/dashboard'],
-    ['적재현황', '/ingest'],
-    ['벡터리스트', '/vectors'],
-    ['시뮬레이터', '/simulator'],
-    ['배차로직', '/dispatch-logic'],
-  ]
-  return (
-    <nav style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-      {links.map(([label, href]) => (
-        <Link key={href} href={href} style={{ color: label === active ? C.text : C.sub, border: `1px solid ${label === active ? C.orange : C.border}`, background: label === active ? 'rgba(251,146,60,.16)' : 'transparent', borderRadius: 8, padding: '9px 12px', textDecoration: 'none', fontWeight: 900 }}>
-          {label}
-        </Link>
-      ))}
-    </nav>
+    </PmoShell>
   )
 }
 

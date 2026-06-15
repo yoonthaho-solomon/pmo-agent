@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import Link from 'next/link'
 import { createClient } from '@supabase/supabase-js'
+import { PmoShell } from '@/app/components/PmoShell'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -132,16 +132,13 @@ export default function IngestPage() {
   const missingRows = useMemo(() => dateRows.filter((row) => !row.callcards || !row.driverLogs || !row.matches), [dateRows])
 
   return (
-    <main style={{ minHeight: '100vh', background: C.bg, color: C.text, fontFamily: 'Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}>
-      <div style={{ maxWidth: 1320, margin: '0 auto', padding: '30px 28px 46px' }}>
-        <TopNav active="적재현황" />
-        <header style={{ margin: '22px 0 24px' }}>
-          <h1 style={{ fontSize: 36, margin: 0, fontWeight: 950 }}>적재현황</h1>
-          <p style={{ color: C.sub, fontSize: 18, lineHeight: 1.6, margin: '10px 0 0' }}>
-            이 화면은 파일을 직접 업로드하지 않습니다. 폴더 자동 적재 기준으로 Supabase에 들어간 날짜 범위와 누락 여부만 확인합니다.
-          </p>
-        </header>
-
+    <PmoShell
+      active="적재현황"
+      kicker="DATA COVERAGE"
+      title="호출데이터와 앱미터데이터 적재 범위 확인"
+      description="이 화면은 파일을 직접 업로드하지 않습니다. 폴더 자동 적재 기준으로 Supabase에 들어간 날짜 범위와 누락 여부만 확인합니다."
+      status="자동 적재 상태"
+    >
         {loading && <div style={{ color: C.sub, fontSize: 18 }}>데이터를 불러오는 중입니다.</div>}
 
         <section style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 14, marginBottom: 24 }}>
@@ -186,27 +183,7 @@ export default function IngestPage() {
             <Code title="앱미터 자동 감시" command="npm run meter:watch" />
           </div>
         </Panel>
-      </div>
-    </main>
-  )
-}
-
-function TopNav({ active }: { active: string }) {
-  const links = [
-    ['대시보드', '/dashboard'],
-    ['적재현황', '/ingest'],
-    ['벡터리스트', '/vectors'],
-    ['시뮬레이터', '/simulator'],
-    ['배차로직', '/dispatch-logic'],
-  ]
-  return (
-    <nav style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-      {links.map(([label, href]) => (
-        <Link key={href} href={href} style={{ color: label === active ? C.text : C.sub, border: `1px solid ${label === active ? C.green : C.border}`, background: label === active ? 'rgba(16,185,129,.16)' : 'transparent', borderRadius: 8, padding: '9px 12px', textDecoration: 'none', fontWeight: 900 }}>
-          {label}
-        </Link>
-      ))}
-    </nav>
+    </PmoShell>
   )
 }
 
