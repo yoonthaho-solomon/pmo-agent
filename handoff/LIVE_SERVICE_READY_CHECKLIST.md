@@ -107,6 +107,7 @@ final_score = vector_cosine
 
 우선 전달 문서:
 
+- `handoff/AI_PRIORITY_DISPATCH_DEV_BRIEF.md`: 개발자에게 먼저 공유할 1페이지 구현 요청 요약.
 - `handoff/AI_PRIORITY_DISPATCH_SPEC.md`: 기존 배차 후보군에 22D 코사인 유사도 기반 AI 우선순위 정렬을 추가하기 위한 개발 명세.
 
 1. Supabase에 `20260615_driver_realtime_state.sql` 적용 여부 결정.
