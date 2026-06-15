@@ -15,7 +15,9 @@ type UploadResult = {
   hourly_inserted?: number
   driver_inserted?: number
   elapsed_ms?: number
+  pipeline_results?: { step: string; result: unknown }[]
   error?: string
+  detail?: unknown
 }
 
 const C = {
@@ -89,26 +91,85 @@ export default function IngestPage() {
   const callDate = callcardFile?.name.match(/^(\d{4})(\d{2})(\d{2})/)
   const serviceDate = callDate ? `${callDate[1]}-${callDate[2]}-${callDate[3]}` : ''
 
-  async function postForm(endpoint: string, form: FormData, name: string) {
-    setRunning(name)
-    setResult(null)
+  async function requestForm(endpoint: string, form: FormData) {
     const res = await fetch(endpoint, { method: 'POST', body: form })
     const json = await res.json()
-    setResult(json)
-    setRunning(null)
+    if (!res.ok) throw json
+    return json
   }
 
-  async function runJson(endpoint: string, body: object, name: string) {
-    setRunning(name)
-    setResult(null)
+  async function requestJson(endpoint: string, body: object) {
     const res = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     })
     const json = await res.json()
-    setResult(json)
-    setRunning(null)
+    if (!res.ok) throw json
+    return json
+  }
+
+  async function postForm(endpoint: string, form: FormData, name: string) {
+    setRunning(name)
+    setResult(null)
+    try {
+      const json = await requestForm(endpoint, form)
+      setResult(json)
+    } catch (err) {
+      setResult({ error: `${name} 실행 실패`, detail: err })
+    } finally {
+      setRunning(null)
+    }
+  }
+
+  async function runJson(endpoint: string, body: object, name: string) {
+    setRunning(name)
+    setResult(null)
+    try {
+      const json = await requestJson(endpoint, body)
+      setResult(json)
+    } catch (err) {
+      setResult({ error: `${name} 실행 실패`, detail: err })
+    } finally {
+      setRunning(null)
+    }
+  }
+
+  function callcardForm() {
+    if (!callcardFile || !remappedFile) return null
+    const form = new FormData()
+    form.append('callcard_eta', callcardFile)
+    form.append('remapped', remappedFile)
+    return form
+  }
+
+  async function runCallcardPipeline() {
+    const form = callcardForm()
+    if (!form || !serviceDate) return
+    setRunning('pipeline')
+    setResult(null)
+    const pipelineResults: { step: string; result: unknown }[] = []
+    try {
+      setResult({ message: '1/4 호출데이터 적재 중', pipeline_results: pipelineResults })
+      pipelineResults.push({ step: 'callcard-mbti', result: await requestForm('/api/callcard-mbti', form) })
+
+      setResult({ message: '2/4 기사 로그 생성 중', pipeline_results: pipelineResults })
+      const driverForm = callcardForm()
+      if (!driverForm) throw new Error('호출데이터 파일이 필요합니다.')
+      pipelineResults.push({ step: 'driver-logs', result: await requestForm('/api/driver-logs', driverForm) })
+
+      setResult({ message: '3/4 기사 벡터 생성 중', pipeline_results: pipelineResults })
+      pipelineResults.push({ step: 'driver-mbti', result: await requestJson('/api/driver-mbti', {}) })
+
+      setResult({ message: '4/4 매칭 계산 중', pipeline_results: pipelineResults })
+      pipelineResults.push({ step: 'matching', result: await requestJson('/api/matching', { call_date: serviceDate }) })
+
+      setResult({ message: '전체 파이프라인 완료', service_date: serviceDate, pipeline_results: pipelineResults })
+    } catch (err) {
+      setResult({ error: '전체 파이프라인 실행 실패', service_date: serviceDate, pipeline_results: pipelineResults, detail: err })
+    } finally {
+      setRunning(null)
+    }
   }
 
   return (
@@ -141,10 +202,8 @@ export default function IngestPage() {
               <Button
                 disabled={!callcardFile || !remappedFile || running != null}
                 onClick={() => {
-                  if (!callcardFile || !remappedFile) return
-                  const form = new FormData()
-                  form.append('callcard_eta', callcardFile)
-                  form.append('remapped', remappedFile)
+                  const form = callcardForm()
+                  if (!form) return
                   postForm('/api/callcard-mbti', form, 'callcard')
                 }}
               >
@@ -154,10 +213,8 @@ export default function IngestPage() {
                 tone="green"
                 disabled={!callcardFile || !remappedFile || running != null}
                 onClick={() => {
-                  if (!callcardFile || !remappedFile) return
-                  const form = new FormData()
-                  form.append('callcard_eta', callcardFile)
-                  form.append('remapped', remappedFile)
+                  const form = callcardForm()
+                  if (!form) return
                   postForm('/api/driver-logs', form, 'driver-logs')
                 }}
               >
@@ -169,6 +226,12 @@ export default function IngestPage() {
               <Button tone="orange" disabled={!serviceDate || running != null} onClick={() => runJson('/api/matching', { call_date: serviceDate }, 'matching')}>
                 매칭 계산
               </Button>
+              <Button tone="green" disabled={!callcardFile || !remappedFile || !serviceDate || running != null} onClick={runCallcardPipeline}>
+                전체 파이프라인 실행
+              </Button>
+            </div>
+            <div style={{ marginTop: 12, color: C.sub, lineHeight: 1.55, fontSize: 14 }}>
+              개별 버튼은 해당 단계만 실행합니다. 전체 파이프라인 실행은 호출데이터 적재 → 기사 로그 생성 → 기사 벡터 생성 → 매칭 계산을 순서대로 실행합니다.
             </div>
           </section>
 
