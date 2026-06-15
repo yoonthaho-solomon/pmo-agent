@@ -8,6 +8,8 @@
     "start": "next start",
     "call:pipeline": "node scripts/run-call-pipeline-local.js",
     "call:watch": "node scripts/watch-call-pipeline-local.js",
+    "meter:pipeline": "node scripts/run-meter-pipeline-local.js",
+    "meter:watch": "node scripts/watch-meter-pipeline-local.js",
     "lint": "eslint"
   },
   "dependencies": {

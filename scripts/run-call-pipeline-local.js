@@ -1,7 +1,9 @@
 const fs = require('fs')
 const path = require('path')
 
-const DEFAULT_ROOT = 'C:\\Users\\pgman\\OneDrive\\바탕 화면\\호출데이터'
+const DESKTOP_DIR = '\uBC14\uD0D5 \uD654\uBA74'
+const CALL_DATA_DIR = '\uD638\uCD9C\uB370\uC774\uD130'
+const DEFAULT_ROOT = path.join(process.env.USERPROFILE || 'C:\\Users\\pgman', 'OneDrive', DESKTOP_DIR, CALL_DATA_DIR)
 const DEFAULT_BASE_URL = 'http://localhost:3133'
 
 function argValue(name, fallback = null) {
@@ -26,6 +28,10 @@ function normalizeDateArg(value) {
   return /^\d{8}$/.test(compact) ? compact : null
 }
 
+function itemCompare(a, b) {
+  return a.localeCompare(b)
+}
+
 function discoverDateDirs(root, from, to, onlyDate) {
   return fs.readdirSync(root, { withFileTypes: true })
     .filter((entry) => entry.isDirectory() && /^\d{8}_call_data$/.test(entry.name))
@@ -39,14 +45,11 @@ function discoverDateDirs(root, from, to, onlyDate) {
     .sort((a, b) => itemCompare(a.date, b.date))
 }
 
-function itemCompare(a, b) {
-  return a.localeCompare(b)
-}
-
 function callcardFiles(item) {
-  const eta = path.join(item.dir, `${item.date}_RAW_DATA_callcard_eta.xlsx`)
-  const remapped = path.join(item.dir, `${item.date}_RAW_DATA_remapped.xlsx`)
-  return { eta, remapped }
+  return {
+    eta: path.join(item.dir, `${item.date}_RAW_DATA_callcard_eta.xlsx`),
+    remapped: path.join(item.dir, `${item.date}_RAW_DATA_remapped.xlsx`),
+  }
 }
 
 function fileBlob(filePath) {

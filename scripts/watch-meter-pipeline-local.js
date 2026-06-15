@@ -3,8 +3,8 @@ const path = require('path')
 const { spawn } = require('child_process')
 
 const DESKTOP_DIR = '\uBC14\uD0D5 \uD654\uBA74'
-const CALL_DATA_DIR = '\uD638\uCD9C\uB370\uC774\uD130'
-const DEFAULT_ROOT = path.join(process.env.USERPROFILE || 'C:\\Users\\pgman', 'OneDrive', DESKTOP_DIR, CALL_DATA_DIR)
+const METER_DATA_DIR = '\uC571\uBBF8\uD130\uB370\uC774\uD130'
+const DEFAULT_ROOT = path.join(process.env.USERPROFILE || 'C:\\Users\\pgman', 'OneDrive', DESKTOP_DIR, METER_DATA_DIR)
 const DEFAULT_BASE_URL = 'http://localhost:3133'
 const DEFAULT_INTERVAL_MS = 30_000
 const DEFAULT_STABLE_MS = 60_000
@@ -27,36 +27,35 @@ function log(record) {
   console.log(JSON.stringify({ at: now(), ...record }))
 }
 
-function dateDirs(root) {
-  if (!fs.existsSync(root)) return []
-  return fs.readdirSync(root, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory() && /^\d{8}_call_data$/.test(entry.name))
-    .map((entry) => {
-      const date = entry.name.slice(0, 8)
-      return { date, dir: path.join(root, entry.name) }
-    })
-    .sort((a, b) => a.date.localeCompare(b.date))
+function extractDateFromFileName(fileName) {
+  const match = fileName.match(/(\d{8})_(\d{8})/)
+  return match ? match[1] : null
 }
 
-function pairFiles(item) {
-  return {
-    eta: path.join(item.dir, `${item.date}_RAW_DATA_callcard_eta.xlsx`),
-    remapped: path.join(item.dir, `${item.date}_RAW_DATA_remapped.xlsx`),
+function meterFiles(root) {
+  const results = []
+  function walk(dir) {
+    if (!fs.existsSync(dir)) return
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name)
+      if (entry.isDirectory()) {
+        walk(full)
+        continue
+      }
+      if (!entry.isFile() || !/\.xlsx$/i.test(entry.name)) continue
+      const date = extractDateFromFileName(entry.name)
+      if (!date) continue
+      results.push({ date, file: full })
+    }
   }
+  walk(root)
+  return results.sort((a, b) => a.date.localeCompare(b.date) || a.file.localeCompare(b.file))
 }
 
-function pairState(item) {
-  const files = pairFiles(item)
-  if (!fs.existsSync(files.eta) || !fs.existsSync(files.remapped)) {
-    return { ready: false, bytes: 0, mtimes: [] }
-  }
-  const eta = fs.statSync(files.eta)
-  const remapped = fs.statSync(files.remapped)
-  return {
-    ready: true,
-    bytes: eta.size + remapped.size,
-    mtimes: [eta.mtimeMs, remapped.mtimeMs],
-  }
+function fileState(file) {
+  if (!fs.existsSync(file)) return { ready: false, bytes: 0, mtime: 0 }
+  const stat = fs.statSync(file)
+  return { ready: true, bytes: stat.size, mtime: stat.mtimeMs }
 }
 
 function loadState(file) {
@@ -72,15 +71,20 @@ function saveState(file, state) {
   fs.writeFileSync(file, JSON.stringify(state, null, 2))
 }
 
-function runPipeline(date, baseUrl, extraArgs) {
+function fileKey(file) {
+  return path.resolve(file).toLowerCase()
+}
+
+function runPipeline(file, baseUrl, mode, aspId) {
   return new Promise((resolve, reject) => {
     const args = [
       'run',
-      'call:pipeline',
+      'meter:pipeline',
       '--',
-      `--date=${date}`,
+      `--file=${file}`,
       `--base-url=${baseUrl}`,
-      ...extraArgs,
+      `--mode=${mode}`,
+      `--asp-id=${aspId}`,
     ]
     const child = spawn('npm.cmd', args, {
       cwd: process.cwd(),
@@ -90,7 +94,7 @@ function runPipeline(date, baseUrl, extraArgs) {
     child.on('error', reject)
     child.on('exit', (code) => {
       if (code === 0) resolve()
-      else reject(new Error(`pipeline exited with code ${code}`))
+      else reject(new Error(`meter pipeline exited with code ${code}`))
     })
   })
 }
@@ -100,18 +104,19 @@ async function main() {
   const baseUrl = argValue('base-url', DEFAULT_BASE_URL)
   const intervalMs = Number(argValue('interval-ms', DEFAULT_INTERVAL_MS))
   const stableMs = Number(argValue('stable-ms', DEFAULT_STABLE_MS))
-  const stateFile = argValue('state', path.join('work', 'call-pipeline-watch-state.json'))
+  const stateFile = argValue('state', path.join('work', 'meter-pipeline-watch-state.json'))
   const processExisting = hasArg('process-existing')
   const once = hasArg('once')
-  const extraArgs = []
-  for (const name of ['skip-callcards', 'skip-driver-logs', 'skip-driver-mbti', 'skip-matching']) {
-    if (hasArg(name)) extraArgs.push(`--${name}`)
-  }
+  const mode = argValue('mode', 'excel')
+  const aspId = argValue('asp-id', '147')
 
+  if (!['daily', 'excel', 'both'].includes(mode)) {
+    throw new Error('--mode must be daily, excel, or both')
+  }
   if (!fs.existsSync(root)) throw new Error(`root not found: ${root}`)
 
   const state = loadState(stateFile)
-  const seenAtStart = new Set(dateDirs(root).map((item) => item.date))
+  const seenAtStart = new Set(meterFiles(root).map((item) => fileKey(item.file)))
 
   log({
     step: 'watch_start',
@@ -121,6 +126,8 @@ async function main() {
     stable_ms: stableMs,
     process_existing: processExisting,
     state_file: stateFile,
+    mode,
+    asp_id: aspId,
   })
 
   let running = false
@@ -129,21 +136,24 @@ async function main() {
     if (running) return
     running = true
     try {
-      for (const item of dateDirs(root)) {
-        if (!processExisting && seenAtStart.has(item.date)) continue
-        if (state.processed[item.date]) continue
+      for (const item of meterFiles(root)) {
+        const key = fileKey(item.file)
+        if (!processExisting && seenAtStart.has(key)) continue
+        if (state.processed[key]) continue
 
-        const current = pairState(item)
-        if (!current.ready) {
-          log({ step: 'waiting_pair', date: item.date })
-          continue
-        }
+        const current = fileState(item.file)
+        if (!current.ready) continue
 
-        const last = state.pending?.[item.date]
+        const last = state.pending?.[key]
         state.pending = state.pending || {}
-        const signature = `${current.bytes}:${current.mtimes.join(',')}`
+        const signature = `${current.bytes}:${current.mtime}`
         const firstSeenAt = last?.signature === signature ? last.first_seen_at : Date.now()
-        state.pending[item.date] = { signature, first_seen_at: firstSeenAt }
+        state.pending[key] = {
+          date: item.date,
+          file: item.file,
+          signature,
+          first_seen_at: firstSeenAt,
+        }
         saveState(stateFile, state)
 
         const stableForMs = Date.now() - firstSeenAt
@@ -151,24 +161,25 @@ async function main() {
           log({
             step: 'waiting_stable',
             date: item.date,
+            file: item.file,
             upload_mb: Number((current.bytes / 1024 / 1024).toFixed(2)),
             stable_for_ms: stableForMs,
           })
           continue
         }
 
-        log({ step: 'pipeline_start', date: item.date })
+        log({ step: 'pipeline_start', date: item.date, file: item.file })
         try {
-          await runPipeline(item.date, baseUrl, extraArgs)
-          state.processed[item.date] = { at: now() }
-          delete state.failed[item.date]
-          delete state.pending[item.date]
+          await runPipeline(item.file, baseUrl, mode, aspId)
+          state.processed[key] = { at: now(), date: item.date, file: item.file }
+          delete state.failed[key]
+          delete state.pending[key]
           saveState(stateFile, state)
-          log({ step: 'pipeline_done', date: item.date })
+          log({ step: 'pipeline_done', date: item.date, file: item.file })
         } catch (error) {
-          state.failed[item.date] = { at: now(), error: error.message }
+          state.failed[key] = { at: now(), date: item.date, file: item.file, error: error.message }
           saveState(stateFile, state)
-          log({ step: 'pipeline_failed', date: item.date, error: error.message })
+          log({ step: 'pipeline_failed', date: item.date, file: item.file, error: error.message })
         }
       }
     } finally {
