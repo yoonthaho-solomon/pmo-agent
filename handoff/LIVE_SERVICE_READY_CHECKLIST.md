@@ -113,6 +113,7 @@ final_score = vector_cosine
 - 대시보드: https://pmo-agent-khaki.vercel.app/dashboard
 - 시뮬레이터: https://pmo-agent-khaki.vercel.app/simulator
 - dispatch skeleton: `POST https://pmo-agent-khaki.vercel.app/api/dispatch/recommend`
+- dispatch event skeleton: `GET/POST https://pmo-agent-khaki.vercel.app/api/dispatch/events`
 
 ## 현재 기준 커밋
 
