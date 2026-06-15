@@ -111,6 +111,12 @@ interface CallcardRow {
   weekday: number
   s_hexagon: string
   d_hexagon: string
+  s_area?: string | null
+  d_area?: string | null
+  passenger_lat?: number | null
+  passenger_lng?: number | null
+  dest_lat?: number | null
+  dest_lng?: number | null
   expected_distance: number
   expected_fare: number
   is_paid: boolean
@@ -296,6 +302,15 @@ function pct(v: number) {
 
 function fmt(n: number | null | undefined) {
   return n == null ? '-' : n.toLocaleString()
+}
+
+function coordinateAreaKey(lat: number | null | undefined, lng: number | null | undefined): string {
+  if (lat == null || lng == null || !Number.isFinite(lat) || !Number.isFinite(lng)) return 'unknown'
+  return `grid_${lat.toFixed(2)}_${lng.toFixed(2)}`
+}
+
+function areaTarget(area: string | null | undefined, lat: number | null | undefined, lng: number | null | undefined): string {
+  return area || coordinateAreaKey(lat, lng)
 }
 
 function toneColor(tone: StatusTone) {
@@ -754,7 +769,7 @@ function EntitiesTab() {
       const [callRes, driverRes] = await Promise.all([
         supabase
           .from('callcard_mbti')
-          .select('callcard_id,asp_id,call_date,hour_slot,weekday,s_hexagon,d_hexagon,expected_distance,expected_fare,is_paid,is_surge,eta_distance,product_type')
+          .select('callcard_id,asp_id,call_date,hour_slot,weekday,s_hexagon,d_hexagon,s_area,d_area,passenger_lat,passenger_lng,dest_lat,dest_lng,expected_distance,expected_fare,is_paid,is_surge,eta_distance,product_type')
           .eq('asp_id', aspId)
           .order('call_date', { ascending: false })
           .limit(40),
@@ -906,7 +921,7 @@ function SimulationTab() {
   async function loadActualCalls() {
     const { data } = await supabase
       .from('callcard_mbti')
-      .select('callcard_id,asp_id,call_date,hour_slot,weekday,s_hexagon,d_hexagon,expected_distance,expected_fare,is_paid,is_surge,eta_distance,product_type')
+      .select('callcard_id,asp_id,call_date,hour_slot,weekday,s_hexagon,d_hexagon,s_area,d_area,passenger_lat,passenger_lng,dest_lat,dest_lng,expected_distance,expected_fare,is_paid,is_surge,eta_distance,product_type')
       .eq('asp_id', aspId)
       .order('call_date', { ascending: false })
       .limit(80)
@@ -971,7 +986,7 @@ function SimulationTab() {
     setOutcomeResult(null)
     setOutcomeBreakdowns([])
     try {
-      const common = new URLSearchParams({ limit: '24', asp_id: String(aspId) })
+      const common = new URLSearchParams({ limit: '100', asp_id: String(aspId) })
       if (selectedActualCall?.call_date) {
         common.set('date_from', selectedActualCall.call_date)
         common.set('date_to', selectedActualCall.call_date)
@@ -979,12 +994,17 @@ function SimulationTab() {
 
       const distanceKey = distance > 0 && distance <= 3000 ? 'short_0_3km' : distance <= 8000 ? 'medium_3_8km' : 'long_8km_plus'
       const fareKey = fare > 0 && fare <= 10000 ? 'low_0_10k' : fare <= 20000 ? 'mid_10_20k' : 'high_20k_plus'
+      const routeQueries = selectedActualCall ? [
+        { key: 's_area', title: '출발 권역', targetKey: areaTarget(selectedActualCall.s_area, selectedActualCall.passenger_lat, selectedActualCall.passenger_lng), fallbackLabel: selectedActualCall.s_area ?? '출발권역 격자' },
+        { key: 'd_area', title: '도착 권역', targetKey: areaTarget(selectedActualCall.d_area, selectedActualCall.dest_lat, selectedActualCall.dest_lng), fallbackLabel: selectedActualCall.d_area ?? '도착권역 격자' },
+      ] : []
       const queries = [
         { key: 'hour', title: '시간대', targetKey: String(hour).padStart(2, '0'), fallbackLabel: `${hour}시` },
         { key: 'distance', title: '거리 구간', targetKey: distanceKey, fallbackLabel: distance <= 3000 ? '단거리 0-3km' : distance <= 8000 ? '중거리 3-8km' : '장거리 8km+' },
         { key: 'fare', title: '요금 구간', targetKey: fareKey, fallbackLabel: fare <= 10000 ? '저요금 1만원 이하' : fare <= 20000 ? '중요금 1-2만원' : '고요금 2만원 초과' },
         { key: 'paid', title: '유료 여부', targetKey: isPaid ? 'paid' : 'free', fallbackLabel: isPaid ? '유료콜' : '무료콜' },
         { key: 'surge', title: '탄력 여부', targetKey: isSurge ? 'surge' : 'normal', fallbackLabel: isSurge ? '탄력/할증' : '일반' },
+        ...routeQueries,
       ]
 
       const results = await Promise.all(queries.map(async (query) => {
@@ -1196,7 +1216,7 @@ function SimulationTab() {
                 </div>
                 <div style={{ color: C.sub, lineHeight: 1.55 }}>
                   <strong style={{ color: C.text }}>0.35*time + 0.20*distance + 0.20*fare + 0.15*paid + 0.10*surge</strong>
-                  <div style={{ marginTop: 6 }}>이 값은 과거 expired+canceled 비율로 만든 콜 난이도 지표이며, 아직 22D 코사인 추천 순위에는 반영하지 않습니다.</div>
+                  <div style={{ marginTop: 6 }}>이 값은 과거 expired+canceled 비율로 만든 콜 난이도 지표이며, 아직 22D 코사인 추천 순위에는 반영하지 않습니다. 출발/도착권역은 표본 검증 전이라 별도 참고축으로 표시합니다.</div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
                     {topRiskContributors.map((item) => (
                       <span key={item.key} style={{ padding: '6px 9px', borderRadius: 8, border: `1px solid ${C.border}`, background: '#0B1222', color: C.text, fontWeight: 800 }}>

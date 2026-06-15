@@ -13,6 +13,10 @@ type CallOutcomeRow = {
   status_group: OutcomeGroup | null
   s_area: string | null
   d_area: string | null
+  passenger_lat: number | null
+  passenger_lng: number | null
+  dest_lat: number | null
+  dest_lng: number | null
   expected_distance: number | null
   expected_fare: number | null
   is_paid: boolean | null
@@ -45,6 +49,10 @@ const SELECT_COLS = [
   'status_group',
   's_area',
   'd_area',
+  'passenger_lat',
+  'passenger_lng',
+  'dest_lat',
+  'dest_lng',
   'expected_distance',
   'expected_fare',
   'is_paid',
@@ -130,13 +138,18 @@ function fareBucket(fare: number | null): string {
   return 'high_20k_plus'
 }
 
+function coordinateAreaKey(lat: number | null, lng: number | null): string {
+  if (lat == null || lng == null || !Number.isFinite(lat) || !Number.isFinite(lng)) return 'unknown'
+  return `grid_${lat.toFixed(2)}_${lng.toFixed(2)}`
+}
+
 function groupKey(row: CallOutcomeRow, groupBy: GroupBy): string {
   if (groupBy === 'date') return row.call_date ?? 'unknown'
   if (groupBy === 'asp') return row.asp_id == null ? 'unknown' : String(row.asp_id)
   if (groupBy === 'hour') return row.hour_slot == null ? 'unknown' : String(row.hour_slot).padStart(2, '0')
   if (groupBy === 'weekday') return row.weekday == null ? 'unknown' : String(row.weekday)
-  if (groupBy === 's_area') return row.s_area || 'unknown'
-  if (groupBy === 'd_area') return row.d_area || 'unknown'
+  if (groupBy === 's_area') return row.s_area || coordinateAreaKey(row.passenger_lat, row.passenger_lng)
+  if (groupBy === 'd_area') return row.d_area || coordinateAreaKey(row.dest_lat, row.dest_lng)
   if (groupBy === 'distance') return distanceBucket(row.expected_distance)
   if (groupBy === 'fare') return fareBucket(row.expected_fare)
   if (groupBy === 'paid') return row.is_paid ? 'paid' : 'free'
@@ -159,6 +172,7 @@ function groupLabel(key: string, groupBy: GroupBy): string {
   }
   if (groupBy === 'paid') return key === 'paid' ? '유료콜' : '무료콜'
   if (groupBy === 'surge') return key === 'surge' ? '탄력/할증' : '일반'
+  if ((groupBy === 's_area' || groupBy === 'd_area') && key.startsWith('grid_')) return key.replace('grid_', '').replace('_', ', ') + ' 격자'
   return key
 }
 
