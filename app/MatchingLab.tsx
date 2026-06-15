@@ -257,6 +257,14 @@ const ASP_OPTIONS = [
 
 const WEEKDAYS = ['월', '화', '수', '목', '금', '토', '일']
 
+const RISK_WEIGHTS: Record<string, number> = {
+  hour: 0.35,
+  distance: 0.2,
+  fare: 0.2,
+  paid: 0.15,
+  surge: 0.1,
+}
+
 const FACTORS: { key: keyof DriverRow; label: string; group: string; color: string }[] = [
   { key: 'score_dawn', label: '새벽', group: '시간대', color: C.cyan },
   { key: 'score_morning', label: '오전', group: '시간대', color: C.cyan },
@@ -1062,6 +1070,28 @@ function SimulationTab() {
   const apiIds = recommendResult?.recommended_drivers?.map((r) => r.driver_id) ?? []
   const localApiIds = apiComparableTop.map((r) => r.driver.driver_id)
   const top10Overlap = apiIds.filter((id) => localApiIds.includes(id)).length
+  const callRiskScore = useMemo(() => {
+    if (outcomeBreakdowns.length === 0) return null
+    const contributors = outcomeBreakdowns.map((item) => ({
+      ...item,
+      weight: RISK_WEIGHTS[item.key] ?? 0,
+      risk: item.target?.problem_rate ?? null,
+    }))
+    const totals = contributors.reduce(
+      (acc, item) => {
+        if (item.risk == null || item.weight <= 0) return acc
+        return { weighted: acc.weighted + item.risk * item.weight, weight: acc.weight + item.weight }
+      },
+      { weighted: 0, weight: 0 }
+    )
+    return totals.weight > 0 ? { score: totals.weighted / totals.weight, contributors } : null
+  }, [outcomeBreakdowns])
+  const topRiskContributors = callRiskScore
+    ? [...callRiskScore.contributors]
+      .filter((item) => item.risk != null && item.weight > 0)
+      .sort((a, b) => (b.risk ?? 0) * b.weight - (a.risk ?? 0) * a.weight)
+      .slice(0, 3)
+    : []
   const currentHourRisk = outcomeResult?.groups?.find((item) => Number(item.key) === hour) ?? null
 
   return (
@@ -1155,6 +1185,25 @@ function SimulationTab() {
                 <strong>{hour}시 기준 위험률 {pct(currentHourRisk.problem_rate)}</strong>
                 <div style={{ color: C.sub, marginTop: 6 }}>
                   과거 {currentHourRisk.total.toLocaleString()}건 중 expired {currentHourRisk.expired.toLocaleString()}건, canceled {currentHourRisk.canceled.toLocaleString()}건입니다.
+                </div>
+              </div>
+            )}
+            {callRiskScore && (
+              <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: 14, padding: 16, borderRadius: 8, background: 'rgba(244,63,94,.10)', border: '1px solid rgba(244,63,94,.32)' }}>
+                <div>
+                  <div style={{ color: C.muted, fontWeight: 850, marginBottom: 8 }}>call_risk_score</div>
+                  <div style={{ fontSize: 34, fontWeight: 950, color: callRiskScore.score >= 0.6 ? C.red : C.yellow }}>{pct(callRiskScore.score)}</div>
+                </div>
+                <div style={{ color: C.sub, lineHeight: 1.55 }}>
+                  <strong style={{ color: C.text }}>0.35*time + 0.20*distance + 0.20*fare + 0.15*paid + 0.10*surge</strong>
+                  <div style={{ marginTop: 6 }}>이 값은 과거 expired+canceled 비율로 만든 콜 난이도 지표이며, 아직 22D 코사인 추천 순위에는 반영하지 않습니다.</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
+                    {topRiskContributors.map((item) => (
+                      <span key={item.key} style={{ padding: '6px 9px', borderRadius: 8, border: `1px solid ${C.border}`, background: '#0B1222', color: C.text, fontWeight: 800 }}>
+                        {item.title} {pct(item.risk ?? 0)} · {Math.round(item.weight * 100)}%
+                      </span>
+                    ))}
+                  </div>
                 </div>
               </div>
             )}
@@ -1423,3 +1472,4 @@ export default function MatchingLab({ initialTab = 'load' }: { initialTab?: TabK
     </div>
   )
 }
+
