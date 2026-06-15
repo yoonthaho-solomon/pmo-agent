@@ -952,7 +952,7 @@ function SimulationTab() {
     setOutcomeLoading(true)
     setOutcomeResult(null)
     try {
-      const params = new URLSearchParams({ group_by: 'hour', limit: '24' })
+      const params = new URLSearchParams({ group_by: 'hour', limit: '24', asp_id: String(aspId) })
       if (selectedActualCall?.call_date) {
         params.set('date_from', selectedActualCall.call_date)
         params.set('date_to', selectedActualCall.call_date)
@@ -1098,7 +1098,7 @@ function SimulationTab() {
 
       <Panel>
         <SectionHeader title="콜 난이도 · 만료 위험" desc="과거 실제 outcome 기준으로 expired와 canceled가 많이 난 조건을 분리 표시합니다. 현재 22D 코사인 점수에는 섞지 않습니다." />
-        {!outcomeResult && <div style={{ color: C.muted }}>콜 위험도 조회를 누르면 선택 날짜 기준 시간대 outcome이 표시됩니다. ASP별 필터는 전용 인덱스 적용 후 연결합니다.</div>}
+        {!outcomeResult && <div style={{ color: C.muted }}>콜 위험도 조회를 누르면 같은 ASP와 선택 날짜 기준 시간대 outcome이 표시됩니다.</div>}
         {Boolean(outcomeResult?.error) && <div style={{ color: C.red }}>{String(typeof outcomeResult?.error === 'object' ? JSON.stringify(outcomeResult.error) : outcomeResult?.error)}</div>}
         {outcomeResult?.summary && (
           <div style={{ display: 'grid', gap: 14 }}>
