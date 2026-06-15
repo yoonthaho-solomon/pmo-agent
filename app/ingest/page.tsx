@@ -1,303 +1,263 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { createClient } from '@supabase/supabase-js'
 
-type UploadResult = {
-  message?: string
-  service_date?: string
-  driver_count?: number
-  callcard_count?: number
-  data_rows_read?: number
-  match_count?: number
-  call_count?: number
-  total_rows_read?: number
-  hourly_inserted?: number
-  driver_inserted?: number
-  elapsed_ms?: number
-  pipeline_results?: { step: string; result: unknown }[]
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
+
+type TableStatus = {
+  table: string
+  label: string
+  count: number | null
+  minDate: string | null
+  maxDate: string | null
   error?: string
-  detail?: unknown
+}
+
+type DateRow = {
+  date: string
+  callcards: number | null
+  driverLogs: number | null
+  matches: number | null
+}
+
+type MeterStatusResponse = {
+  tables?: TableStatus[]
+  dateCounts?: { date: string; hourly: number | null; driver: number | null }[]
 }
 
 const C = {
   bg: '#080C18',
   panel: '#0F1628',
   border: '#1E2D4A',
-  border2: '#2D4470',
   text: '#F1F5F9',
-  sub: '#94A3B8',
-  muted: '#4E6080',
+  sub: '#A9B7CC',
+  muted: '#6C7D99',
   cyan: '#22D3EE',
-  purple: '#8B5CF6',
   green: '#10B981',
-  red: '#F43F5E',
   yellow: '#F59E0B',
-  orange: '#FB923C',
+  purple: '#8B5CF6',
 }
 
-const VERCEL_UPLOAD_LIMIT_BYTES = 4 * 1024 * 1024
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)}KB`
-  return `${(bytes / 1024 / 1024).toFixed(1)}MB`
+function fmt(n: number | null | undefined) {
+  return n == null ? '-' : n.toLocaleString()
 }
 
-function Button({ children, onClick, disabled, tone = 'cyan' }: { children: React.ReactNode; onClick?: () => void; disabled?: boolean; tone?: 'cyan' | 'purple' | 'green' | 'orange' }) {
-  const color = tone === 'purple' ? C.purple : tone === 'green' ? C.green : tone === 'orange' ? C.orange : C.cyan
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      style={{
-        height: 40,
-        borderRadius: 8,
-        border: `1px solid ${disabled ? C.border : color}`,
-        background: disabled ? 'transparent' : `${color}22`,
-        color: disabled ? C.muted : color,
-        padding: '0 14px',
-        fontWeight: 850,
-        cursor: disabled ? 'not-allowed' : 'pointer',
-      }}
-    >
-      {children}
-    </button>
-  )
+function range(row?: TableStatus) {
+  if (!row?.minDate || !row?.maxDate) return '-'
+  return `${row.minDate} ~ ${row.maxDate}`
 }
 
-function FilePicker({ label, file, onChange }: { label: string; file: File | null; onChange: (file: File | null) => void }) {
-  return (
-    <label style={{ display: 'grid', gap: 8, color: C.sub, fontWeight: 850 }}>
-      {label}
-      <input
-        type="file"
-        accept=".xlsx,.xls"
-        onChange={(event) => onChange(event.target.files?.[0] ?? null)}
-        style={{
-          width: '100%',
-          border: `1px dashed ${file ? C.green : C.border2}`,
-          background: '#0B1222',
-          color: file ? C.text : C.sub,
-          borderRadius: 8,
-          minHeight: 44,
-          padding: 10,
-          fontSize: 14,
-        }}
-      />
-    </label>
-  )
+function days(start?: string | null, end?: string | null) {
+  if (!start || !end) return '-'
+  const diff = new Date(`${end}T00:00:00`).getTime() - new Date(`${start}T00:00:00`).getTime()
+  return `${Math.max(0, Math.round(diff / 86400000) + 1)}일`
+}
+
+function recentDates(maxDate: string | null | undefined, count = 14) {
+  if (!maxDate) return []
+  const base = new Date(`${maxDate}T00:00:00`)
+  return Array.from({ length: count }, (_, index) => {
+    const d = new Date(base)
+    d.setDate(base.getDate() - (count - 1 - index))
+    return d.toISOString().slice(0, 10)
+  })
+}
+
+async function tableStatus(table: string, label: string, dateColumn: string): Promise<TableStatus> {
+  const { count, error } = await supabase.from(table).select('*', { count: 'exact', head: true })
+  if (error) return { table, label, count: null, minDate: null, maxDate: null, error: error.message }
+  const [minRes, maxRes] = await Promise.all([
+    supabase.from(table).select(dateColumn).order(dateColumn, { ascending: true }).limit(1),
+    supabase.from(table).select(dateColumn).order(dateColumn, { ascending: false }).limit(1),
+  ])
+  return {
+    table,
+    label,
+    count: count ?? 0,
+    minDate: (minRes.data?.[0] as Record<string, string> | undefined)?.[dateColumn] ?? null,
+    maxDate: (maxRes.data?.[0] as Record<string, string> | undefined)?.[dateColumn] ?? null,
+    error: minRes.error?.message ?? maxRes.error?.message,
+  }
+}
+
+async function countByDate(table: string, column: string, date: string) {
+  const { count, error } = await supabase.from(table).select('*', { count: 'exact', head: true }).eq(column, date)
+  return error ? null : count ?? 0
 }
 
 export default function IngestPage() {
-  const [callcardFile, setCallcardFile] = useState<File | null>(null)
-  const [remappedFile, setRemappedFile] = useState<File | null>(null)
-  const [meterFile, setMeterFile] = useState<File | null>(null)
-  const [running, setRunning] = useState<string | null>(null)
-  const [result, setResult] = useState<UploadResult | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [callTables, setCallTables] = useState<TableStatus[]>([])
+  const [meterTables, setMeterTables] = useState<TableStatus[]>([])
+  const [dateRows, setDateRows] = useState<DateRow[]>([])
+  const [meterDates, setMeterDates] = useState<MeterStatusResponse['dateCounts']>([])
 
-  const callDate = callcardFile?.name.match(/^(\d{4})(\d{2})(\d{2})/)
-  const serviceDate = callDate ? `${callDate[1]}-${callDate[2]}-${callDate[3]}` : ''
-  const callUploadBytes = (callcardFile?.size ?? 0) + (remappedFile?.size ?? 0)
-  const callUploadTooLarge = callUploadBytes > VERCEL_UPLOAD_LIMIT_BYTES
-
-  async function requestForm(endpoint: string, form: FormData) {
-    const res = await fetch(endpoint, { method: 'POST', body: form })
-    const json = await res.json()
-    if (!res.ok) throw json
-    return json
-  }
-
-  async function requestJson(endpoint: string, body: object) {
-    const res = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
-    const json = await res.json()
-    if (!res.ok) throw json
-    return json
-  }
-
-  async function postForm(endpoint: string, form: FormData, name: string) {
-    setRunning(name)
-    setResult(null)
-    try {
-      const json = await requestForm(endpoint, form)
-      setResult(json)
-    } catch (err) {
-      setResult({ error: `${name} 실행 실패`, detail: err })
-    } finally {
-      setRunning(null)
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      setLoading(true)
+      const calls = await Promise.all([
+        tableStatus('callcard_mbti', '호출데이터 / 콜카드', 'call_date'),
+        tableStatus('driver_daily_logs', '기사 호출 로그', 'service_date'),
+        tableStatus('matching_scores', '매칭 Top 10 결과', 'match_date'),
+      ])
+      const callRange = calls[0]
+      const rows = await Promise.all(recentDates(callRange.maxDate).map(async (date) => ({
+        date,
+        callcards: await countByDate('callcard_mbti', 'call_date', date),
+        driverLogs: await countByDate('driver_daily_logs', 'service_date', date),
+        matches: await countByDate('matching_scores', 'match_date', date),
+      })))
+      const meter = await fetch('/api/meter-status', { cache: 'no-store' }).then((res) => res.json()).catch(() => ({} as MeterStatusResponse))
+      if (cancelled) return
+      setCallTables(calls)
+      setDateRows(rows)
+      setMeterTables(meter.tables ?? [])
+      setMeterDates(meter.dateCounts ?? [])
+      setLoading(false)
     }
-  }
-
-  async function runJson(endpoint: string, body: object, name: string) {
-    setRunning(name)
-    setResult(null)
-    try {
-      const json = await requestJson(endpoint, body)
-      setResult(json)
-    } catch (err) {
-      setResult({ error: `${name} 실행 실패`, detail: err })
-    } finally {
-      setRunning(null)
+    load()
+    return () => {
+      cancelled = true
     }
-  }
+  }, [])
 
-  function callcardForm() {
-    if (!callcardFile || !remappedFile) return null
-    const form = new FormData()
-    form.append('callcard_eta', callcardFile)
-    form.append('remapped', remappedFile)
-    return form
-  }
-
-  async function runCallcardPipeline() {
-    const form = callcardForm()
-    if (!form || !serviceDate) return
-    setRunning('pipeline')
-    setResult(null)
-    const pipelineResults: { step: string; result: unknown }[] = []
-    try {
-      setResult({ message: '1/4 호출데이터 적재 중', pipeline_results: pipelineResults })
-      pipelineResults.push({ step: 'callcard-mbti', result: await requestForm('/api/callcard-mbti', form) })
-
-      setResult({ message: '2/4 기사 로그 생성 중', pipeline_results: pipelineResults })
-      const driverForm = callcardForm()
-      if (!driverForm) throw new Error('호출데이터 파일이 필요합니다.')
-      pipelineResults.push({ step: 'driver-logs', result: await requestForm('/api/driver-logs', driverForm) })
-
-      setResult({ message: '3/4 기사 벡터 생성 중', pipeline_results: pipelineResults })
-      pipelineResults.push({ step: 'driver-mbti', result: await requestJson('/api/driver-mbti', {}) })
-
-      setResult({ message: '4/4 매칭 계산 중', pipeline_results: pipelineResults })
-      pipelineResults.push({ step: 'matching', result: await requestJson('/api/matching', { call_date: serviceDate }) })
-
-      setResult({ message: '전체 파이프라인 완료', service_date: serviceDate, pipeline_results: pipelineResults })
-    } catch (err) {
-      setResult({ error: '전체 파이프라인 실행 실패', service_date: serviceDate, pipeline_results: pipelineResults, detail: err })
-    } finally {
-      setRunning(null)
-    }
-  }
+  const callcards = callTables.find((row) => row.table === 'callcard_mbti')
+  const meterMain = meterTables.find((row) => row.table === 'meter_hourly_logs') ?? meterTables[0]
+  const missingRows = useMemo(() => dateRows.filter((row) => !row.callcards || !row.driverLogs || !row.matches), [dateRows])
 
   return (
-    <div style={{ minHeight: '100vh', background: C.bg, color: C.text, fontFamily: 'Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}>
-      <header style={{ height: 56, borderBottom: `1px solid ${C.border}`, background: 'rgba(8,12,24,.95)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px', position: 'sticky', top: 0, zIndex: 10 }}>
-        <div>
-          <div style={{ fontSize: 16, fontWeight: 900 }}>PMO Ingest Control</div>
-          <div style={{ color: C.muted, fontSize: 14 }}>파일 적재와 재처리 전용 화면</div>
-        </div>
-        <nav style={{ display: 'flex', gap: 8 }}>
-          <Link href="/dashboard" style={{ color: C.sub, textDecoration: 'none', border: `1px solid ${C.border}`, borderRadius: 8, padding: '7px 10px', fontSize: 14 }}>대시보드</Link>
-          <Link href="/simulator" style={{ color: C.sub, textDecoration: 'none', border: `1px solid ${C.border}`, borderRadius: 8, padding: '7px 10px', fontSize: 14 }}>시뮬레이터</Link>
-        </nav>
-      </header>
+    <main style={{ minHeight: '100vh', background: C.bg, color: C.text, fontFamily: 'Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}>
+      <div style={{ maxWidth: 1320, margin: '0 auto', padding: '30px 28px 46px' }}>
+        <TopNav active="적재현황" />
+        <header style={{ margin: '22px 0 24px' }}>
+          <h1 style={{ fontSize: 36, margin: 0, fontWeight: 950 }}>적재현황</h1>
+          <p style={{ color: C.sub, fontSize: 18, lineHeight: 1.6, margin: '10px 0 0' }}>
+            이 화면은 파일을 직접 업로드하지 않습니다. 폴더 자동 적재 기준으로 Supabase에 들어간 날짜 범위와 누락 여부만 확인합니다.
+          </p>
+        </header>
 
-      <main style={{ maxWidth: 1120, margin: '0 auto', padding: 24, display: 'grid', gap: 18 }}>
-        <section>
-          <h1 style={{ fontSize: 28, margin: 0 }}>적재 관리</h1>
-          <p style={{ color: C.sub, lineHeight: 1.55 }}>이 화면은 Supabase 데이터를 변경할 수 있는 관리용 화면입니다. 운영 대시보드와 시뮬레이터는 읽기 전용으로 분리했습니다.</p>
+        {loading && <div style={{ color: C.sub, fontSize: 18 }}>데이터를 불러오는 중입니다.</div>}
+
+        <section style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 14, marginBottom: 24 }}>
+          <Stat title="호출데이터" value={range(callcards)} caption={days(callcards?.minDate, callcards?.maxDate)} color={C.green} />
+          <Stat title="앱미터데이터" value={range(meterMain)} caption={meterMain?.label ?? '보조 시장 기준 데이터'} color={C.cyan} />
+          <Stat title="콜카드 건수" value={fmt(callcards?.count)} caption="callcard_mbti" color={C.green} />
+          <Stat title="누락 확인" value={`${missingRows.length}일`} caption="최근 14일 기준" color={missingRows.length ? C.yellow : C.green} />
         </section>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1.2fr .8fr', gap: 18 }}>
-          <section style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 8, padding: 20 }}>
-            <h2 style={{ fontSize: 20, margin: '0 0 14px' }}>호출데이터 / 기사 로그</h2>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <FilePicker label="callcard_eta" file={callcardFile} onChange={setCallcardFile} />
-              <FilePicker label="remapped" file={remappedFile} onChange={setRemappedFile} />
-            </div>
-            <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
-              <Button
-                disabled={!callcardFile || !remappedFile || callUploadTooLarge || running != null}
-                onClick={() => {
-                  const form = callcardForm()
-                  if (!form) return
-                  postForm('/api/callcard-mbti', form, 'callcard')
-                }}
-              >
-                호출데이터 적재
-              </Button>
-              <Button
-                tone="green"
-                disabled={!callcardFile || !remappedFile || callUploadTooLarge || running != null}
-                onClick={() => {
-                  const form = callcardForm()
-                  if (!form) return
-                  postForm('/api/driver-logs', form, 'driver-logs')
-                }}
-              >
-                기사 로그 생성
-              </Button>
-              <Button tone="purple" disabled={running != null} onClick={() => runJson('/api/driver-mbti', {}, 'driver-mbti')}>
-                기사 벡터 생성
-              </Button>
-              <Button tone="orange" disabled={!serviceDate || running != null} onClick={() => runJson('/api/matching', { call_date: serviceDate }, 'matching')}>
-                매칭 계산
-              </Button>
-              <Button tone="green" disabled={!callcardFile || !remappedFile || !serviceDate || callUploadTooLarge || running != null} onClick={runCallcardPipeline}>
-                전체 파이프라인 실행
-              </Button>
-            </div>
-            {callcardFile && remappedFile && (
-              <div style={{ marginTop: 12, padding: 12, borderRadius: 8, background: callUploadTooLarge ? 'rgba(244,63,94,.10)' : 'rgba(16,185,129,.08)', border: `1px solid ${callUploadTooLarge ? 'rgba(244,63,94,.35)' : 'rgba(16,185,129,.25)'}`, color: callUploadTooLarge ? C.red : C.green, lineHeight: 1.55, fontSize: 14, fontWeight: 800 }}>
-                선택한 호출데이터 합계 {formatBytes(callUploadBytes)}.
-                {callUploadTooLarge
-                  ? ' 운영 Vercel 화면 업로드 한도를 넘을 수 있어 로컬/서버 배치 적재가 필요합니다.'
-                  : ' 화면 업로드 가능 범위입니다.'}
-              </div>
-            )}
-            <div style={{ marginTop: 12, color: C.sub, lineHeight: 1.55, fontSize: 14 }}>
-              개별 버튼은 해당 단계만 실행합니다. 전체 파이프라인 실행은 호출데이터 적재 → 기사 로그 생성 → 기사 벡터 생성 → 매칭 계산을 순서대로 실행합니다.
-            </div>
-          </section>
+        <section style={{ display: 'grid', gridTemplateColumns: '1.2fr .8fr', gap: 18 }}>
+          <Panel title="호출데이터 날짜별 상태" desc="콜카드, 기사 로그, 매칭 결과가 같은 날짜로 맞아야 AI 우선배차 검증에 사용할 수 있습니다.">
+            <Table
+              headers={['날짜', '콜카드', '기사 로그', '매칭 결과', '상태']}
+              rows={dateRows.map((row) => {
+                const ok = Boolean(row.callcards && row.driverLogs && row.matches)
+                return [row.date, fmt(row.callcards), fmt(row.driverLogs), fmt(row.matches), ok ? '정상' : '확인 필요']
+              })}
+            />
+          </Panel>
 
-          <section style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 8, padding: 20 }}>
-            <h2 style={{ fontSize: 20, margin: '0 0 14px' }}>앱미터데이터 · 시장 기준</h2>
-            <FilePicker label="앱미터 엑셀" file={meterFile} onChange={setMeterFile} />
-            <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
-              <Button
-                tone="green"
-                disabled={!meterFile || running != null}
-                onClick={() => {
-                  if (!meterFile) return
-                  const form = new FormData()
-                  form.append('file', meterFile)
-                  postForm('/api/meter-logs', form, 'meter-daily')
-                }}
-              >
-                일별 앱미터 적재
-              </Button>
-              <Button
-                tone="orange"
-                disabled={!meterFile || running != null}
-                onClick={() => {
-                  if (!meterFile) return
-                  const form = new FormData()
-                  form.append('meter_file', meterFile)
-                  postForm('/api/meter-excel', form, 'meter-excel')
-                }}
-              >
-                2시트 앱미터 적재
-              </Button>
+          <Panel title="앱미터 적재 상태" desc="앱미터는 기사 MBTI의 주 원천이 아니라 천안 택시 흐름을 보는 보조 데이터입니다.">
+            <div style={{ display: 'grid', gap: 10 }}>
+              {meterTables.map((row) => (
+                <div key={row.table} style={{ border: `1px solid ${C.border}`, borderRadius: 8, padding: 14, background: '#0B1222' }}>
+                  <div style={{ fontSize: 17, fontWeight: 950 }}>{row.label}</div>
+                  <div style={{ color: C.cyan, fontSize: 22, fontWeight: 950, marginTop: 8 }}>{fmt(row.count)}</div>
+                  <div style={{ color: C.sub, fontSize: 15, marginTop: 6 }}>{range(row)}</div>
+                </div>
+              ))}
+              {meterDates?.slice(-4).map((row) => (
+                <div key={row.date} style={{ color: C.muted, fontSize: 15 }}>
+                  {row.date}: 시간대 {fmt(row.hourly)}건 / 기사별 {fmt(row.driver)}건
+                </div>
+              ))}
             </div>
-            <div style={{ marginTop: 14, padding: 12, borderRadius: 8, background: 'rgba(245,158,11,.08)', border: `1px solid rgba(245,158,11,.25)`, color: C.yellow, lineHeight: 1.55 }}>
-              앱미터는 기사 MBTI의 주 원천이 아니라 천안 택시 흐름, 수입, 운행량을 보는 보조 시장 기준 데이터입니다. 일별 적재는 <strong>meter_daily_logs</strong>, 2시트 적재는 <strong>meter_hourly_logs</strong>, <strong>meter_driver_logs</strong>를 사용합니다.
-            </div>
-          </section>
-        </div>
+          </Panel>
+        </section>
 
-        {(running || result) && (
-          <section style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 8, padding: 20 }}>
-            {running && <p style={{ margin: 0, color: C.cyan, fontWeight: 850 }}>실행 중: {running}</p>}
-            {result && (
-              <pre style={{ marginTop: 14, maxHeight: 260, overflow: 'auto', color: result.error ? C.red : C.green, background: '#08101E', border: `1px solid ${C.border}`, borderRadius: 8, padding: 12, fontSize: 14 }}>
-                {JSON.stringify(result, null, 2)}
-              </pre>
-            )}
-          </section>
-        )}
-      </main>
+        <Panel title="자동 적재 방식" desc="운영 화면 업로드는 큰 파일에서 실패할 수 있어 폴더 감시 방식으로 전환했습니다.">
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+            <Code title="호출데이터 자동 감시" command="npm run call:watch" />
+            <Code title="앱미터 자동 감시" command="npm run meter:watch" />
+          </div>
+        </Panel>
+      </div>
+    </main>
+  )
+}
+
+function TopNav({ active }: { active: string }) {
+  const links = [
+    ['대시보드', '/dashboard'],
+    ['적재현황', '/ingest'],
+    ['벡터리스트', '/vectors'],
+    ['시뮬레이터', '/simulator'],
+    ['배차로직', '/dispatch-logic'],
+  ]
+  return (
+    <nav style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+      {links.map(([label, href]) => (
+        <Link key={href} href={href} style={{ color: label === active ? C.text : C.sub, border: `1px solid ${label === active ? C.green : C.border}`, background: label === active ? 'rgba(16,185,129,.16)' : 'transparent', borderRadius: 8, padding: '9px 12px', textDecoration: 'none', fontWeight: 900 }}>
+          {label}
+        </Link>
+      ))}
+    </nav>
+  )
+}
+
+function Stat({ title, value, caption, color }: { title: string; value: string; caption: string; color: string }) {
+  return (
+    <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 8, padding: 18, minHeight: 126 }}>
+      <div style={{ color: C.sub, fontSize: 16, fontWeight: 850 }}>{title}</div>
+      <div style={{ color, fontSize: 26, lineHeight: 1.15, fontWeight: 950, marginTop: 12 }}>{value}</div>
+      <div style={{ color: C.muted, fontSize: 15, marginTop: 8 }}>{caption}</div>
     </div>
   )
+}
+
+function Panel({ title, desc, children }: { title: string; desc: string; children: React.ReactNode }) {
+  return (
+    <section style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 8, padding: 20, marginBottom: 18 }}>
+      <h2 style={{ fontSize: 23, margin: 0, fontWeight: 950 }}>{title}</h2>
+      <p style={{ color: C.sub, fontSize: 16, lineHeight: 1.55, margin: '8px 0 16px' }}>{desc}</p>
+      {children}
+    </section>
+  )
+}
+
+function Table({ headers, rows }: { headers: string[]; rows: string[][] }) {
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 720 }}>
+        <thead>
+          <tr>{headers.map((h) => <th key={h} style={th()}>{h}</th>)}</tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => <tr key={row[0]}>{row.map((cell, i) => <td key={`${row[0]}-${i}`} style={td(i === row.length - 1 && cell !== '정상' ? C.yellow : C.text)}>{cell}</td>)}</tr>)}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function Code({ title, command }: { title: string; command: string }) {
+  return (
+    <div style={{ border: `1px solid ${C.border}`, borderRadius: 8, padding: 14, background: '#0B1222' }}>
+      <div style={{ color: C.sub, fontSize: 15, fontWeight: 850 }}>{title}</div>
+      <code style={{ display: 'block', color: C.green, fontSize: 18, fontWeight: 900, marginTop: 8 }}>{command}</code>
+    </div>
+  )
+}
+
+function th(): React.CSSProperties {
+  return { textAlign: 'left', color: C.sub, padding: '12px 10px', borderBottom: `1px solid ${C.border}`, fontSize: 15 }
+}
+
+function td(color = C.text): React.CSSProperties {
+  return { color, padding: '12px 10px', borderBottom: `1px solid ${C.border}`, fontSize: 15, fontWeight: 780 }
 }
