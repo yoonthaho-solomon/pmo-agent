@@ -1,107 +1,340 @@
 import Link from 'next/link'
-import { InsightCard, Panel, PmoShell, ui } from '@/app/components/PmoShell'
+import type { ReactNode } from 'react'
 
-const workflows = [
+const C = {
+  bg: '#080C18',
+  top: '#070A12',
+  panel: 'rgba(15,22,40,.92)',
+  line: '#1E2D4A',
+  text: '#F1F5F9',
+  sub: '#9FB0C8',
+  muted: '#5D6B85',
+  cyan: '#22D3EE',
+  green: '#10B981',
+  red: '#F43F5E',
+  yellow: '#F59E0B',
+  purple: '#8B5CF6',
+  orange: '#FB923C',
+}
+
+const nav = [
+  ['적재현황', '/ingest'],
+  ['벡터리스트', '/vectors'],
+  ['시뮬레이터', '/simulator'],
+  ['배차로직', '/dispatch-logic'],
+]
+
+const kpis = [
+  { label: '데이터 준비', value: '5/23-6/11', sub: '호출데이터 기준', color: C.cyan },
+  { label: '벡터 기준', value: '22D', sub: '콜카드 x 기사', color: C.green },
+  { label: '추천 출력', value: 'Top 10', sub: '코사인 유사도', color: C.purple },
+  { label: '적용 방식', value: '우선정렬', sub: '기존 배차 유지', color: C.orange },
+  { label: 'Fallback', value: '기존순차', sub: '미수락/만료 시', color: C.yellow },
+]
+
+const flow = [
   {
-    href: '/ingest',
+    no: '01',
     title: '적재현황',
-    label: '먼저 확인',
-    desc: '호출데이터와 앱미터데이터가 어느 날짜까지 들어왔는지 확인합니다.',
-    color: ui.green,
+    href: '/ingest',
+    desc: '호출/앱미터 데이터가 어느 날짜까지 준비됐는지 확인합니다.',
+    color: C.green,
   },
   {
-    href: '/vectors',
+    no: '02',
     title: '벡터리스트',
-    label: '핵심 설명',
-    desc: '콜카드 팩터와 기사 능력치를 카드처럼 비교하고 코사인 유사도를 봅니다.',
-    color: ui.cyan,
+    href: '/vectors',
+    desc: '콜카드와 기사 능력치를 22D 카드와 연결 그래프로 봅니다.',
+    color: C.cyan,
   },
   {
-    href: '/simulator',
+    no: '03',
     title: '시뮬레이터',
-    label: '결과 검증',
-    desc: '새 콜 조건을 넣고 누적 기사 정보 중 가장 잘 맞는 후보를 찾습니다.',
-    color: ui.purple,
+    href: '/simulator',
+    desc: '콜 조건을 입력하고 가장 잘 맞는 기사 Top 10을 찾습니다.',
+    color: C.purple,
   },
   {
-    href: '/dispatch-logic',
+    no: '04',
     title: '배차로직',
-    label: '개발 전달',
-    desc: '기존 배차 후보를 AI 유사도 순으로 정렬하는 계약을 정리합니다.',
-    color: ui.orange,
+    href: '/dispatch-logic',
+    desc: '개발자에게 전달할 후보 생성, 우선정렬, fallback 구조입니다.',
+    color: C.orange,
   },
 ]
 
 export default function DashboardPage() {
   return (
-    <PmoShell
-      active="대시보드"
-      kicker="SERVICE MAP"
-      title="AI 우선배차를 설명하는 운영 콘솔"
-      description="이 화면은 모든 정보를 한 번에 쏟아내지 않습니다. 데이터가 준비됐는지, 벡터가 어떤 의미인지, 실제 추천이 어떻게 나오는지, 개발자에게 무엇을 전달해야 하는지를 순서대로 보여줍니다."
-      status="제품 구조 정리"
+    <main
+      style={{
+        minHeight: '100vh',
+        background: C.bg,
+        color: C.text,
+        fontFamily: 'Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+        overflow: 'hidden',
+      }}
     >
-      <section style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 14, marginBottom: 18 }}>
-        <InsightCard tone={ui.green} title="1. 데이터" value="적재현황" desc="호출과 앱미터 데이터의 날짜 범위와 누락을 봅니다." />
-        <InsightCard tone={ui.cyan} title="2. 벡터" value="22D" desc="콜카드와 기사를 같은 팩터 체계로 변환합니다." />
-        <InsightCard tone={ui.purple} title="3. 추천" value="Top 10" desc="코사인 유사도가 높은 기사부터 확인합니다." />
-        <InsightCard tone={ui.orange} title="4. 전달" value="API" desc="기존 배차를 유지하고 우선순위만 추가합니다." />
+      <TopBar />
+      <KpiStrip />
+
+      <section
+        style={{
+          position: 'relative',
+          minHeight: 'calc(100vh - 126px)',
+          borderTop: `1px solid ${C.line}`,
+          background:
+            'radial-gradient(circle at 48% 40%, rgba(34,211,238,.12), transparent 24%), linear-gradient(135deg, rgba(10,18,32,.92), rgba(8,12,24,.98))',
+        }}
+      >
+        <MapGrid />
+        <LeftPanel />
+        <CenterMission />
+        <RightPanel />
+        <BottomDock />
       </section>
-
-      <section style={{ display: 'grid', gridTemplateColumns: '1.1fr .9fr', gap: 18 }}>
-        <Panel title="사용 흐름" desc="운영자와 개발자가 같은 흐름으로 이해하도록 화면을 4단계로 나눴습니다.">
-          <div style={{ display: 'grid', gap: 12 }}>
-            {workflows.map((item, index) => (
-              <Link key={item.href} href={item.href} style={{ color: 'inherit', textDecoration: 'none' }}>
-                <article style={{ display: 'grid', gridTemplateColumns: '50px 150px 1fr 110px', gap: 14, alignItems: 'center', minHeight: 88, border: `1px solid ${ui.border}`, borderRadius: 8, background: '#0B1222', padding: 16 }}>
-                  <strong style={{ color: item.color, fontSize: 26 }}>{String(index + 1).padStart(2, '0')}</strong>
-                  <div>
-                    <div style={{ color: item.color, fontSize: 13, fontWeight: 950 }}>{item.label}</div>
-                    <div style={{ fontSize: 21, fontWeight: 950, marginTop: 4 }}>{item.title}</div>
-                  </div>
-                  <p style={{ color: ui.sub, fontSize: 16, lineHeight: 1.5, margin: 0 }}>{item.desc}</p>
-                  <span style={{ color: item.color, fontSize: 15, fontWeight: 950, textAlign: 'right' }}>열기</span>
-                </article>
-              </Link>
-            ))}
-          </div>
-        </Panel>
-
-        <Panel title="보여줄 것과 숨길 것" desc="서비스 화면에서는 판단에 필요한 정보만 먼저 보이게 합니다.">
-          <div style={{ display: 'grid', gap: 14 }}>
-            <Rule tone={ui.green} title="보여줄 것" lines={['데이터 날짜 범위', '콜카드 주요 조건', '기사 능력치 팩터', '코사인 유사도', '개발 전달 흐름']} />
-            <Rule tone={ui.red} title="숨길 것" lines={['긴 원본 JSON', '불필요한 내부 테이블명 반복', 'mock 값을 실제 배차처럼 보이는 표현', '확정되지 않은 최종 배차점수']} />
-          </div>
-        </Panel>
-      </section>
-
-      <Panel title="Uber · Grab · DiDi 반영 방식" desc="참고 서비스의 장점은 각각 다른 화면에 녹입니다. 그대로 베끼는 것이 아니라 PMO 배차 설명에 맞게 번역합니다.">
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
-          <Ref title="Grab" color={ui.purple} desc="시뮬레이터에서 기존 정책과 AI 추천 결과를 비교하고, 점수 구성요소를 설명합니다." />
-          <Ref title="Uber" color={ui.cyan} desc="배차로직에서 후보 생성, 상태 필터, 반경 확장, fallback 흐름으로 반영합니다." />
-          <Ref title="DiDi" color={ui.green} desc="벡터리스트에서 기사 누적 패턴을 능력치처럼 보여주고, 이후 도착지역 가치로 확장합니다." />
-        </div>
-      </Panel>
-    </PmoShell>
+    </main>
   )
 }
 
-function Rule({ tone, title, lines }: { tone: string; title: string; lines: string[] }) {
+function TopBar() {
   return (
-    <div style={{ border: `1px solid ${ui.border}`, borderRadius: 8, background: '#0B1222', padding: 16 }}>
-      <div style={{ color: tone, fontSize: 18, fontWeight: 950 }}>{title}</div>
-      <div style={{ display: 'grid', gap: 8, marginTop: 12 }}>
-        {lines.map((line) => <div key={line} style={{ color: ui.sub, fontSize: 16, fontWeight: 780 }}>{line}</div>)}
+    <header
+      style={{
+        height: 56,
+        background: C.top,
+        borderBottom: `1px solid ${C.line}`,
+        display: 'grid',
+        gridTemplateColumns: '270px 1fr 260px',
+        alignItems: 'center',
+        padding: '0 20px',
+        gap: 18,
+      }}
+    >
+      <Link href="/dashboard" style={{ color: C.text, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span
+          style={{
+            width: 30,
+            height: 30,
+            borderRadius: 8,
+            display: 'grid',
+            placeItems: 'center',
+            border: `1px solid ${C.cyan}`,
+            background: 'rgba(34,211,238,.14)',
+            color: C.cyan,
+            fontWeight: 950,
+          }}
+        >
+          PM
+        </span>
+        <span style={{ fontSize: 16, fontWeight: 950 }}>
+          Happycall PMO <span style={{ color: C.cyan }}>AI Dispatch</span>
+        </span>
+      </Link>
+      <nav style={{ display: 'flex', justifyContent: 'center', gap: 10 }}>
+        {nav.map(([label, href]) => (
+          <Link
+            key={href}
+            href={href}
+            style={{
+              color: C.sub,
+              textDecoration: 'none',
+              border: `1px solid ${C.line}`,
+              borderRadius: 8,
+              padding: '8px 13px',
+              fontSize: 14,
+              fontWeight: 850,
+              background: 'rgba(15,22,40,.72)',
+            }}
+          >
+            {label}
+          </Link>
+        ))}
+      </nav>
+      <div style={{ justifySelf: 'end', display: 'flex', gap: 8 }}>
+        <Badge>LIVE PREP</Badge>
+        <Badge color={C.green}>BUILD OK</Badge>
       </div>
+    </header>
+  )
+}
+
+function KpiStrip() {
+  return (
+    <section style={{ height: 70, background: '#090D17', borderBottom: `1px solid ${C.line}`, display: 'grid', gridTemplateColumns: `repeat(${kpis.length}, 1fr)` }}>
+      {kpis.map((kpi) => (
+        <div key={kpi.label} style={{ borderRight: `1px solid ${C.line}`, padding: '10px 18px', display: 'grid', alignContent: 'center' }}>
+          <div style={{ color: C.muted, fontSize: 13, fontWeight: 850 }}>{kpi.label}</div>
+          <div style={{ color: kpi.color, fontSize: 28, lineHeight: 1, fontWeight: 950, marginTop: 3 }}>{kpi.value}</div>
+          <div style={{ color: C.muted, fontSize: 12, marginTop: 3 }}>{kpi.sub}</div>
+        </div>
+      ))}
+    </section>
+  )
+}
+
+function MapGrid() {
+  return (
+    <div aria-hidden style={{ position: 'absolute', inset: 0, opacity: 0.72 }}>
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          backgroundImage:
+            'linear-gradient(rgba(255,255,255,.045) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.04) 1px, transparent 1px)',
+          backgroundSize: '58px 58px',
+        }}
+      />
+      <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
+        <path d="M6 74 C22 62 28 38 44 48 S66 78 92 24" stroke="rgba(34,211,238,.25)" strokeWidth=".35" fill="none" />
+        <path d="M10 34 C30 22 58 28 86 70" stroke="rgba(16,185,129,.18)" strokeWidth=".4" fill="none" />
+        <path d="M34 10 L68 88" stroke="rgba(139,92,246,.18)" strokeWidth=".25" fill="none" />
+        {[
+          [48, 48, 6, C.cyan],
+          [30, 38, 3, C.green],
+          [67, 35, 4, C.purple],
+          [74, 66, 3, C.orange],
+          [18, 68, 2.4, C.yellow],
+        ].map(([x, y, r, color], i) => (
+          <circle key={i} cx={x} cy={y} r={r} fill={`${color}22`} stroke={`${color}88`} strokeWidth=".35" />
+        ))}
+      </svg>
     </div>
   )
 }
 
-function Ref({ title, desc, color }: { title: string; desc: string; color: string }) {
+function LeftPanel() {
   return (
-    <div style={{ border: `1px solid ${ui.border}`, borderRadius: 8, background: '#0B1222', padding: 18 }}>
-      <div style={{ color, fontSize: 22, fontWeight: 950 }}>{title}</div>
-      <p style={{ color: ui.sub, fontSize: 16, lineHeight: 1.55, margin: '10px 0 0' }}>{desc}</p>
+    <aside
+      style={{
+        position: 'absolute',
+        left: 18,
+        top: 18,
+        bottom: 18,
+        width: 310,
+        background: C.panel,
+        border: `1px solid ${C.line}`,
+        borderRadius: 14,
+        padding: 18,
+        boxShadow: '0 20px 60px rgba(0,0,0,.28)',
+      }}
+    >
+      <div style={{ color: C.sub, fontSize: 15, fontWeight: 950, letterSpacing: '.08em' }}>CRITICAL PATH</div>
+      <div style={{ height: 1, background: C.line, margin: '12px 0 16px' }} />
+      <div style={{ display: 'grid', gap: 12 }}>
+        {flow.map((item) => (
+          <Link key={item.href} href={item.href} style={{ color: 'inherit', textDecoration: 'none' }}>
+            <div style={{ border: `1px solid ${C.line}`, borderRadius: 10, background: '#0B1222', padding: 13 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                <span style={{ color: item.color, fontSize: 15, fontWeight: 950 }}>{item.no}</span>
+                <span style={{ color: item.color, fontSize: 12, fontWeight: 950 }}>OPEN</span>
+              </div>
+              <div style={{ color: C.text, fontSize: 18, fontWeight: 950, marginTop: 8 }}>{item.title}</div>
+              <p style={{ color: C.sub, fontSize: 14, lineHeight: 1.45, margin: '7px 0 0' }}>{item.desc}</p>
+            </div>
+          </Link>
+        ))}
+      </div>
+    </aside>
+  )
+}
+
+function CenterMission() {
+  return (
+    <section style={{ position: 'absolute', left: 354, right: 360, top: 54, bottom: 122, display: 'grid', placeItems: 'center', pointerEvents: 'none' }}>
+      <div style={{ width: 'min(620px, 100%)', border: `1px solid ${C.line}`, borderRadius: 18, background: 'rgba(8,12,24,.72)', padding: 28, boxShadow: '0 30px 90px rgba(0,0,0,.32)' }}>
+        <div style={{ color: C.cyan, fontSize: 15, fontWeight: 950, letterSpacing: '.08em' }}>MISSION</div>
+        <h1 style={{ fontSize: 42, lineHeight: 1.1, margin: '12px 0 0', fontWeight: 950 }}>
+          콜카드와 기사 능력치를 연결해 AI 우선배차를 설명한다
+        </h1>
+        <p style={{ color: C.sub, fontSize: 18, lineHeight: 1.55, margin: '16px 0 0' }}>
+          기존 배차 엔진은 유지합니다. 콜 발생 시 후보 기사군을 22D 코사인 유사도 기준으로 다시 정렬하고, 가장 잘 맞는 기사에게 먼저 콜카드를 보냅니다.
+        </p>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginTop: 22 }}>
+          <Mini title="Grab" desc="결과 비교" color={C.purple} />
+          <Mini title="Uber" desc="후보/반경" color={C.cyan} />
+          <Mini title="DiDi" desc="누적성향" color={C.green} />
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function RightPanel() {
+  return (
+    <aside style={{ position: 'absolute', right: 18, top: 18, bottom: 18, width: 318, display: 'grid', gridTemplateRows: '1fr auto', gap: 14 }}>
+      <div style={{ background: C.panel, border: `1px solid ${C.line}`, borderRadius: 14, padding: 18 }}>
+        <div style={{ color: C.sub, fontSize: 15, fontWeight: 950, letterSpacing: '.08em' }}>CONTROL NOTES</div>
+        <div style={{ display: 'grid', gap: 12, marginTop: 16 }}>
+          <Note tone={C.green} title="보여줄 것" desc="날짜 범위, 콜 조건, 기사 능력치, 유사도, 우선 발송 순서" />
+          <Note tone={C.red} title="숨길 것" desc="긴 JSON, 내부 테이블 반복, 확정되지 않은 최종 배차점수" />
+          <Note tone={C.yellow} title="주의" desc="실시간 위치/온라인 상태는 아직 실제 배차점수에 섞지 않음" />
+        </div>
+      </div>
+      <Link href="/vectors" style={{ textDecoration: 'none', color: C.text }}>
+        <div style={{ border: `1px solid ${C.cyan}`, background: 'rgba(34,211,238,.14)', borderRadius: 14, padding: 18 }}>
+          <div style={{ color: C.cyan, fontSize: 14, fontWeight: 950 }}>NEXT</div>
+          <div style={{ fontSize: 22, fontWeight: 950, marginTop: 7 }}>인터랙티브 벡터 매칭 보기</div>
+        </div>
+      </Link>
+    </aside>
+  )
+}
+
+function BottomDock() {
+  return (
+    <section
+      style={{
+        position: 'absolute',
+        left: 354,
+        right: 360,
+        bottom: 18,
+        minHeight: 86,
+        border: `1px solid ${C.line}`,
+        borderRadius: 14,
+        background: 'linear-gradient(90deg, rgba(15,22,40,.96), rgba(15,22,40,.74))',
+        padding: 16,
+        display: 'grid',
+        gridTemplateColumns: 'repeat(4, 1fr)',
+        gap: 12,
+      }}
+    >
+      <DockItem title="Data" value="적재현황" href="/ingest" color={C.green} />
+      <DockItem title="Vector" value="매칭 그래프" href="/vectors" color={C.cyan} />
+      <DockItem title="Sim" value="조건 입력" href="/simulator" color={C.purple} />
+      <DockItem title="Logic" value="개발 전달" href="/dispatch-logic" color={C.orange} />
+    </section>
+  )
+}
+
+function DockItem({ title, value, href, color }: { title: string; value: string; href: string; color: string }) {
+  return (
+    <Link href={href} style={{ textDecoration: 'none' }}>
+      <div style={{ height: '100%', border: `1px solid ${C.line}`, borderRadius: 10, background: '#0B1222', padding: 12 }}>
+        <div style={{ color: C.muted, fontSize: 12, fontWeight: 850 }}>{title}</div>
+        <div style={{ color, fontSize: 18, fontWeight: 950, marginTop: 5 }}>{value}</div>
+      </div>
+    </Link>
+  )
+}
+
+function Badge({ children, color = C.cyan }: { children: ReactNode; color?: string }) {
+  return <span style={{ border: `1px solid ${color}66`, color, borderRadius: 8, padding: '7px 10px', fontSize: 12, fontWeight: 950, background: `${color}18` }}>{children}</span>
+}
+
+function Mini({ title, desc, color }: { title: string; desc: string; color: string }) {
+  return (
+    <div style={{ border: `1px solid ${C.line}`, borderRadius: 10, background: '#0B1222', padding: 12 }}>
+      <div style={{ color, fontSize: 18, fontWeight: 950 }}>{title}</div>
+      <div style={{ color: C.sub, fontSize: 14, marginTop: 5 }}>{desc}</div>
+    </div>
+  )
+}
+
+function Note({ tone, title, desc }: { tone: string; title: string; desc: string }) {
+  return (
+    <div style={{ borderLeft: `3px solid ${tone}`, background: '#0B1222', padding: '12px 13px', borderRadius: 8 }}>
+      <div style={{ color: tone, fontSize: 16, fontWeight: 950 }}>{title}</div>
+      <p style={{ color: C.sub, fontSize: 14, lineHeight: 1.45, margin: '6px 0 0' }}>{desc}</p>
     </div>
   )
 }
