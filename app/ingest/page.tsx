@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { createClient } from '@supabase/supabase-js'
-import { PmoShell } from '@/app/components/PmoShell'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -31,15 +31,17 @@ type MeterStatusResponse = {
 }
 
 const C = {
-  bg: '#080C18',
-  panel: '#0F1628',
-  border: '#1E2D4A',
-  text: '#F1F5F9',
-  sub: '#A9B7CC',
-  muted: '#6C7D99',
+  bg: '#070A12',
+  ink: '#F5F7FB',
+  sub: '#AAB7CB',
+  muted: '#657189',
+  panel: 'rgba(9,14,26,.92)',
+  border: '#22314F',
   cyan: '#22D3EE',
   green: '#10B981',
   yellow: '#F59E0B',
+  orange: '#FB923C',
+  red: '#F43F5E',
   purple: '#8B5CF6',
 }
 
@@ -52,7 +54,7 @@ function range(row?: TableStatus) {
   return `${row.minDate} ~ ${row.maxDate}`
 }
 
-function days(start?: string | null, end?: string | null) {
+function dayCount(start?: string | null, end?: string | null) {
   if (!start || !end) return '-'
   const diff = new Date(`${end}T00:00:00`).getTime() - new Date(`${start}T00:00:00`).getTime()
   return `${Math.max(0, Math.round(diff / 86400000) + 1)}일`
@@ -99,6 +101,7 @@ export default function IngestPage() {
 
   useEffect(() => {
     let cancelled = false
+
     async function load() {
       setLoading(true)
       const calls = await Promise.all([
@@ -106,14 +109,14 @@ export default function IngestPage() {
         tableStatus('driver_daily_logs', '기사 호출 로그', 'service_date'),
         tableStatus('matching_scores', '매칭 Top 10 결과', 'match_date'),
       ])
-      const callRange = calls[0]
-      const rows = await Promise.all(recentDates(callRange.maxDate).map(async (date) => ({
+      const rows = await Promise.all(recentDates(calls[0].maxDate).map(async (date) => ({
         date,
         callcards: await countByDate('callcard_mbti', 'call_date', date),
         driverLogs: await countByDate('driver_daily_logs', 'service_date', date),
         matches: await countByDate('matching_scores', 'match_date', date),
       })))
       const meter = await fetch('/api/meter-status', { cache: 'no-store' }).then((res) => res.json()).catch(() => ({} as MeterStatusResponse))
+
       if (cancelled) return
       setCallTables(calls)
       setDateRows(rows)
@@ -121,6 +124,7 @@ export default function IngestPage() {
       setMeterDates(meter.dateCounts ?? [])
       setLoading(false)
     }
+
     load()
     return () => {
       cancelled = true
@@ -128,113 +132,231 @@ export default function IngestPage() {
   }, [])
 
   const callcards = callTables.find((row) => row.table === 'callcard_mbti')
+  const driverLogs = callTables.find((row) => row.table === 'driver_daily_logs')
+  const matches = callTables.find((row) => row.table === 'matching_scores')
   const meterMain = meterTables.find((row) => row.table === 'meter_hourly_logs') ?? meterTables[0]
   const missingRows = useMemo(() => dateRows.filter((row) => !row.callcards || !row.driverLogs || !row.matches), [dateRows])
 
   return (
-    <PmoShell
-      active="적재현황"
-      kicker="DATA COVERAGE"
-      title="호출데이터와 앱미터데이터 적재 범위 확인"
-      description="이 화면은 파일을 직접 업로드하지 않습니다. 폴더 자동 적재 기준으로 Supabase에 들어간 날짜 범위와 누락 여부만 확인합니다."
-      status="자동 적재 상태"
-    >
-        {loading && <div style={{ color: C.sub, fontSize: 18 }}>데이터를 불러오는 중입니다.</div>}
+    <main style={{ minHeight: '100vh', background: C.bg, color: C.ink, fontFamily: 'Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}>
+      <Topbar />
+      <KpiRail loading={loading} callcards={callcards} meterMain={meterMain} missing={missingRows.length} />
 
-        <section style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 14, marginBottom: 24 }}>
-          <Stat title="호출데이터" value={range(callcards)} caption={days(callcards?.minDate, callcards?.maxDate)} color={C.green} />
-          <Stat title="앱미터데이터" value={range(meterMain)} caption={meterMain?.label ?? '보조 시장 기준 데이터'} color={C.cyan} />
-          <Stat title="콜카드 건수" value={fmt(callcards?.count)} caption="callcard_mbti" color={C.green} />
-          <Stat title="누락 확인" value={`${missingRows.length}일`} caption="최근 14일 기준" color={missingRows.length ? C.yellow : C.green} />
-        </section>
+      <section style={{ position: 'relative', minHeight: 'calc(100vh - 126px)', overflow: 'hidden', borderTop: `1px solid ${C.border}` }}>
+        <MapBackdrop />
 
-        <section style={{ display: 'grid', gridTemplateColumns: '1.2fr .8fr', gap: 18 }}>
-          <Panel title="호출데이터 날짜별 상태" desc="콜카드, 기사 로그, 매칭 결과가 같은 날짜로 맞아야 AI 우선배차 검증에 사용할 수 있습니다.">
-            <Table
-              headers={['날짜', '콜카드', '기사 로그', '매칭 결과', '상태']}
-              rows={dateRows.map((row) => {
-                const ok = Boolean(row.callcards && row.driverLogs && row.matches)
-                return [row.date, fmt(row.callcards), fmt(row.driverLogs), fmt(row.matches), ok ? '정상' : '확인 필요']
-              })}
-            />
-          </Panel>
+        <aside style={leftPanel}>
+          <PanelTitle kicker="DATA COVERAGE" title="적재 범위" />
+          <CoverageCard title="호출데이터" range={range(callcards)} days={dayCount(callcards?.minDate, callcards?.maxDate)} count={fmt(callcards?.count)} color={C.green} />
+          <CoverageCard title="기사 로그" range={range(driverLogs)} days={dayCount(driverLogs?.minDate, driverLogs?.maxDate)} count={fmt(driverLogs?.count)} color={C.cyan} />
+          <CoverageCard title="앱미터데이터" range={range(meterMain)} days={dayCount(meterMain?.minDate, meterMain?.maxDate)} count={fmt(meterMain?.count)} color={C.purple} />
+        </aside>
 
-          <Panel title="앱미터 적재 상태" desc="앱미터는 기사 MBTI의 주 원천이 아니라 천안 택시 흐름을 보는 보조 데이터입니다.">
-            <div style={{ display: 'grid', gap: 10 }}>
-              {meterTables.map((row) => (
-                <div key={row.table} style={{ border: `1px solid ${C.border}`, borderRadius: 8, padding: 14, background: '#0B1222' }}>
-                  <div style={{ fontSize: 17, fontWeight: 950 }}>{row.label}</div>
-                  <div style={{ color: C.cyan, fontSize: 22, fontWeight: 950, marginTop: 8 }}>{fmt(row.count)}</div>
-                  <div style={{ color: C.sub, fontSize: 15, marginTop: 6 }}>{range(row)}</div>
-                </div>
-              ))}
-              {meterDates?.slice(-4).map((row) => (
-                <div key={row.date} style={{ color: C.muted, fontSize: 15 }}>
-                  {row.date}: 시간대 {fmt(row.hourly)}건 / 기사별 {fmt(row.driver)}건
-                </div>
-              ))}
-            </div>
-          </Panel>
-        </section>
-
-        <Panel title="자동 적재 방식" desc="운영 화면 업로드는 큰 파일에서 실패할 수 있어 폴더 감시 방식으로 전환했습니다.">
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-            <Code title="호출데이터 자동 감시" command="npm run call:watch" />
-            <Code title="앱미터 자동 감시" command="npm run meter:watch" />
+        <section style={stagePanel}>
+          <div style={{ position: 'relative', zIndex: 3 }}>
+            <div style={{ color: C.cyan, fontSize: 14, fontWeight: 950, letterSpacing: '.12em' }}>INGESTION RADAR</div>
+            <h1 style={{ margin: '8px 0 0', fontSize: 36, lineHeight: 1.08, fontWeight: 950 }}>파일 업로드 화면이 아니라 데이터 준비 상태를 보는 관제 화면</h1>
+            <p style={{ color: C.sub, fontSize: 16, lineHeight: 1.55, maxWidth: 760, marginTop: 12 }}>
+              폴더 감시 파이프라인이 Supabase에 적재한 결과를 기준으로, AI 우선배차 검증에 필요한 콜카드, 기사 로그, 매칭 결과가 날짜별로 이어져 있는지 확인합니다.
+            </p>
           </div>
-        </Panel>
-    </PmoShell>
+          <CoverageTimeline rows={dateRows} />
+        </section>
+
+        <aside style={rightPanel}>
+          <PanelTitle kicker="AUTOMATION" title="폴더 감시 파이프라인" />
+          <CommandCard title="호출데이터 자동 적재" command="npm run call:watch" color={C.green} />
+          <CommandCard title="앱미터 자동 적재" command="npm run meter:watch" color={C.cyan} />
+          <div style={{ marginTop: 14, border: `1px solid ${C.yellow}66`, borderRadius: 16, background: 'rgba(245,158,11,.1)', padding: 16 }}>
+            <div style={{ color: C.yellow, fontSize: 15, fontWeight: 950 }}>운영 기준</div>
+            <p style={{ color: C.sub, fontSize: 15, lineHeight: 1.55, margin: '8px 0 0' }}>
+              앱미터는 기사 MBTI의 주 원천이 아니라 천안 택시 흐름과 시장 기준을 보는 보조 데이터입니다.
+            </p>
+          </div>
+        </aside>
+
+        <BottomDock callTables={callTables} meterDates={meterDates ?? []} />
+      </section>
+    </main>
   )
 }
 
-function Stat({ title, value, caption, color }: { title: string; value: string; caption: string; color: string }) {
+function Topbar() {
+  const nav = [
+    ['대시보드', '/dashboard'],
+    ['적재현황', '/ingest'],
+    ['벡터리스트', '/vectors'],
+    ['시뮬레이터', '/simulator'],
+    ['배차로직', '/dispatch-logic'],
+  ]
+
   return (
-    <div style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 8, padding: 18, minHeight: 126 }}>
-      <div style={{ color: C.sub, fontSize: 16, fontWeight: 850 }}>{title}</div>
-      <div style={{ color, fontSize: 26, lineHeight: 1.15, fontWeight: 950, marginTop: 12 }}>{value}</div>
-      <div style={{ color: C.muted, fontSize: 15, marginTop: 8 }}>{caption}</div>
-    </div>
+    <header style={{ height: 56, background: '#05070D', borderBottom: `1px solid ${C.border}`, display: 'grid', gridTemplateColumns: '320px 1fr 260px', alignItems: 'center', padding: '0 18px', gap: 18 }}>
+      <Link href="/dashboard" style={{ color: C.ink, textDecoration: 'none', fontSize: 18, fontWeight: 950 }}>
+        Happycall PMO <span style={{ color: C.cyan }}>Data Radar</span>
+      </Link>
+      <nav style={{ display: 'flex', justifyContent: 'center', gap: 8 }}>
+        {nav.map(([label, href]) => (
+          <Link key={href} href={href} style={{ color: href === '/ingest' ? C.cyan : C.sub, textDecoration: 'none', border: `1px solid ${href === '/ingest' ? C.cyan : C.border}`, borderRadius: 8, padding: '8px 12px', fontSize: 14, fontWeight: 900, background: href === '/ingest' ? 'rgba(34,211,238,.12)' : 'rgba(15,22,40,.62)' }}>
+            {label}
+          </Link>
+        ))}
+      </nav>
+      <div style={{ justifySelf: 'end', display: 'flex', gap: 8 }}>
+        <Pill color={C.green}>READ ONLY</Pill>
+        <Pill color={C.cyan}>SUPABASE</Pill>
+      </div>
+    </header>
   )
 }
 
-function Panel({ title, desc, children }: { title: string; desc: string; children: React.ReactNode }) {
+function KpiRail({ loading, callcards, meterMain, missing }: { loading: boolean; callcards?: TableStatus; meterMain?: TableStatus; missing: number }) {
+  const items = [
+    ['호출데이터', loading ? '로딩 중' : range(callcards), dayCount(callcards?.minDate, callcards?.maxDate), C.green],
+    ['앱미터데이터', range(meterMain), meterMain?.label ?? '보조 시장 기준', C.cyan],
+    ['콜카드 건수', fmt(callcards?.count), 'callcard_mbti', C.purple],
+    ['누락 확인', `${missing}일`, '최근 14일 기준', missing ? C.yellow : C.green],
+    ['적재 방식', '폴더 감시', '업로드 버튼 제거 방향', C.orange],
+  ]
+
   return (
-    <section style={{ background: C.panel, border: `1px solid ${C.border}`, borderRadius: 8, padding: 20, marginBottom: 18 }}>
-      <h2 style={{ fontSize: 23, margin: 0, fontWeight: 950 }}>{title}</h2>
-      <p style={{ color: C.sub, fontSize: 16, lineHeight: 1.55, margin: '8px 0 16px' }}>{desc}</p>
-      {children}
+    <section style={{ height: 70, background: '#080B13', display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', borderBottom: `1px solid ${C.border}` }}>
+      {items.map(([label, value, sub, color]) => (
+        <div key={label} style={{ borderRight: `1px solid ${C.border}`, padding: '10px 18px' }}>
+          <div style={{ color: C.muted, fontSize: 13, fontWeight: 900 }}>{label}</div>
+          <div style={{ color: String(color), fontSize: 24, lineHeight: 1.05, fontWeight: 950, marginTop: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{value}</div>
+          <div style={{ color: C.muted, fontSize: 12, marginTop: 4 }}>{sub}</div>
+        </div>
+      ))}
     </section>
   )
 }
 
-function Table({ headers, rows }: { headers: string[]; rows: string[][] }) {
+function CoverageTimeline({ rows }: { rows: DateRow[] }) {
   return (
-    <div style={{ overflowX: 'auto' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 720 }}>
-        <thead>
-          <tr>{headers.map((h) => <th key={h} style={th()}>{h}</th>)}</tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => <tr key={row[0]}>{row.map((cell, i) => <td key={`${row[0]}-${i}`} style={td(i === row.length - 1 && cell !== '정상' ? C.yellow : C.text)}>{cell}</td>)}</tr>)}
-        </tbody>
-      </table>
+    <div style={{ position: 'absolute', left: 28, right: 28, bottom: 28, zIndex: 4 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.max(rows.length, 1)}, 1fr)`, gap: 9 }}>
+        {rows.map((row) => {
+          const ok = Boolean(row.callcards && row.driverLogs && row.matches)
+          return (
+            <div key={row.date} style={{ minHeight: 170, border: `1px solid ${ok ? C.green : C.yellow}66`, borderRadius: 16, background: ok ? 'rgba(16,185,129,.1)' : 'rgba(245,158,11,.1)', padding: 12, display: 'grid', alignContent: 'space-between' }}>
+              <div>
+                <div style={{ color: ok ? C.green : C.yellow, fontSize: 12, fontWeight: 950 }}>{row.date.slice(5)}</div>
+                <div style={{ color: C.ink, fontSize: 18, fontWeight: 950, marginTop: 8 }}>{ok ? '정상' : '확인'}</div>
+              </div>
+              <div style={{ display: 'grid', gap: 5, color: C.sub, fontSize: 12, fontWeight: 850 }}>
+                <span>콜 {fmt(row.callcards)}</span>
+                <span>로그 {fmt(row.driverLogs)}</span>
+                <span>매칭 {fmt(row.matches)}</span>
+              </div>
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
 
-function Code({ title, command }: { title: string; command: string }) {
+function BottomDock({ callTables, meterDates }: { callTables: TableStatus[]; meterDates: { date: string; hourly: number | null; driver: number | null }[] }) {
   return (
-    <div style={{ border: `1px solid ${C.border}`, borderRadius: 8, padding: 14, background: '#0B1222' }}>
-      <div style={{ color: C.sub, fontSize: 15, fontWeight: 850 }}>{title}</div>
-      <code style={{ display: 'block', color: C.green, fontSize: 18, fontWeight: 900, marginTop: 8 }}>{command}</code>
+    <section style={{ position: 'absolute', left: 350, right: 350, bottom: 18, minHeight: 112, border: `1px solid ${C.border}`, borderRadius: 18, background: 'linear-gradient(90deg, rgba(9,14,26,.96), rgba(9,14,26,.76))', boxShadow: '0 20px 70px rgba(0,0,0,.32)', zIndex: 8, padding: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+        {callTables.map((row) => <Dock key={row.table} title={row.label} value={fmt(row.count)} sub={range(row)} color={C.green} />)}
+        {meterDates.slice(-1).map((row) => <Dock key={row.date} title="앱미터 최근일" value={row.date} sub={`시간대 ${fmt(row.hourly)} / 기사 ${fmt(row.driver)}`} color={C.cyan} />)}
+      </div>
+    </section>
+  )
+}
+
+function CoverageCard({ title, range, days, count, color }: { title: string; range: string; days: string; count: string; color: string }) {
+  return (
+    <div style={{ marginTop: 14, border: `1px solid ${color}66`, borderRadius: 16, background: `${color}12`, padding: 16 }}>
+      <div style={{ color, fontSize: 16, fontWeight: 950 }}>{title}</div>
+      <div style={{ color: C.ink, fontSize: 22, lineHeight: 1.25, fontWeight: 950, marginTop: 10 }}>{range}</div>
+      <div style={{ color: C.sub, fontSize: 14, marginTop: 8 }}>{days} · {count}건</div>
     </div>
   )
 }
 
-function th(): React.CSSProperties {
-  return { textAlign: 'left', color: C.sub, padding: '12px 10px', borderBottom: `1px solid ${C.border}`, fontSize: 15 }
+function CommandCard({ title, command, color }: { title: string; command: string; color: string }) {
+  return (
+    <div style={{ marginTop: 14, border: `1px solid ${color}66`, borderRadius: 16, background: `${color}12`, padding: 16 }}>
+      <div style={{ color, fontSize: 16, fontWeight: 950 }}>{title}</div>
+      <code style={{ display: 'block', color: C.ink, fontSize: 17, fontWeight: 950, marginTop: 10 }}>{command}</code>
+    </div>
+  )
 }
 
-function td(color = C.text): React.CSSProperties {
-  return { color, padding: '12px 10px', borderBottom: `1px solid ${C.border}`, fontSize: 15, fontWeight: 780 }
+function Dock({ title, value, sub, color }: { title: string; value: string; sub: string; color: string }) {
+  return (
+    <div style={{ border: `1px solid ${C.border}`, borderRadius: 12, background: 'rgba(15,22,40,.88)', padding: 12 }}>
+      <div style={{ color: C.muted, fontSize: 12, fontWeight: 850 }}>{title}</div>
+      <div style={{ color, fontSize: 20, fontWeight: 950, marginTop: 6 }}>{value}</div>
+      <div style={{ color: C.sub, fontSize: 12, marginTop: 7, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sub}</div>
+    </div>
+  )
+}
+
+function PanelTitle({ kicker, title }: { kicker: string; title: string }) {
+  return (
+    <div>
+      <div style={{ color: C.muted, fontSize: 13, fontWeight: 950, letterSpacing: '.12em' }}>{kicker}</div>
+      <h2 style={{ margin: '6px 0 0', fontSize: 24, fontWeight: 950 }}>{title}</h2>
+    </div>
+  )
+}
+
+function MapBackdrop() {
+  return (
+    <div aria-hidden style={{ position: 'absolute', inset: 0 }}>
+      <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(circle at 50% 48%, rgba(34,211,238,.12), transparent 30%), linear-gradient(135deg, #121820, #080B13 68%)' }} />
+      <div style={{ position: 'absolute', inset: 0, opacity: 0.36, backgroundImage: 'linear-gradient(rgba(255,255,255,.07) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.06) 1px, transparent 1px)', backgroundSize: '56px 56px' }} />
+    </div>
+  )
+}
+
+function Pill({ children, color }: { children: ReactNode; color: string }) {
+  return <span style={{ color, border: `1px solid ${color}66`, background: `${color}18`, borderRadius: 8, padding: '7px 10px', fontSize: 12, fontWeight: 950 }}>{children}</span>
+}
+
+const leftPanel: React.CSSProperties = {
+  position: 'absolute',
+  left: 18,
+  top: 18,
+  bottom: 18,
+  width: 306,
+  zIndex: 7,
+  border: `1px solid ${C.border}`,
+  borderRadius: 18,
+  background: C.panel,
+  padding: 18,
+  boxShadow: '0 20px 70px rgba(0,0,0,.35)',
+}
+
+const rightPanel: React.CSSProperties = {
+  position: 'absolute',
+  right: 18,
+  top: 18,
+  bottom: 18,
+  width: 306,
+  zIndex: 7,
+  border: `1px solid ${C.border}`,
+  borderRadius: 18,
+  background: C.panel,
+  padding: 18,
+  boxShadow: '0 20px 70px rgba(0,0,0,.35)',
+}
+
+const stagePanel: React.CSSProperties = {
+  position: 'absolute',
+  left: 342,
+  right: 342,
+  top: 18,
+  bottom: 148,
+  zIndex: 4,
+  border: `1px solid rgba(34,211,238,.22)`,
+  borderRadius: 22,
+  background: 'rgba(7,10,18,.28)',
+  padding: 24,
+  overflow: 'hidden',
 }
