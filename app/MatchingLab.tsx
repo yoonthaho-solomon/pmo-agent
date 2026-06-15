@@ -1142,6 +1142,11 @@ function SimulationTab() {
   const apiIds = recommendResult?.recommended_drivers?.map((r) => r.driver_id) ?? []
   const localApiIds = apiComparableTop.map((r) => r.driver.driver_id)
   const top10Overlap = apiIds.filter((id) => localApiIds.includes(id)).length
+  const dispatchIds = dispatchResult?.recommended_drivers?.map((r) => r.driver_id) ?? []
+  const distanceIds = distanceTop.map((r) => r.driver.driver_id)
+  const similarityIds = similarityTop.map((r) => r.driver.driver_id)
+  const dispatchSimilarityOverlap = dispatchIds.filter((id) => similarityIds.includes(id)).length
+  const dispatchDistanceOverlap = dispatchIds.filter((id) => distanceIds.includes(id)).length
   const callRiskScore = useMemo(() => {
     if (outcomeBreakdowns.length === 0) return null
     const contributors = outcomeBreakdowns.map((item) => ({
@@ -1417,16 +1422,29 @@ function SimulationTab() {
           </div>
         )}
       </Panel>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
-        <Panel>
-          <SectionHeader title="기존 거리순 결과" desc="주변 후보를 가까운 거리 기준으로 정렬한 비교군입니다." />
-          <CandidateTable rows={distanceTop} mode="distance" />
-        </Panel>
-        <Panel>
-          <SectionHeader title="신규 유사도 기반 Top 10" desc="기존 22D cosine을 유지하고 구성요소를 분리해 표시합니다." />
-          <CandidateTable rows={similarityTop} mode="similarity" />
-        </Panel>
-      </div>
+      <Panel>
+        <SectionHeader title="정책별 Top 10 비교" desc="거리순, 22D 유사도순, 라이브 dispatch simulation 결과를 나란히 비교합니다." />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 14 }}>
+          <MiniMetric label="dispatch 후보" value={dispatchResult?.candidate_counts?.ranked ?? 0} />
+          <MiniMetric label="dispatch 반경 km" value={dispatchResult?.radius_step_used_km ?? 0} />
+          <MiniMetric label="유사도 겹침" value={dispatchSimilarityOverlap} />
+          <MiniMetric label="거리순 겹침" value={dispatchDistanceOverlap} />
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 18 }}>
+          <div>
+            <div style={{ color: C.cyan, fontWeight: 900, marginBottom: 8 }}>기존 거리순</div>
+            <CandidateTable rows={distanceTop} mode="distance" />
+          </div>
+          <div>
+            <div style={{ color: C.purple, fontWeight: 900, marginBottom: 8 }}>22D 유사도순</div>
+            <CandidateTable rows={similarityTop} mode="similarity" />
+          </div>
+          <div>
+            <div style={{ color: C.green, fontWeight: 900, marginBottom: 8 }}>dispatch simulation</div>
+            <DispatchCandidateTable rows={dispatchResult?.recommended_drivers ?? []} />
+          </div>
+        </div>
+      </Panel>
 
       <Panel>
         <SectionHeader title="점수 구성요소 매트릭스" desc="최종 배차점수는 아직 정책 확정 전이므로 preview로만 표시합니다." />
@@ -1490,6 +1508,24 @@ function CandidateTable({ rows, mode }: { rows: RankedCandidate[]; mode: 'distan
   )
 }
 
+function DispatchCandidateTable({ rows }: { rows: NonNullable<DispatchResult['recommended_drivers']> }) {
+  return (
+    <div style={{ display: 'grid', gap: 10 }}>
+      {rows.length === 0 ? <p style={{ color: C.muted }}>라이브 API 모의검증 결과가 없습니다.</p> : rows.map((r) => (
+        <div key={r.driver_id} style={{ display: 'grid', gridTemplateColumns: '34px 1fr 70px 70px 70px', gap: 10, alignItems: 'center', padding: 12, borderRadius: 8, background: '#0B1222', border: `1px solid ${C.border}` }}>
+          <strong style={{ color: r.rank <= 3 ? C.yellow : C.sub }}>{r.rank}</strong>
+          <div>
+            <div style={{ fontFamily: 'monospace', fontWeight: 800 }}>{r.driver_id}</div>
+            <div style={{ fontSize: 15, color: C.muted, marginTop: 3 }}>source {r.status_snapshot?.source ?? '-'}</div>
+          </div>
+          <span style={{ color: C.sub }}>{r.distance_km}km</span>
+          <span style={{ color: C.blue }}>{Math.round(r.eta_seconds / 60)}분</span>
+          <span style={{ color: C.green }}>{pct(r.final_score)}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
 function inputStyle(): React.CSSProperties {
   return {
     width: '100%',
