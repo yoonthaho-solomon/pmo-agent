@@ -293,8 +293,10 @@ export default function SimulatorPage() {
             <span><i style={{ background: C.orange }} />기사 성향</span>
             <span className="hint">축 클릭 시 22팩터 드릴다운</span>
           </div>
+          <DataSourceStrip driverCount={drivers.length} />
           <MatchRadar callAxis={callBundle.axis} driverAxis={selected?.axis ?? []} callSub={callBundle.sub} driverSub={selected?.sub ?? []} />
           <div className="lead">{selected ? selected.lead : '콜 조건과 기사 성향을 비교할 준비가 됐습니다.'}</div>
+          <DispatchPipeline selected={selected} />
           <MatchWaterfall why={selected?.why ?? []} />
         </section>
 
@@ -518,6 +520,7 @@ function CallcardPanel(props: {
     <aside className="panel left-panel">
       <PanelTitle color={C.cyan}>입력된 콜카드</PanelTitle>
       <div className="route"><span>출발 H3 준비</span><b>→</b><span>도착 H3 준비</span></div>
+      <AxisSnapshot axis={props.callBundle.axis} />
       <div className="rows">
         <Select label="지역" value={props.aspId} onChange={props.setAspId} options={aspOptions} />
         <Two>
@@ -544,6 +547,202 @@ function CallcardPanel(props: {
   )
 }
 
+function AxisSnapshot({ axis }: { axis: number[] }) {
+  return (
+    <div className="axis-snapshot">
+      {AXES.map((item, index) => (
+        <div key={item.name} className="axis-card">
+          <span>{item.name}</span>
+          <b>{Math.round(axis[index] ?? 0)}</b>
+          <i style={{ width: `${axis[index] ?? 0}%` }} />
+        </div>
+      ))}
+      <style jsx>{`
+        .axis-snapshot {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: .5rem;
+          margin: .85rem 0 1rem;
+        }
+        .axis-card {
+          position: relative;
+          min-height: 3.2rem;
+          overflow: hidden;
+          border: 1px solid rgba(34,211,238,.18);
+          border-radius: 12px;
+          background: rgba(34,211,238,.045);
+          padding: .7rem .75rem;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: .7rem;
+        }
+        .axis-card span {
+          position: relative;
+          z-index: 2;
+          color: ${C.sub};
+          font-size: clamp(.74rem, 1.3vw, .86rem);
+          font-weight: 850;
+          line-height: 1.2;
+        }
+        .axis-card b {
+          position: relative;
+          z-index: 2;
+          color: ${C.cyan};
+          font-size: clamp(1.05rem, 2vw, 1.35rem);
+          font-weight: 950;
+        }
+        .axis-card i {
+          position: absolute;
+          inset: auto auto 0 0;
+          height: 3px;
+          background: linear-gradient(90deg, ${C.cyan}, ${C.purple});
+          box-shadow: 0 0 16px rgba(34,211,238,.35);
+          transition: width .55s ease;
+        }
+      `}</style>
+    </div>
+  )
+}
+
+function DataSourceStrip({ driverCount }: { driverCount: number }) {
+  const items = [
+    { label: '계산', value: '22D 코사인', tone: C.cyan },
+    { label: '기사군', value: `driver_mbti ${driverCount.toLocaleString()}명`, tone: C.green },
+    { label: '레이더', value: '5축 표시용', tone: C.purple },
+    { label: '위치/H3', value: '미연결', tone: C.yellow },
+  ]
+
+  return (
+    <div className="source-strip">
+      {items.map((item) => (
+        <div key={item.label} className="source-item">
+          <span>{item.label}</span>
+          <b style={{ color: item.tone }}>{item.value}</b>
+        </div>
+      ))}
+      <style jsx>{`
+        .source-strip {
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: .55rem;
+          margin: .75rem 0 1rem;
+        }
+        .source-item {
+          min-width: 0;
+          border: 1px solid ${C.line};
+          border-radius: 12px;
+          background: rgba(255,255,255,.025);
+          padding: .55rem .65rem;
+          text-align: center;
+        }
+        .source-item span {
+          display: block;
+          color: ${C.muted};
+          font-size: clamp(.66rem, 1.2vw, .74rem);
+          font-weight: 850;
+          margin-bottom: .18rem;
+        }
+        .source-item b {
+          display: block;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          font-size: clamp(.76rem, 1.35vw, .9rem);
+          font-weight: 950;
+        }
+        @media (max-width: 760px) {
+          .source-strip { grid-template-columns: 1fr 1fr; }
+        }
+      `}</style>
+    </div>
+  )
+}
+
+function DispatchPipeline({ selected }: { selected?: Ranked }) {
+  const steps = [
+    { title: '후보 생성', desc: '현재는 ASP 기사군 기준', state: '실데이터' },
+    { title: '상태 필터', desc: '온라인·공차·위치 최신성 필요', state: '미연결' },
+    { title: '22D 랭킹', desc: selected ? `${selected.driver.driver_id} 우선` : '후보 대기', state: '실계산' },
+    { title: '콜카드 발송', desc: '실배차 API 계약 단계', state: '준비' },
+  ]
+
+  return (
+    <div className="pipeline">
+      {steps.map((step, index) => (
+        <div key={step.title} className="pipe-step">
+          <span>{index + 1}</span>
+          <b>{step.title}</b>
+          <small>{step.desc}</small>
+          <em data-state={step.state}>{step.state}</em>
+        </div>
+      ))}
+      <style jsx>{`
+        .pipeline {
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: .6rem;
+          margin: .75rem 0 .4rem;
+        }
+        .pipe-step {
+          position: relative;
+          min-width: 0;
+          border: 1px solid ${C.line};
+          border-radius: 14px;
+          background: rgba(15,23,42,.58);
+          padding: .75rem;
+          display: grid;
+          gap: .24rem;
+        }
+        .pipe-step span {
+          width: 1.5rem;
+          height: 1.5rem;
+          border-radius: 999px;
+          display: grid;
+          place-items: center;
+          color: ${C.body};
+          background: ${C.cyan};
+          font-size: .78rem;
+          font-weight: 950;
+        }
+        .pipe-step b {
+          color: ${C.ink};
+          font-size: clamp(.8rem, 1.45vw, .95rem);
+          font-weight: 950;
+        }
+        .pipe-step small {
+          color: ${C.muted};
+          font-size: clamp(.68rem, 1.2vw, .78rem);
+          line-height: 1.25;
+        }
+        .pipe-step em {
+          justify-self: start;
+          margin-top: .15rem;
+          border-radius: 999px;
+          padding: .18rem .45rem;
+          color: ${C.sub};
+          background: rgba(255,255,255,.05);
+          font-size: .66rem;
+          font-style: normal;
+          font-weight: 950;
+        }
+        .pipe-step em[data-state="실데이터"],
+        .pipe-step em[data-state="실계산"] {
+          color: ${C.green};
+          background: rgba(16,185,129,.12);
+        }
+        .pipe-step em[data-state="미연결"] {
+          color: ${C.yellow};
+          background: rgba(245,158,11,.12);
+        }
+        @media (max-width: 760px) {
+          .pipeline { grid-template-columns: 1fr 1fr; }
+        }
+      `}</style>
+    </div>
+  )
+}
+
 function DecisionPanel({
   ranked,
   selectedId,
@@ -559,8 +758,16 @@ function DecisionPanel({
   return (
     <aside className="panel right-panel">
       <PanelTitle color={C.orange}>유사도 랭킹 Top 4</PanelTitle>
+      <div className="data-note">
+        기사 성향은 Supabase `driver_mbti` 기준입니다. 거리와 ETA는 실시간 위치 테이블 연결 전까지 시뮬레이션용 표시값입니다.
+      </div>
       <div className="rank-list">
-        {ranked.map((row, index) => (
+        {ranked.length === 0 ? (
+          <div className="empty-rank">
+            <b>추천 후보 없음</b>
+            <span>선택한 ASP에 기사 벡터가 없거나 아직 로딩 중입니다.</span>
+          </div>
+        ) : ranked.map((row, index) => (
           <button
             key={row.driver.driver_id}
             className={row.driver.driver_id === selectedId ? 'driver active' : 'driver'}
@@ -591,6 +798,27 @@ function DecisionPanel({
       </div>
       <style jsx>{`
         .rank-list { display: grid; gap: .75rem; margin-bottom: 1.2rem; }
+        .data-note {
+          border: 1px solid rgba(245,158,11,.24);
+          border-radius: 12px;
+          background: rgba(245,158,11,.08);
+          color: #FDBA74;
+          padding: .75rem;
+          line-height: 1.45;
+          font-size: clamp(.76rem, 1.35vw, .86rem);
+          font-weight: 800;
+          margin-bottom: .85rem;
+        }
+        .empty-rank {
+          border: 1px dashed ${C.line};
+          border-radius: 14px;
+          padding: 1rem;
+          display: grid;
+          gap: .35rem;
+          color: ${C.sub};
+          background: rgba(255,255,255,.025);
+        }
+        .empty-rank b { color: ${C.ink}; }
         .driver {
           width: 100%;
           border: 1px solid ${C.line};
