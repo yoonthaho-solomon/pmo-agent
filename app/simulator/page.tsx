@@ -1,9 +1,15 @@
-﻿'use client'
+'use client'
 
 import Link from 'next/link'
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createClient } from '@supabase/supabase-js'
-import { callToVector, cosineSimilarity, driverToVector, type DriverVectorRow } from '@/lib/matching-vector'
+import {
+  VECTOR_DIMENSIONS,
+  callToVector,
+  cosineSimilarity,
+  driverToVector,
+  type DriverVectorRow,
+} from '@/lib/matching-vector'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -17,31 +23,47 @@ type DriverRow = DriverVectorRow & {
   data_days: number | null
 }
 
+type Why = {
+  type: 'up' | 'down'
+  label: string
+  value: number
+}
+
 type Ranked = {
   driver: DriverRow
+  vector: number[]
+  axis: number[]
+  sub: number[][]
   cosine: number
+  similarityScore: number
+  acceptanceProbability: number
+  completionProbability: number
+  pickupAccessibilityScore: number
+  finalScore: number
   reliability: number
-  etaScore: number
-  acceptance: number
-  previewScore: number
   simDistanceKm: number
   simEtaMin: number
+  lead: string
+  why: Why[]
+  confidence: 'HIGH' | 'MEDIUM' | 'LOW'
 }
 
 const C = {
-  bg: '#070A12',
-  ink: '#F5F7FB',
-  sub: '#AAB7CB',
-  muted: '#657189',
-  panel: 'rgba(9,14,26,.92)',
-  border: '#22314F',
+  body: '#050810',
+  card: '#0A101D',
+  ink: '#E2E8F0',
+  sub: '#94A3B8',
+  muted: '#64748B',
+  line: '#1E293B',
   cyan: '#22D3EE',
-  green: '#10B981',
-  yellow: '#F59E0B',
-  orange: '#FB923C',
-  red: '#F43F5E',
   purple: '#8B5CF6',
+  green: '#10B981',
+  red: '#F43F5E',
+  orange: '#FB923C',
+  yellow: '#F59E0B',
 }
+
+const BASELINE_ACCEPTANCE = 29
 
 const aspOptions = [
   { value: 137000000000, label: '인천 137' },
@@ -51,12 +73,20 @@ const aspOptions = [
 
 const weekdays = ['월', '화', '수', '목', '금', '토', '일']
 
+const AXES = [
+  { name: '픽업 수용도', indexes: [21, 11, 12, 13] },
+  { name: '출발지·지역 친숙도', indexes: [0, 1, 2, 3] },
+  { name: '목적지 선호도', indexes: [4, 5, 6, 7, 8] },
+  { name: '운행거리·시간', indexes: [9, 10, 18, 19, 20] },
+  { name: '수익 매력도', indexes: [14, 15, 16, 17] },
+] as const
+
 function pct(n: number | null | undefined) {
-  return n == null ? '-' : `${Math.round(n * 100)}%`
+  return n == null ? '-' : `${Math.round(n)}%`
 }
 
-function clamp(n: number) {
-  return Math.max(0, Math.min(1, n))
+function clamp(n: number, min = 0, max = 100) {
+  return Math.max(min, Math.min(max, n))
 }
 
 function pseudoDistance(driverId: string, index: number) {
@@ -64,23 +94,72 @@ function pseudoDistance(driverId: string, index: number) {
   return 0.7 + ((seed + index * 17) % 82) / 10
 }
 
+function toScore(value: number | null | undefined) {
+  return clamp(Number(value ?? 0) * 100)
+}
+
+function average(values: number[]) {
+  if (!values.length) return 0
+  return values.reduce((sum, value) => sum + value, 0) / values.length
+}
+
+function toAxisBundle(vector: number[]) {
+  const sub = AXES.map((axis) => axis.indexes.map((index) => toScore(vector[index])))
+  const axis = sub.map((values) => average(values))
+  return { axis, sub }
+}
+
+function axisGap(callAxis: number[], driverAxis: number[], index: number) {
+  return Math.abs((callAxis[index] ?? 0) - (driverAxis[index] ?? 0))
+}
+
+function makeLead(row: Pick<Ranked, 'axis' | 'similarityScore' | 'simEtaMin'>, callAxis: number[]) {
+  const bestAxis = AXES
+    .map((axis, index) => ({ axis: axis.name, diff: axisGap(callAxis, row.axis, index) }))
+    .sort((a, b) => a.diff - b.diff)[0]
+  return `${bestAxis.axis}이 가장 잘 맞고, 픽업 ETA ${row.simEtaMin}분 조건에서 성향 유사도 ${Math.round(row.similarityScore)}점입니다.`
+}
+
+function makeWhy(driverAxis: number[], callAxis: number[], acceptance: number, etaMin: number): Why[] {
+  const matches = AXES.map((axis, index) => ({
+    label: axis.name,
+    score: clamp(100 - axisGap(callAxis, driverAxis, index)),
+  })).sort((a, b) => b.score - a.score)
+  const gaps = AXES.map((axis, index) => ({
+    label: axis.name,
+    gap: axisGap(callAxis, driverAxis, index),
+  })).sort((a, b) => b.gap - a.gap)
+
+  return [
+    { type: 'up', label: `${matches[0].label} 일치`, value: Math.round(matches[0].score / 3) },
+    { type: 'up', label: `예상 수락률 ${Math.round(acceptance)}%`, value: Math.round(acceptance / 4) },
+    { type: etaMin <= 7 ? 'up' : 'down', label: `픽업 ETA ${etaMin}분`, value: etaMin <= 7 ? 18 : 16 },
+    { type: 'down', label: `${gaps[0].label} 차이`, value: Math.round(gaps[0].gap / 3) },
+  ]
+}
+
+function confidence(reliability: number, dataDays: number | null | undefined): Ranked['confidence'] {
+  if (reliability >= 0.7 && Number(dataDays ?? 0) >= 30) return 'HIGH'
+  if (reliability >= 0.45 && Number(dataDays ?? 0) >= 10) return 'MEDIUM'
+  return 'LOW'
+}
+
 export default function SimulatorPage() {
   const [aspId, setAspId] = useState(147000000000)
-  const [hour, setHour] = useState(18)
+  const [hour, setHour] = useState(21)
   const [weekday, setWeekday] = useState(4)
-  const [distance, setDistance] = useState(2500)
-  const [fare, setFare] = useState(9000)
-  const [paid, setPaid] = useState(false)
+  const [distance, setDistance] = useState(18400)
+  const [fare, setFare] = useState(21500)
+  const [paid, setPaid] = useState(true)
   const [surge, setSurge] = useState(false)
   const [eta, setEta] = useState(240)
-  const [radius, setRadius] = useState(2.5)
   const [drivers, setDrivers] = useState<DriverRow[]>([])
-  const [focusedId, setFocusedId] = useState('')
+  const [selectedDriverId, setSelectedDriverId] = useState('')
+  const [running, setRunning] = useState(false)
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
     let cancelled = false
-
     async function load() {
       setLoading(true)
       const { data } = await supabase
@@ -95,14 +174,13 @@ export default function SimulatorPage() {
         setLoading(false)
       }
     }
-
     load()
     return () => {
       cancelled = true
     }
   }, [aspId])
 
-  const callVector = useMemo(() => callToVector({
+  const callInput = useMemo(() => ({
     hour_slot: hour,
     weekday,
     expected_distance: distance,
@@ -112,90 +190,216 @@ export default function SimulatorPage() {
     eta_distance: eta,
   }), [hour, weekday, distance, fare, paid, surge, eta])
 
+  const callVector = useMemo(() => callToVector(callInput), [callInput])
+  const callBundle = useMemo(() => toAxisBundle(callVector), [callVector])
+
   const ranked = useMemo<Ranked[]>(() => {
     return drivers
       .map((driver, index) => {
-        const simDistanceKm = pseudoDistance(driver.driver_id, index)
-        const simEtaMin = Math.max(2, Math.round(simDistanceKm * 2.7 + ((index % 4) * 0.8)))
-        const etaScore = clamp(1 - simEtaMin / 28)
-        const cosine = cosineSimilarity(callVector, driverToVector(driver))
+        const vector = driverToVector(driver)
+        const bundle = toAxisBundle(vector)
+        const cosine = cosineSimilarity(callVector, vector)
+        const similarityScore = clamp(cosine * 100)
         const reliability = Number(driver.reliability ?? 0)
-        const acceptance = clamp(cosine * 0.7 + reliability * 0.2 + etaScore * 0.1)
-        const previewScore = cosine * 0.72 + etaScore * 0.14 + acceptance * 0.1 + reliability * 0.04
-        return { driver, cosine, reliability, etaScore, acceptance, previewScore, simDistanceKm, simEtaMin }
+        const simDistanceKm = pseudoDistance(driver.driver_id, index)
+        const simEtaMin = Math.max(2, Math.round(simDistanceKm * 2.6 + ((index % 4) * 0.75)))
+        const pickupAccessibilityScore = clamp(100 - simEtaMin * 4)
+        const acceptanceProbability = clamp(similarityScore * 0.62 + reliability * 22 + pickupAccessibilityScore * 0.16)
+        const completionProbability = clamp(acceptanceProbability * 0.82 + reliability * 18)
+        const finalScore = clamp(
+          acceptanceProbability * 0.4 +
+          similarityScore * 0.25 +
+          pickupAccessibilityScore * 0.2 +
+          completionProbability * 0.1 +
+          reliability * 100 * 0.05
+        )
+        const base = {
+          driver,
+          vector,
+          axis: bundle.axis,
+          sub: bundle.sub,
+          cosine,
+          similarityScore,
+          acceptanceProbability,
+          completionProbability,
+          pickupAccessibilityScore,
+          finalScore,
+          reliability,
+          simDistanceKm,
+          simEtaMin,
+          confidence: confidence(reliability, driver.data_days),
+        }
+        return {
+          ...base,
+          lead: makeLead(base, callBundle.axis),
+          why: makeWhy(bundle.axis, callBundle.axis, acceptanceProbability, simEtaMin),
+        }
       })
-      .sort((a, b) => b.cosine - a.cosine)
+      .sort((a, b) => b.similarityScore - a.similarityScore)
       .slice(0, 10)
-  }, [drivers, callVector])
+  }, [drivers, callVector, callBundle.axis])
 
   useEffect(() => {
-    if (!focusedId && ranked[0]) setFocusedId(ranked[0].driver.driver_id)
-    if (focusedId && ranked.length && !ranked.some((row) => row.driver.driver_id === focusedId)) {
-      setFocusedId(ranked[0].driver.driver_id)
+    if (!selectedDriverId && ranked[0]) setSelectedDriverId(ranked[0].driver.driver_id)
+    if (selectedDriverId && ranked.length && !ranked.some((row) => row.driver.driver_id === selectedDriverId)) {
+      setSelectedDriverId(ranked[0].driver.driver_id)
     }
-  }, [focusedId, ranked])
+  }, [ranked, selectedDriverId])
 
-  const focused = ranked.find((row) => row.driver.driver_id === focusedId) ?? ranked[0]
-  const inRadius = ranked.filter((row) => row.simDistanceKm <= radius)
-  const secondRadius = ranked.filter((row) => row.simDistanceKm > radius && row.simDistanceKm <= radius * 1.8)
-  const thirdRadius = ranked.filter((row) => row.simDistanceKm > radius * 1.8)
+  const selected = ranked.find((row) => row.driver.driver_id === selectedDriverId) ?? ranked[0]
+  const top4 = ranked.slice(0, 4)
+
+  async function runSimulation() {
+    setRunning(true)
+    await new Promise((resolve) => setTimeout(resolve, 650))
+    setSelectedDriverId(ranked[0]?.driver.driver_id ?? '')
+    setRunning(false)
+  }
 
   return (
-    <main style={{ minHeight: '100vh', background: C.bg, color: C.ink, fontFamily: 'Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}>
-      <Topbar />
-      <KpiRail loading={loading} ranked={ranked} radius={radius} inRadius={inRadius.length} />
+    <main className="sim-page">
+      <Topbar running={running} onRun={runSimulation} />
 
-      <section style={{ position: 'relative', minHeight: 'calc(100vh - 126px)', overflow: 'hidden', borderTop: `1px solid ${C.border}` }}>
-        <MapBackdrop />
+      <section className="sim-shell">
+        <CallcardPanel
+          aspId={aspId}
+          setAspId={setAspId}
+          hour={hour}
+          setHour={setHour}
+          weekday={weekday}
+          setWeekday={setWeekday}
+          distance={distance}
+          setDistance={setDistance}
+          fare={fare}
+          setFare={setFare}
+          paid={paid}
+          setPaid={setPaid}
+          surge={surge}
+          setSurge={setSurge}
+          eta={eta}
+          setEta={setEta}
+          callBundle={callBundle}
+          running={running}
+        />
 
-        <aside style={leftPanel}>
-          <PanelTitle kicker="CALL INPUT" title="콜카드 조건" />
-          <Controls
-            aspId={aspId}
-            setAspId={setAspId}
-            hour={hour}
-            setHour={setHour}
-            weekday={weekday}
-            setWeekday={setWeekday}
-            distance={distance}
-            setDistance={setDistance}
-            fare={fare}
-            setFare={setFare}
-            eta={eta}
-            setEta={setEta}
-            radius={radius}
-            setRadius={setRadius}
-            paid={paid}
-            setPaid={setPaid}
-            surge={surge}
-            setSurge={setSurge}
-          />
-        </aside>
-
-        <section style={stagePanel}>
-          <div style={{ position: 'relative', zIndex: 4 }}>
-            <div style={{ color: C.cyan, fontSize: 14, fontWeight: 950, letterSpacing: '.12em' }}>UBER STYLE CANDIDATE SEARCH</div>
-            <h1 style={{ margin: '8px 0 0', fontSize: 36, lineHeight: 1.08, fontWeight: 950 }}>반경 후보를 만들고, 유사도 순서로 먼저 보냅니다</h1>
-            <p style={{ color: C.sub, fontSize: 16, lineHeight: 1.55, maxWidth: 720, marginTop: 12 }}>
-              실제 위치/온라인 상태가 들어오기 전까지 거리와 ETA는 시뮬레이션 표시입니다. 배차 점수에 섞지 않고, 코사인 유사도 우선정렬을 설명하는 용도로만 보여줍니다.
-            </p>
+        <section className="panel center-panel">
+          <div className="headline">
+            {loading ? '기사 벡터를 불러오는 중입니다' : selected ? (
+              <>추천 1순위 <b>{selected.driver.driver_id}</b> · 유사도 {pct(selected.similarityScore)}</>
+            ) : '추천 후보를 기다리는 중입니다'}
           </div>
-          <DispatchField ranked={ranked} focusedId={focusedId} setFocusedId={setFocusedId} radius={radius} />
+          <div className="legend">
+            <span><i style={{ background: C.cyan }} />콜 요구</span>
+            <span><i style={{ background: C.orange }} />기사 성향</span>
+            <span className="hint">축 클릭 시 22팩터 드릴다운</span>
+          </div>
+          <MatchRadar callAxis={callBundle.axis} driverAxis={selected?.axis ?? []} callSub={callBundle.sub} driverSub={selected?.sub ?? []} />
+          <div className="lead">{selected ? selected.lead : '콜 조건과 기사 성향을 비교할 준비가 됐습니다.'}</div>
+          <MatchWaterfall why={selected?.why ?? []} />
         </section>
 
-        <aside style={rightPanel}>
-          <PanelTitle kicker="BEST CANDIDATE" title="추천 기사 Top 1" />
-          <DriverScoreCard row={focused} />
-          <FallbackPanel first={inRadius.length} second={secondRadius.length} third={thirdRadius.length} radius={radius} />
-        </aside>
-
-        <BottomRanking ranked={ranked} focusedId={focusedId} setFocusedId={setFocusedId} />
+        <DecisionPanel
+          ranked={top4}
+          selectedId={selectedDriverId}
+          setSelectedId={setSelectedDriverId}
+          selected={selected}
+        />
       </section>
+
+      <style jsx global>{`
+        html { font-size: clamp(15px, 1.1vw, 20px); }
+        body { background: ${C.body}; }
+      `}</style>
+      <style jsx>{`
+        .sim-page {
+          min-height: 100vh;
+          background: ${C.body};
+          color: ${C.ink};
+          font-family: Pretendard, "Apple SD Gothic Neo", "Malgun Gothic", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+        .sim-shell {
+          display: grid;
+          grid-template-columns: minmax(220px, 300px) 1fr minmax(260px, 360px);
+          gap: 1.2rem;
+          padding: 1.2rem 1.6rem;
+          align-items: stretch;
+        }
+        .panel {
+          background: ${C.card};
+          border: 1px solid ${C.line};
+          border-radius: 20px;
+          padding: 1.3rem;
+          min-width: 0;
+        }
+        .center-panel {
+          border-color: rgba(34, 211, 238, .3);
+          box-shadow: inset 0 0 40px rgba(34, 211, 238, .03);
+        }
+        .headline {
+          min-height: 1.6em;
+          text-align: center;
+          font-size: clamp(1.3rem, 3vw, 1.7rem);
+          line-height: 1.2;
+          font-weight: 900;
+        }
+        .headline b {
+          color: ${C.cyan};
+          text-shadow: 0 0 15px rgba(34, 211, 238, .5);
+        }
+        .legend {
+          display: flex;
+          justify-content: center;
+          gap: 1.2rem;
+          color: ${C.sub};
+          font-size: clamp(.8rem, 1.4vw, .9rem);
+          margin: .75rem 0;
+          flex-wrap: wrap;
+        }
+        .legend i {
+          display: inline-block;
+          width: .9rem;
+          height: .9rem;
+          border-radius: 4px;
+          margin-right: .4rem;
+          vertical-align: -2px;
+        }
+        .hint { color: ${C.purple}; }
+        .lead {
+          background: rgba(16, 185, 129, .08);
+          border: 1px solid rgba(16, 185, 129, .25);
+          border-radius: 12px;
+          padding: .85rem 1.1rem;
+          font-size: clamp(.95rem, 1.8vw, 1.1rem);
+          font-weight: 700;
+          text-align: center;
+          margin: .6rem 0;
+        }
+        @media (max-width: 1100px) {
+          .sim-shell {
+            grid-template-columns: 1fr 1fr;
+            grid-template-areas:
+              "left center"
+              "right center";
+          }
+          .left-panel { grid-area: left; }
+          .center-panel { grid-area: center; }
+          .right-panel { grid-area: right; }
+        }
+        @media (max-width: 760px) {
+          html { font-size: clamp(15px, 4vw, 18px); }
+          .sim-shell {
+            grid-template-columns: 1fr;
+            grid-template-areas: none;
+            padding: 1rem;
+          }
+          .center-panel { order: -1; }
+        }
+      `}</style>
     </main>
   )
 }
 
-function Topbar() {
+function Topbar({ running, onRun }: { running: boolean; onRun: () => void }) {
   const nav = [
     ['적재현황', '/ingest'],
     ['벡터리스트', '/vectors'],
@@ -204,49 +408,92 @@ function Topbar() {
   ]
 
   return (
-    <header style={{ height: 56, background: '#05070D', borderBottom: `1px solid ${C.border}`, display: 'grid', gridTemplateColumns: '320px 1fr 260px', alignItems: 'center', padding: '0 18px', gap: 18 }}>
-      <Link href="/dashboard" style={{ color: C.ink, textDecoration: 'none', fontSize: 18, fontWeight: 950 }}>
-        Happycall PMO <span style={{ color: C.cyan }}>Dispatch Lab</span>
+    <header className="topbar">
+      <Link href="/dashboard" className="brand">
+        <span className="dot" />
+        <span>콜카드 <b>↔</b> 기사 매칭 시뮬레이터</span>
       </Link>
-      <nav style={{ display: 'flex', justifyContent: 'center', gap: 8 }}>
+      <nav>
         {nav.map(([label, href]) => (
-          <Link key={href} href={href} style={{ color: href === '/simulator' ? C.cyan : C.sub, textDecoration: 'none', border: `1px solid ${href === '/simulator' ? C.cyan : C.border}`, borderRadius: 8, padding: '8px 12px', fontSize: 14, fontWeight: 900, background: href === '/simulator' ? 'rgba(34,211,238,.12)' : 'rgba(15,22,40,.62)' }}>
-            {label}
-          </Link>
+          <Link key={href} href={href} className={href === '/simulator' ? 'active' : ''}>{label}</Link>
         ))}
       </nav>
-      <div style={{ justifySelf: 'end', display: 'flex', gap: 8 }}>
-        <Pill color={C.green}>SUPABASE</Pill>
-        <Pill color={C.yellow}>SIM ETA</Pill>
-      </div>
+      <button type="button" onClick={onRun} disabled={running}>{running ? '계산 중' : '시뮬레이션 가동'}</button>
+      <style jsx>{`
+        .topbar {
+          min-height: 64px;
+          padding: 1rem 1.6rem;
+          display: grid;
+          grid-template-columns: minmax(260px, 1fr) auto auto;
+          gap: 1rem;
+          align-items: center;
+          border-bottom: 1px solid ${C.line};
+          background: rgba(10, 16, 29, .84);
+        }
+        .brand {
+          color: ${C.ink};
+          text-decoration: none;
+          font-size: clamp(1.05rem, 2.2vw, 1.4rem);
+          font-weight: 950;
+          display: flex;
+          align-items: center;
+          gap: .75rem;
+        }
+        .brand b { color: ${C.cyan}; }
+        .dot {
+          width: .85rem;
+          height: .85rem;
+          border-radius: 999px;
+          background: ${C.cyan};
+          box-shadow: 0 0 16px ${C.cyan};
+        }
+        nav {
+          display: flex;
+          gap: .45rem;
+          flex-wrap: wrap;
+          justify-content: center;
+        }
+        nav a {
+          color: ${C.sub};
+          text-decoration: none;
+          border: 1px solid ${C.line};
+          border-radius: 10px;
+          padding: .55rem .7rem;
+          font-size: .82rem;
+          font-weight: 850;
+          background: rgba(15, 23, 42, .7);
+        }
+        nav a.active {
+          color: ${C.cyan};
+          border-color: ${C.cyan};
+          background: rgba(34, 211, 238, .1);
+        }
+        button {
+          border: 0;
+          border-radius: 12px;
+          padding: .75rem 1.1rem;
+          color: white;
+          background: linear-gradient(135deg, ${C.cyan}, ${C.purple});
+          font: inherit;
+          font-weight: 950;
+          cursor: pointer;
+          box-shadow: 0 8px 24px rgba(34, 211, 238, .24);
+        }
+        button:disabled {
+          opacity: .55;
+          cursor: wait;
+        }
+        @media (max-width: 920px) {
+          .topbar { grid-template-columns: 1fr; }
+          nav { justify-content: flex-start; }
+          button { justify-self: start; }
+        }
+      `}</style>
     </header>
   )
 }
 
-function KpiRail({ loading, ranked, radius, inRadius }: { loading: boolean; ranked: Ranked[]; radius: number; inRadius: number }) {
-  const best = ranked[0]
-  const items = [
-    ['기사 벡터', loading ? '로딩 중' : `${ranked.length}명`, '동일 ASP 후보 Top 10', C.green],
-    ['탐색 반경', `${radius.toFixed(1)}km`, `${inRadius}명 1차 후보`, C.cyan],
-    ['최고 유사도', pct(best?.cosine), '22D 코사인', C.purple],
-    ['예상 수락', pct(best?.acceptance), '참고용 구성요소', C.yellow],
-    ['Fallback', '1 → 2 → 3차', '미수락 시 기존 순차', C.orange],
-  ]
-
-  return (
-    <section style={{ height: 70, background: '#080B13', display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', borderBottom: `1px solid ${C.border}` }}>
-      {items.map(([label, value, sub, color]) => (
-        <div key={label} style={{ borderRight: `1px solid ${C.border}`, padding: '10px 18px' }}>
-          <div style={{ color: C.muted, fontSize: 13, fontWeight: 900 }}>{label}</div>
-          <div style={{ color: String(color), fontSize: 26, lineHeight: 1.05, fontWeight: 950, marginTop: 3 }}>{value}</div>
-          <div style={{ color: C.muted, fontSize: 12, marginTop: 3 }}>{sub}</div>
-        </div>
-      ))}
-    </section>
-  )
-}
-
-function Controls(props: {
+function CallcardPanel(props: {
   aspId: number
   setAspId: (v: number) => void
   hour: number
@@ -257,275 +504,633 @@ function Controls(props: {
   setDistance: (v: number) => void
   fare: number
   setFare: (v: number) => void
-  eta: number
-  setEta: (v: number) => void
-  radius: number
-  setRadius: (v: number) => void
   paid: boolean
   setPaid: (v: boolean) => void
   surge: boolean
   setSurge: (v: boolean) => void
+  eta: number
+  setEta: (v: number) => void
+  callBundle: { axis: number[]; sub: number[][] }
+  running: boolean
 }) {
+  const tags = AXES.flatMap((axis) => axis.indexes.map((index) => VECTOR_DIMENSIONS[index].label))
   return (
-    <div style={{ display: 'grid', gap: 12, marginTop: 16 }}>
-      <Label title="지역">
-        <select value={props.aspId} onChange={(event) => props.setAspId(Number(event.target.value))} style={inputStyle}>
-          {aspOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-        </select>
-      </Label>
-      <Two>
-        <Label title="요청 시간">
-          <input type="number" min={0} max={23} value={props.hour} onChange={(event) => props.setHour(Number(event.target.value))} style={inputStyle} />
-        </Label>
-        <Label title="요일">
-          <select value={props.weekday} onChange={(event) => props.setWeekday(Number(event.target.value))} style={inputStyle}>
-            {weekdays.map((day, index) => <option key={day} value={index}>{day}</option>)}
-          </select>
-        </Label>
-      </Two>
-      <Label title={`탐색 반경 ${props.radius.toFixed(1)}km`}>
-        <input type="range" min={1} max={8} step={0.5} value={props.radius} onChange={(event) => props.setRadius(Number(event.target.value))} />
-      </Label>
-      <Two>
-        <Label title="예상거리 m">
-          <input type="number" value={props.distance} onChange={(event) => props.setDistance(Number(event.target.value))} style={inputStyle} />
-        </Label>
-        <Label title="예상요금 원">
-          <input type="number" value={props.fare} onChange={(event) => props.setFare(Number(event.target.value))} style={inputStyle} />
-        </Label>
-      </Two>
-      <Label title="승객 위치 ETA 초">
-        <input type="number" value={props.eta} onChange={(event) => props.setEta(Number(event.target.value))} style={inputStyle} />
-      </Label>
-      <label style={checkStyle}><input type="checkbox" checked={props.paid} onChange={(event) => props.setPaid(event.target.checked)} /> 유료콜</label>
-      <label style={checkStyle}><input type="checkbox" checked={props.surge} onChange={(event) => props.setSurge(event.target.checked)} /> 탄력/프리미엄</label>
-    </div>
+    <aside className="panel left-panel">
+      <PanelTitle color={C.cyan}>입력된 콜카드</PanelTitle>
+      <div className="route"><span>출발 H3 준비</span><b>→</b><span>도착 H3 준비</span></div>
+      <div className="rows">
+        <Select label="지역" value={props.aspId} onChange={props.setAspId} options={aspOptions} />
+        <Two>
+          <NumberInput label="시간" value={props.hour} min={0} max={23} onChange={props.setHour} />
+          <label className="field">요일
+            <select value={props.weekday} onChange={(event) => props.setWeekday(Number(event.target.value))}>
+              {weekdays.map((day, index) => <option key={day} value={index}>{day}</option>)}
+            </select>
+          </label>
+        </Two>
+        <NumberInput label="예상거리 m" value={props.distance} onChange={props.setDistance} />
+        <NumberInput label="예상요금 원" value={props.fare} onChange={props.setFare} />
+        <NumberInput label="픽업 ETA 초" value={props.eta} onChange={props.setEta} />
+        <label className="check"><input type="checkbox" checked={props.paid} onChange={(event) => props.setPaid(event.target.checked)} /> 유료콜</label>
+        <label className="check"><input type="checkbox" checked={props.surge} onChange={(event) => props.setSurge(event.target.checked)} /> 탄력/프리미엄</label>
+      </div>
+
+      <PanelTitle color={C.purple}>22 벡터 팩터</PanelTitle>
+      <div className="factors">
+        {tags.map((tag, index) => <span key={`${tag}-${index}`} className={props.running ? 'active' : ''}>{tag}</span>)}
+      </div>
+      <style jsx>{panelCss}</style>
+    </aside>
   )
 }
 
-function DispatchField({ ranked, focusedId, setFocusedId, radius }: { ranked: Ranked[]; focusedId: string; setFocusedId: (id: string) => void; radius: number }) {
+function DecisionPanel({
+  ranked,
+  selectedId,
+  setSelectedId,
+  selected,
+}: {
+  ranked: Ranked[]
+  selectedId: string
+  setSelectedId: (id: string) => void
+  selected?: Ranked
+}) {
+  const delta = Math.round((selected?.acceptanceProbability ?? 0) - BASELINE_ACCEPTANCE)
   return (
-    <div style={{ position: 'absolute', inset: 0 }}>
-      <div style={{ position: 'absolute', left: '50%', top: '54%', width: radius * 82, height: radius * 82, transform: 'translate(-50%, -50%)', borderRadius: 999, border: `1px solid ${C.cyan}66`, background: 'rgba(34,211,238,.06)', zIndex: 1 }} />
-      <div style={{ position: 'absolute', left: '50%', top: '54%', width: radius * 138, height: radius * 138, transform: 'translate(-50%, -50%)', borderRadius: 999, border: `1px dashed ${C.yellow}55`, zIndex: 1 }} />
-      <div style={{ position: 'absolute', left: '50%', top: '54%', width: radius * 190, height: radius * 190, transform: 'translate(-50%, -50%)', borderRadius: 999, border: `1px dashed ${C.orange}44`, zIndex: 1 }} />
-
-      <div style={{ position: 'absolute', left: '50%', top: '54%', transform: 'translate(-50%, -50%)', zIndex: 4, width: 142, height: 142, borderRadius: 28, border: `2px solid ${C.cyan}`, background: 'linear-gradient(160deg, rgba(34,211,238,.24), rgba(7,10,18,.96))', display: 'grid', placeItems: 'center', boxShadow: `0 0 58px ${C.cyan}44` }}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ color: C.cyan, fontSize: 14, fontWeight: 950 }}>CALL</div>
-          <div style={{ fontSize: 30, fontWeight: 950, marginTop: 4 }}>발생</div>
-          <div style={{ color: C.sub, fontSize: 12, marginTop: 5 }}>후보 탐색</div>
-        </div>
-      </div>
-
-      {ranked.map((row, index) => {
-        const angle = (index / Math.max(1, ranked.length)) * Math.PI * 2 - Math.PI / 2
-        const ring = row.simDistanceKm <= radius ? 31 : row.simDistanceKm <= radius * 1.8 ? 42 : 52
-        const x = 50 + Math.cos(angle) * ring
-        const y = 54 + Math.sin(angle) * ring * 0.68
-        const active = row.driver.driver_id === focusedId
-        return (
+    <aside className="panel right-panel">
+      <PanelTitle color={C.orange}>유사도 랭킹 Top 4</PanelTitle>
+      <div className="rank-list">
+        {ranked.map((row, index) => (
           <button
             key={row.driver.driver_id}
-            onMouseEnter={() => setFocusedId(row.driver.driver_id)}
-            onClick={() => setFocusedId(row.driver.driver_id)}
-            style={{
-              position: 'absolute',
-              left: `${x}%`,
-              top: `${y}%`,
-              transform: 'translate(-50%, -50%)',
-              zIndex: active ? 7 : 5,
-              width: active ? 92 : 68,
-              height: active ? 92 : 68,
-              borderRadius: 18,
-              border: `2px solid ${active ? C.cyan : index < 3 ? C.green : C.border}`,
-              background: active ? 'rgba(34,211,238,.18)' : 'rgba(9,14,26,.96)',
-              color: C.ink,
-              cursor: 'pointer',
-              boxShadow: active ? `0 0 36px ${C.cyan}55` : 'none',
-            }}
+            className={row.driver.driver_id === selectedId ? 'driver active' : 'driver'}
+            onClick={() => setSelectedId(row.driver.driver_id)}
           >
-            <div style={{ color: index < 3 ? C.green : C.sub, fontSize: active ? 22 : 17, fontWeight: 950 }}>#{index + 1}</div>
-            <div style={{ color: C.cyan, fontSize: active ? 18 : 14, fontWeight: 950, marginTop: 5 }}>{pct(row.cosine)}</div>
-            <div style={{ color: C.muted, fontSize: 10, marginTop: 3 }}>{row.simEtaMin}분</div>
+            <span className="badge">{index + 1}</span>
+            <span className="meta">
+              <b>{row.driver.driver_id}</b>
+              <small>{row.simDistanceKm.toFixed(1)}km · ETA {row.simEtaMin}분 · {row.confidence}</small>
+            </span>
+            <span className="score">{Math.round(row.similarityScore)}<small>%</small></span>
           </button>
+        ))}
+      </div>
+
+      <PanelTitle color={C.green}>예상 수락률 KPI</PanelTitle>
+      <div className="kpi-box">
+        <KpiRow label="기존 순번" value={BASELINE_ACCEPTANCE} color={C.muted} />
+        <KpiRow label="우선 배차" value={Math.round(selected?.acceptanceProbability ?? 0)} color={C.green} delta={delta} />
+      </div>
+
+      <PanelTitle color={C.cyan}>점수 분리</PanelTitle>
+      <div className="split">
+        <Metric label="성향 유사도" value={pct(selected?.similarityScore)} />
+        <Metric label="예상 수락률" value={pct(selected?.acceptanceProbability)} />
+        <Metric label="완료 가능성" value={pct(selected?.completionProbability)} />
+        <Metric label="최종 추천점수" value={pct(selected?.finalScore)} />
+      </div>
+      <style jsx>{`
+        .rank-list { display: grid; gap: .75rem; margin-bottom: 1.2rem; }
+        .driver {
+          width: 100%;
+          border: 1px solid ${C.line};
+          border-radius: 14px;
+          background: rgba(255,255,255,.025);
+          color: ${C.ink};
+          padding: .85rem;
+          display: grid;
+          grid-template-columns: 2.6rem 1fr auto;
+          align-items: center;
+          gap: .75rem;
+          text-align: left;
+          cursor: pointer;
+          opacity: .75;
+        }
+        .driver.active {
+          opacity: 1;
+          border-color: ${C.orange};
+          background: rgba(251,146,60,.08);
+          box-shadow: 0 0 0 1px ${C.orange};
+        }
+        .badge {
+          width: 2.6rem;
+          height: 2.6rem;
+          border-radius: 12px;
+          display: grid;
+          place-items: center;
+          font-weight: 950;
+          background: linear-gradient(135deg, ${C.orange}, #EA580C);
+        }
+        .meta { min-width: 0; display: grid; gap: .2rem; }
+        .meta b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .meta small { color: ${C.muted}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .score { color: ${C.cyan}; font-size: clamp(1.25rem, 2.4vw, 1.75rem); font-weight: 950; }
+        .score small { color: ${C.muted}; font-size: .55em; }
+        .kpi-box {
+          border: 1px solid rgba(16,185,129,.2);
+          border-radius: 16px;
+          background: rgba(16,185,129,.05);
+          padding: 1rem;
+          margin-bottom: 1.2rem;
+        }
+        .split { display: grid; gap: .7rem; }
+      `}</style>
+    </aside>
+  )
+}
+
+function MatchRadar({
+  callAxis,
+  driverAxis,
+  callSub,
+  driverSub,
+}: {
+  callAxis: number[]
+  driverAxis: number[]
+  callSub: number[][]
+  driverSub: number[][]
+}) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  const wrapRef = useRef<HTMLDivElement | null>(null)
+  const [selectedAxis, setSelectedAxis] = useState<number | null>(null)
+  const hitRef = useRef<{ x: number; y: number; i: number }[]>([])
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    const wrap = wrapRef.current
+    if (!canvas || !wrap) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    const context = ctx
+
+    let raf = 0
+    let start = performance.now()
+    const dpr = window.devicePixelRatio || 1
+
+    function sizeCanvas() {
+      if (!canvas || !wrap) return
+      const side = Math.max(Math.min(wrap.clientWidth, wrap.clientHeight, 600), 220)
+      canvas.style.width = `${side}px`
+      canvas.style.height = `${side}px`
+      canvas.width = side * dpr
+      canvas.height = side * dpr
+      context.setTransform(dpr, 0, 0, dpr, 0, 0)
+    }
+
+    function point(cx: number, cy: number, r: number, i: number, value: number) {
+      const angle = -Math.PI / 2 + i * 2 * Math.PI / AXES.length
+      return [cx + r * (value / 100) * Math.cos(angle), cy + r * (value / 100) * Math.sin(angle)]
+    }
+
+    function drawPoly(cx: number, cy: number, r: number, vals: number[], stroke: string, fill: string, progress = 1) {
+      const next = vals.map((value) => value * progress)
+      context.beginPath()
+      for (let i = 0; i <= AXES.length; i++) {
+        const [x, y] = point(cx, cy, r, i % AXES.length, next[i % AXES.length] ?? 0)
+        if (i === 0) context.moveTo(x, y)
+        else context.lineTo(x, y)
+      }
+      context.closePath()
+      context.fillStyle = fill
+      context.fill()
+      context.shadowBlur = 15
+      context.shadowColor = stroke
+      context.strokeStyle = stroke
+      context.lineWidth = 3
+      context.stroke()
+      context.shadowBlur = 0
+      next.forEach((value, i) => {
+        const [x, y] = point(cx, cy, r, i, value)
+        context.beginPath()
+        context.arc(x, y, 4, 0, Math.PI * 2)
+        context.fillStyle = '#fff'
+        context.fill()
+        context.strokeStyle = stroke
+        context.lineWidth = 2
+        context.stroke()
+      })
+    }
+
+    function draw(now: number) {
+      if (!canvas) return
+      sizeCanvas()
+      const w = Number.parseFloat(canvas.style.width)
+      const h = Number.parseFloat(canvas.style.height)
+      context.clearRect(0, 0, w, h)
+      const cx = w / 2
+      const cy = h / 2
+      const labelFont = Math.max(11, Math.min(w * 0.032, 17))
+      const r = Math.min(w, h) / 2 - Math.max(48, w * 0.1)
+      hitRef.current = []
+
+      for (let g = 1; g <= 4; g++) {
+        context.beginPath()
+        for (let i = 0; i <= AXES.length; i++) {
+          const [x, y] = point(cx, cy, r, i % AXES.length, g * 25)
+          if (i === 0) context.moveTo(x, y)
+          else context.lineTo(x, y)
+        }
+        context.strokeStyle = 'rgba(255,255,255,.08)'
+        context.lineWidth = 1
+        context.stroke()
+      }
+
+      context.font = `800 ${labelFont}px Pretendard, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif`
+      context.textAlign = 'center'
+      context.textBaseline = 'middle'
+      AXES.forEach((axis, i) => {
+        const [x, y] = point(cx, cy, r, i, 100)
+        context.beginPath()
+        context.moveTo(cx, cy)
+        context.lineTo(x, y)
+        context.strokeStyle = 'rgba(255,255,255,.1)'
+        context.stroke()
+        const [lx, ly] = point(cx, cy, r + labelFont * 1.7, i, 100)
+        context.fillStyle = selectedAxis === i ? C.cyan : '#94A3B8'
+        context.fillText(axis.name, lx, ly)
+        hitRef.current.push({ x: lx, y: ly, i })
+      })
+
+      drawPoly(cx, cy, r, callAxis, C.cyan, 'rgba(34,211,238,.16)')
+      const p = Math.min((now - start) / 620, 1)
+      const eased = 1 - Math.pow(1 - p, 3)
+      context.globalCompositeOperation = 'screen'
+      drawPoly(cx, cy, r, driverAxis, C.orange, 'rgba(251,146,60,.28)', eased)
+      context.globalCompositeOperation = 'source-over'
+      if (p < 1) raf = requestAnimationFrame(draw)
+    }
+
+    start = performance.now()
+    raf = requestAnimationFrame(draw)
+    window.addEventListener('resize', sizeCanvas)
+    return () => {
+      cancelAnimationFrame(raf)
+      window.removeEventListener('resize', sizeCanvas)
+    }
+  }, [callAxis, driverAxis, selectedAxis])
+
+  function onCanvasClick(event: React.MouseEvent<HTMLCanvasElement>) {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const rect = canvas.getBoundingClientRect()
+    const mx = event.clientX - rect.left
+    const my = event.clientY - rect.top
+    const hit = hitRef.current
+      .map((item) => ({ ...item, d: (item.x - mx) ** 2 + (item.y - my) ** 2 }))
+      .sort((a, b) => a.d - b.d)[0]
+    if (hit && hit.d < 55 * 55) setSelectedAxis(hit.i)
+  }
+
+  return (
+    <>
+      <div className="radar-wrap" ref={wrapRef}>
+        <canvas ref={canvasRef} onClick={onCanvasClick} />
+      </div>
+      {selectedAxis != null && (
+        <FactorDrilldown
+          axisIndex={selectedAxis}
+          callValues={callSub[selectedAxis] ?? []}
+          driverValues={driverSub[selectedAxis] ?? []}
+          onClose={() => setSelectedAxis(null)}
+        />
+      )}
+      <style jsx>{`
+        .radar-wrap {
+          min-height: clamp(260px, 42vh, 480px);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        canvas {
+          width: 100%;
+          height: 100%;
+          max-width: 600px;
+          cursor: pointer;
+        }
+        @media (max-width: 760px) {
+          .radar-wrap { min-height: clamp(280px, 70vw, 380px); }
+        }
+      `}</style>
+    </>
+  )
+}
+
+function MatchWaterfall({ why }: { why: Why[] }) {
+  return (
+    <div className="waterfall">
+      {why.map((item, index) => {
+        const width = Math.min(item.value * 1.5, 48)
+        return (
+          <div key={`${item.label}-${index}`} className="wf-row">
+            <div className="wf-label">{item.type === 'down' ? item.label : ''}</div>
+            <div className="wf-track">
+              <div className="wf-center" />
+              <div className={item.type === 'up' ? 'wf-bar pos' : 'wf-bar neg'} style={{ width: `${width}%` }}>
+                {item.type === 'up' ? '+' : '-'}{item.value}
+              </div>
+            </div>
+            <div className="wf-label right">{item.type === 'up' ? item.label : ''}</div>
+          </div>
         )
       })}
+      <style jsx>{`
+        .waterfall {
+          margin-top: .75rem;
+          padding-top: 1rem;
+          border-top: 1px solid ${C.line};
+          display: grid;
+          gap: .6rem;
+        }
+        .wf-row {
+          display: grid;
+          grid-template-columns: 1fr minmax(120px, 1.4fr) 1fr;
+          gap: .7rem;
+          align-items: center;
+          font-size: clamp(.8rem, 1.5vw, .95rem);
+          font-weight: 700;
+        }
+        .wf-label { color: ${C.muted}; text-align: right; line-height: 1.25; }
+        .wf-label.right { text-align: left; }
+        .wf-track {
+          position: relative;
+          height: 1.9rem;
+          background: rgba(255,255,255,.035);
+          border-radius: 14px;
+          overflow: hidden;
+        }
+        .wf-center {
+          position: absolute;
+          left: 50%;
+          top: 0;
+          bottom: 0;
+          width: 2px;
+          background: rgba(255,255,255,.2);
+          transform: translateX(-50%);
+          z-index: 2;
+        }
+        .wf-bar {
+          position: absolute;
+          top: 0;
+          bottom: 0;
+          display: flex;
+          align-items: center;
+          padding: 0 .6rem;
+          color: white;
+          font-weight: 950;
+          font-size: clamp(.78rem, 1.4vw, .9rem);
+        }
+        .wf-bar.pos {
+          left: 50%;
+          justify-content: flex-end;
+          background: linear-gradient(90deg, transparent, ${C.green});
+          border-right: 2px solid ${C.green};
+        }
+        .wf-bar.neg {
+          right: 50%;
+          justify-content: flex-start;
+          background: linear-gradient(270deg, transparent, ${C.red});
+          border-left: 2px solid ${C.red};
+        }
+      `}</style>
     </div>
   )
 }
 
-function DriverScoreCard({ row }: { row?: Ranked }) {
+function FactorDrilldown({
+  axisIndex,
+  callValues,
+  driverValues,
+  onClose,
+}: {
+  axisIndex: number
+  callValues: number[]
+  driverValues: number[]
+  onClose: () => void
+}) {
+  const axis = AXES[axisIndex]
   return (
-    <div style={{ marginTop: 16, border: `1px solid ${C.green}66`, borderRadius: 18, background: 'linear-gradient(160deg, rgba(16,185,129,.18), rgba(9,14,26,.96))', padding: 16 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <div style={{ color: C.green, fontSize: 13, fontWeight: 950 }}>AI PRIORITY</div>
-          <div style={{ fontSize: 42, lineHeight: 1, fontWeight: 950, marginTop: 6 }}>{pct(row?.cosine)}</div>
-        </div>
-        <div style={{ width: 82, height: 82, borderRadius: 18, border: `1px solid ${C.green}66`, background: 'rgba(16,185,129,.14)', display: 'grid', placeItems: 'center', color: C.green, fontSize: 31, fontWeight: 950 }}>TOP</div>
-      </div>
-      <div style={{ marginTop: 18, fontFamily: 'monospace', fontSize: 17, fontWeight: 900, overflowWrap: 'anywhere' }}>{row?.driver.driver_id ?? '-'}</div>
-      <div style={{ display: 'grid', gap: 10, marginTop: 16 }}>
-        <Metric label="ETA 점수" value={pct(row?.etaScore)} color={C.cyan} />
-        <Metric label="코사인 유사도" value={pct(row?.cosine)} color={C.green} />
-        <Metric label="예상 수락확률" value={pct(row?.acceptance)} color={C.yellow} />
-        <Metric label="데이터 신뢰도" value={pct(row?.reliability)} color={C.purple} />
-      </div>
-    </div>
-  )
-}
-
-function FallbackPanel({ first, second, third, radius }: { first: number; second: number; third: number; radius: number }) {
-  return (
-    <div style={{ marginTop: 14, border: `1px solid ${C.border}`, borderRadius: 16, background: C.panel, padding: 16 }}>
-      <div style={{ color: C.sub, fontSize: 13, fontWeight: 950, letterSpacing: '.1em' }}>RADIUS FALLBACK</div>
-      <Step title={`1차 ${radius.toFixed(1)}km`} value={`${first}명`} color={C.cyan} />
-      <Step title={`2차 ${(radius * 1.8).toFixed(1)}km`} value={`${second}명`} color={C.yellow} />
-      <Step title="3차 기존 순차" value={`${third}명`} color={C.orange} />
-    </div>
-  )
-}
-
-function BottomRanking({ ranked, focusedId, setFocusedId }: { ranked: Ranked[]; focusedId: string; setFocusedId: (id: string) => void }) {
-  return (
-    <section style={{ position: 'absolute', left: 350, right: 350, bottom: 18, minHeight: 112, border: `1px solid ${C.border}`, borderRadius: 18, background: 'linear-gradient(90deg, rgba(9,14,26,.96), rgba(9,14,26,.76))', boxShadow: '0 20px 70px rgba(0,0,0,.32)', zIndex: 8, padding: 14 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
-        {ranked.slice(0, 5).map((row, index) => {
-          const active = row.driver.driver_id === focusedId
-          return (
-            <button key={row.driver.driver_id} onMouseEnter={() => setFocusedId(row.driver.driver_id)} onClick={() => setFocusedId(row.driver.driver_id)} style={{ border: `1px solid ${active ? C.cyan : C.border}`, borderRadius: 12, background: active ? 'rgba(34,211,238,.14)' : 'rgba(15,22,40,.88)', color: C.ink, padding: 12, textAlign: 'left', cursor: 'pointer' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: index < 3 ? C.yellow : C.sub, fontSize: 13, fontWeight: 950 }}>SEND #{index + 1}</span>
-                <span style={{ color: C.cyan, fontSize: 18, fontWeight: 950 }}>{pct(row.cosine)}</span>
+    <div className="modal-bg" onClick={(event) => {
+      if (event.currentTarget === event.target) onClose()
+    }}>
+      <div className="modal">
+        <h3>{axis.name}</h3>
+        <p>이 축을 구성하는 원본 팩터입니다. 위쪽은 콜카드, 아래쪽은 선택 기사입니다.</p>
+        <div className="items">
+          {axis.indexes.map((dimensionIndex, index) => (
+            <div key={dimensionIndex} className="factor-row">
+              <span>{VECTOR_DIMENSIONS[dimensionIndex].label}</span>
+              <div className="bar">
+                <i className="call" style={{ width: `${callValues[index] ?? 0}%` }} />
+                <i className="driver" style={{ width: `${driverValues[index] ?? 0}%` }} />
               </div>
-              <div style={{ marginTop: 8, fontSize: 13, fontFamily: 'monospace', fontWeight: 900, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.driver.driver_id}</div>
-              <div style={{ marginTop: 7, color: C.sub, fontSize: 13 }}>{row.simDistanceKm.toFixed(1)}km · ETA {row.simEtaMin}분</div>
-            </button>
-          )
-        })}
+              <b>{Math.round(callValues[index] ?? 0)} / {Math.round(driverValues[index] ?? 0)}</b>
+            </div>
+          ))}
+        </div>
+        <button type="button" onClick={onClose}>닫기</button>
       </div>
-    </section>
-  )
-}
-
-function MapBackdrop() {
-  return (
-    <div aria-hidden style={{ position: 'absolute', inset: 0 }}>
-      <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(circle at 50% 52%, rgba(34,211,238,.12), transparent 30%), linear-gradient(135deg, #121820, #080B13 68%)' }} />
-      <div style={{ position: 'absolute', inset: 0, opacity: 0.36, backgroundImage: 'linear-gradient(rgba(255,255,255,.07) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.06) 1px, transparent 1px)', backgroundSize: '56px 56px' }} />
-      <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0.55 }}>
-        <path d="M4 70 C18 52 24 31 42 42 S62 79 96 18" stroke="rgba(34,211,238,.32)" strokeWidth=".35" fill="none" />
-        <path d="M0 26 C28 20 55 22 100 74" stroke="rgba(16,185,129,.22)" strokeWidth=".42" fill="none" />
-        <path d="M26 2 L72 100" stroke="rgba(245,158,11,.22)" strokeWidth=".28" fill="none" />
-      </svg>
+      <style jsx>{`
+        .modal-bg {
+          position: fixed;
+          inset: 0;
+          z-index: 80;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 1rem;
+          background: rgba(5,8,16,.86);
+          backdrop-filter: blur(8px);
+        }
+        .modal {
+          width: min(620px, 100%);
+          max-height: 88vh;
+          overflow: auto;
+          border: 1px solid ${C.line};
+          border-radius: 20px;
+          background: ${C.card};
+          padding: 1.5rem;
+          box-shadow: 0 20px 50px rgba(0,0,0,.5);
+        }
+        h3 { color: ${C.cyan}; font-size: clamp(1.25rem, 2.4vw, 1.5rem); margin: 0; }
+        p { color: ${C.sub}; line-height: 1.5; }
+        .items { display: grid; gap: .9rem; margin-top: 1rem; }
+        .factor-row {
+          display: grid;
+          grid-template-columns: minmax(90px, 140px) 1fr minmax(70px, auto);
+          gap: .8rem;
+          align-items: center;
+        }
+        .factor-row span { color: ${C.ink}; font-weight: 800; text-align: right; }
+        .factor-row b { color: ${C.sub}; text-align: right; }
+        .bar {
+          height: 1.55rem;
+          border-radius: 8px;
+          background: rgba(255,255,255,.05);
+          position: relative;
+          overflow: hidden;
+        }
+        .bar i { position: absolute; left: 0; height: 50%; }
+        .bar .call { top: 0; background: ${C.cyan}; }
+        .bar .driver { bottom: 0; background: ${C.orange}; }
+        button {
+          width: 100%;
+          margin-top: 1.4rem;
+          border: 0;
+          border-radius: 12px;
+          background: ${C.line};
+          color: white;
+          padding: .9rem;
+          font: inherit;
+          font-weight: 900;
+          cursor: pointer;
+        }
+      `}</style>
     </div>
   )
 }
 
-function Metric({ label, value, color }: { label: string; value: string; color: string }) {
+function KpiRow({ label, value, color, delta }: { label: string; value: number; color: string; delta?: number }) {
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', color: C.sub, fontSize: 13, fontWeight: 850 }}>
-        <span>{label}</span>
-        <span style={{ color }}>{value}</span>
-      </div>
-      <div style={{ height: 8, background: '#1A2439', borderRadius: 999, overflow: 'hidden', marginTop: 6 }}>
-        <div style={{ width: value === '-' ? 0 : value, height: '100%', background: color }} />
-      </div>
+    <div className="kpi-row">
+      <span>{label}</span>
+      <div><i style={{ width: `${value}%`, background: color }} /></div>
+      <b>{value}% {delta != null && <em style={{ color: delta >= 0 ? C.green : C.red }}>{delta >= 0 ? `↑${delta}%p` : `↓${Math.abs(delta)}%p`}</em>}</b>
+      <style jsx>{`
+        .kpi-row {
+          display: grid;
+          grid-template-columns: 4.8rem 1fr 6.4rem;
+          gap: .7rem;
+          align-items: center;
+          margin-top: .7rem;
+        }
+        .kpi-row:first-child { margin-top: 0; }
+        span { color: ${C.sub}; font-weight: 850; }
+        div { height: 1.6rem; background: rgba(255,255,255,.05); border-radius: 8px; overflow: hidden; }
+        i { display: block; height: 100%; border-radius: 8px; transition: width .8s cubic-bezier(.22,1,.36,1); }
+        b { text-align: right; font-size: 1.2rem; }
+        em { font-style: normal; font-size: .58em; margin-left: .15rem; }
+      `}</style>
     </div>
   )
 }
 
-function Step({ title, value, color }: { title: string; value: string; color: string }) {
+function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: `1px solid ${C.border}`, paddingTop: 12, marginTop: 12 }}>
-      <span style={{ color: C.sub, fontSize: 14, fontWeight: 850 }}>{title}</span>
-      <span style={{ color, fontSize: 19, fontWeight: 950 }}>{value}</span>
+    <div className="metric">
+      <span>{label}</span>
+      <b>{value}</b>
+      <style jsx>{`
+        .metric {
+          border: 1px solid ${C.line};
+          border-radius: 12px;
+          background: rgba(255,255,255,.025);
+          padding: .75rem;
+          display: flex;
+          justify-content: space-between;
+          gap: .8rem;
+        }
+        span { color: ${C.sub}; font-weight: 800; }
+        b { color: ${C.cyan}; }
+      `}</style>
     </div>
   )
 }
 
-function PanelTitle({ kicker, title }: { kicker: string; title: string }) {
+function PanelTitle({ children, color }: { children: ReactNode; color: string }) {
   return (
-    <div>
-      <div style={{ color: C.muted, fontSize: 13, fontWeight: 950, letterSpacing: '.12em' }}>{kicker}</div>
-      <h2 style={{ margin: '6px 0 0', fontSize: 24, fontWeight: 950 }}>{title}</h2>
+    <div className="panel-title">
+      <span style={{ background: color }} />
+      {children}
+      <style jsx>{`
+        .panel-title {
+          margin: 0 0 1rem;
+          display: flex;
+          align-items: center;
+          gap: .55rem;
+          color: ${C.muted};
+          font-size: clamp(.72rem, 1.3vw, .84rem);
+          font-weight: 950;
+          letter-spacing: .12em;
+          text-transform: uppercase;
+        }
+        span {
+          width: 4px;
+          height: 1rem;
+          border-radius: 99px;
+        }
+      `}</style>
     </div>
   )
 }
 
-function Label({ title, children }: { title: string; children: ReactNode }) {
-  return <label style={{ display: 'grid', gap: 7, color: C.sub, fontSize: 14, fontWeight: 850 }}>{title}{children}</label>
+function NumberInput({ label, value, onChange, min, max }: { label: string; value: number; onChange: (value: number) => void; min?: number; max?: number }) {
+  return (
+    <label className="field">{label}
+      <input type="number" min={min} max={max} value={value} onChange={(event) => onChange(Number(event.target.value))} />
+    </label>
+  )
+}
+
+function Select({ label, value, onChange, options }: { label: string; value: number; onChange: (value: number) => void; options: { value: number; label: string }[] }) {
+  return (
+    <label className="field">{label}
+      <select value={value} onChange={(event) => onChange(Number(event.target.value))}>
+        {options.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+      </select>
+    </label>
+  )
 }
 
 function Two({ children }: { children: ReactNode }) {
-  return <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>{children}</div>
+  return <div className="two">{children}</div>
 }
 
-function Pill({ children, color }: { children: ReactNode; color: string }) {
-  return <span style={{ color, border: `1px solid ${color}66`, background: `${color}18`, borderRadius: 8, padding: '7px 10px', fontSize: 12, fontWeight: 950 }}>{children}</span>
-}
-
-const leftPanel: React.CSSProperties = {
-  position: 'absolute',
-  left: 18,
-  top: 18,
-  bottom: 18,
-  width: 306,
-  zIndex: 7,
-  border: `1px solid ${C.border}`,
-  borderRadius: 18,
-  background: C.panel,
-  padding: 18,
-  boxShadow: '0 20px 70px rgba(0,0,0,.35)',
-}
-
-const rightPanel: React.CSSProperties = {
-  position: 'absolute',
-  right: 18,
-  top: 18,
-  bottom: 18,
-  width: 306,
-  zIndex: 7,
-  border: `1px solid ${C.border}`,
-  borderRadius: 18,
-  background: C.panel,
-  padding: 18,
-  boxShadow: '0 20px 70px rgba(0,0,0,.35)',
-}
-
-const stagePanel: React.CSSProperties = {
-  position: 'absolute',
-  left: 342,
-  right: 342,
-  top: 18,
-  bottom: 148,
-  zIndex: 4,
-  border: `1px solid rgba(34,211,238,.22)`,
-  borderRadius: 22,
-  background: 'rgba(7,10,18,.28)',
-  padding: 24,
-  overflow: 'hidden',
-}
-
-const inputStyle: React.CSSProperties = {
-  width: '100%',
-  height: 40,
-  borderRadius: 10,
-  border: `1px solid ${C.border}`,
-  background: '#0B1222',
-  color: C.ink,
-  padding: '0 10px',
-  fontSize: 15,
-}
-
-const checkStyle: React.CSSProperties = {
-  display: 'flex',
-  gap: 10,
-  alignItems: 'center',
-  color: C.sub,
-  fontSize: 15,
-  fontWeight: 850,
-}
-
+const panelCss = `
+  .route {
+    background: rgba(34,211,238,.08);
+    border: 1px solid rgba(34,211,238,.25);
+    border-radius: 12px;
+    padding: 1rem;
+    text-align: center;
+    font-size: clamp(1rem, 2vw, 1.15rem);
+    font-weight: 900;
+    display: flex;
+    justify-content: center;
+    gap: .6rem;
+    flex-wrap: wrap;
+  }
+  .route b { color: ${C.cyan}; }
+  .rows { display: grid; gap: .75rem; margin: 1rem 0 1.4rem; }
+  .field { display: grid; gap: .35rem; color: ${C.sub}; font-weight: 800; font-size: .86rem; }
+  .field input, .field select {
+    min-height: 2.35rem;
+    border: 1px solid ${C.line};
+    border-radius: 10px;
+    background: rgba(15,23,42,.9);
+    color: ${C.ink};
+    padding: 0 .65rem;
+    font: inherit;
+  }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: .65rem; }
+  .check { display: flex; align-items: center; gap: .55rem; color: ${C.sub}; font-weight: 800; }
+  .factors { display: grid; grid-template-columns: 1fr 1fr; gap: .45rem; }
+  .factors span {
+    font-size: clamp(.68rem, 1.2vw, .78rem);
+    font-weight: 750;
+    padding: .5rem;
+    border-radius: 8px;
+    text-align: center;
+    background: rgba(139,92,246,.1);
+    border: 1px solid rgba(139,92,246,.22);
+    color: #C4B5FD;
+    opacity: .42;
+    transition: all .25s ease;
+  }
+  .factors span.active {
+    opacity: 1;
+    background: rgba(139,92,246,.28);
+    border-color: ${C.purple};
+    color: white;
+    box-shadow: 0 0 10px rgba(139,92,246,.38);
+  }
+`
