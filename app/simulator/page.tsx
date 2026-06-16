@@ -10,6 +10,15 @@ import {
   driverToVector,
   type DriverVectorRow,
 } from '@/lib/matching-vector'
+import {
+  DISPLAY_AXES,
+  vectorToDisplayAxisBundle,
+} from '@/lib/matching-display-axis'
+import {
+  adaptCallcardLocation,
+  type AdaptCallcardLocationResult,
+  type CallcardLocationRow,
+} from '@/lib/callcard-location-adapter'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -21,6 +30,12 @@ type DriverRow = DriverVectorRow & {
   asp_id: number
   reliability: number | null
   data_days: number | null
+}
+
+type SimulatorCallcardRow = CallcardLocationRow & {
+  callcard_id: string
+  asp_id: number | null
+  call_date: string | null
 }
 
 type Why = {
@@ -71,15 +86,19 @@ const aspOptions = [
   { value: 160000000000, label: '부산 160' },
 ]
 
+const CALLCARD_LOCATION_COLS = [
+  'callcard_id',
+  'asp_id',
+  'call_date',
+  'passenger_lat',
+  'passenger_lng',
+  'dest_lat',
+  'dest_lng',
+  's_hexagon',
+  'd_hexagon',
+].join(',')
 const weekdays = ['월', '화', '수', '목', '금', '토', '일']
 
-const AXES = [
-  { name: '픽업 수용도', indexes: [21, 11, 12, 13] },
-  { name: '출발지·지역 친숙도', indexes: [0, 1, 2, 3] },
-  { name: '목적지 선호도', indexes: [4, 5, 6, 7, 8] },
-  { name: '운행거리·시간', indexes: [9, 10, 18, 19, 20] },
-  { name: '수익 매력도', indexes: [14, 15, 16, 17] },
-] as const
 
 function pct(n: number | null | undefined) {
   return n == null ? '-' : `${Math.round(n)}%`
@@ -94,38 +113,24 @@ function pseudoDistance(driverId: string, index: number) {
   return 0.7 + ((seed + index * 17) % 82) / 10
 }
 
-function toScore(value: number | null | undefined) {
-  return clamp(Number(value ?? 0) * 100)
-}
-
-function average(values: number[]) {
-  if (!values.length) return 0
-  return values.reduce((sum, value) => sum + value, 0) / values.length
-}
-
-function toAxisBundle(vector: number[]) {
-  const sub = AXES.map((axis) => axis.indexes.map((index) => toScore(vector[index])))
-  const axis = sub.map((values) => average(values))
-  return { axis, sub }
-}
 
 function axisGap(callAxis: number[], driverAxis: number[], index: number) {
   return Math.abs((callAxis[index] ?? 0) - (driverAxis[index] ?? 0))
 }
 
 function makeLead(row: Pick<Ranked, 'axis' | 'similarityScore' | 'simEtaMin'>, callAxis: number[]) {
-  const bestAxis = AXES
+  const bestAxis = DISPLAY_AXES
     .map((axis, index) => ({ axis: axis.name, diff: axisGap(callAxis, row.axis, index) }))
     .sort((a, b) => a.diff - b.diff)[0]
   return `${bestAxis.axis}이 가장 잘 맞고, 픽업 ETA ${row.simEtaMin}분 조건에서 성향 유사도 ${Math.round(row.similarityScore)}점입니다.`
 }
 
 function makeWhy(driverAxis: number[], callAxis: number[], acceptance: number, etaMin: number): Why[] {
-  const matches = AXES.map((axis, index) => ({
+  const matches = DISPLAY_AXES.map((axis, index) => ({
     label: axis.name,
     score: clamp(100 - axisGap(callAxis, driverAxis, index)),
   })).sort((a, b) => b.score - a.score)
-  const gaps = AXES.map((axis, index) => ({
+  const gaps = DISPLAY_AXES.map((axis, index) => ({
     label: axis.name,
     gap: axisGap(callAxis, driverAxis, index),
   })).sort((a, b) => b.gap - a.gap)
@@ -154,9 +159,12 @@ export default function SimulatorPage() {
   const [surge, setSurge] = useState(false)
   const [eta, setEta] = useState(240)
   const [drivers, setDrivers] = useState<DriverRow[]>([])
+  const [callcards, setCallcards] = useState<SimulatorCallcardRow[]>([])
+  const [selectedCallcardId, setSelectedCallcardId] = useState('')
   const [selectedDriverId, setSelectedDriverId] = useState('')
   const [running, setRunning] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [callcardsLoading, setCallcardsLoading] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -180,6 +188,32 @@ export default function SimulatorPage() {
     }
   }, [aspId])
 
+  useEffect(() => {
+    let cancelled = false
+    async function loadCallcards() {
+      setCallcardsLoading(true)
+      const { data } = await supabase
+        .from('callcard_mbti')
+        .select(CALLCARD_LOCATION_COLS)
+        .eq('asp_id', aspId)
+        .order('call_date', { ascending: false })
+        .limit(80)
+
+      if (!cancelled) {
+        const rows = (data ?? []) as unknown as SimulatorCallcardRow[]
+        setCallcards(rows)
+        setSelectedCallcardId((current) => (
+          rows.some((row) => row.callcard_id === current) ? current : rows[0]?.callcard_id ?? ''
+        ))
+        setCallcardsLoading(false)
+      }
+    }
+    loadCallcards()
+    return () => {
+      cancelled = true
+    }
+  }, [aspId])
+
   const callInput = useMemo(() => ({
     hour_slot: hour,
     weekday,
@@ -191,13 +225,13 @@ export default function SimulatorPage() {
   }), [hour, weekday, distance, fare, paid, surge, eta])
 
   const callVector = useMemo(() => callToVector(callInput), [callInput])
-  const callBundle = useMemo(() => toAxisBundle(callVector), [callVector])
+  const callBundle = useMemo(() => vectorToDisplayAxisBundle(callVector), [callVector])
 
   const ranked = useMemo<Ranked[]>(() => {
     return drivers
       .map((driver, index) => {
         const vector = driverToVector(driver)
-        const bundle = toAxisBundle(vector)
+        const bundle = vectorToDisplayAxisBundle(vector)
         const cosine = cosineSimilarity(callVector, vector)
         const similarityScore = clamp(cosine * 100)
         const reliability = Number(driver.reliability ?? 0)
@@ -240,13 +274,20 @@ export default function SimulatorPage() {
   }, [drivers, callVector, callBundle.axis])
 
   useEffect(() => {
-    if (!selectedDriverId && ranked[0]) setSelectedDriverId(ranked[0].driver.driver_id)
-    if (selectedDriverId && ranked.length && !ranked.some((row) => row.driver.driver_id === selectedDriverId)) {
-      setSelectedDriverId(ranked[0].driver.driver_id)
-    }
+    const nextDriverId = !selectedDriverId && ranked[0]
+      ? ranked[0].driver.driver_id
+      : selectedDriverId && ranked.length && !ranked.some((row) => row.driver.driver_id === selectedDriverId)
+        ? ranked[0].driver.driver_id
+        : null
+    if (nextDriverId) queueMicrotask(() => setSelectedDriverId(nextDriverId))
   }, [ranked, selectedDriverId])
 
   const selected = ranked.find((row) => row.driver.driver_id === selectedDriverId) ?? ranked[0]
+  const selectedCallcard = callcards.find((row) => row.callcard_id === selectedCallcardId) ?? callcards[0] ?? null
+  const adaptedLocation = useMemo(() => {
+    if (!selectedCallcard) return null
+    return adaptCallcardLocation(selectedCallcard)
+  }, [selectedCallcard])
 
   async function runSimulation() {
     setRunning(true)
@@ -278,6 +319,12 @@ export default function SimulatorPage() {
           eta={eta}
           setEta={setEta}
           callBundle={callBundle}
+          callcards={callcards}
+          selectedCallcardId={selectedCallcardId}
+          setSelectedCallcardId={setSelectedCallcardId}
+          selectedCallcard={selectedCallcard}
+          adaptedLocation={adaptedLocation}
+          callcardsLoading={callcardsLoading}
           running={running}
         />
 
@@ -513,13 +560,35 @@ function CallcardPanel(props: {
   eta: number
   setEta: (v: number) => void
   callBundle: { axis: number[]; sub: number[][] }
+  callcards: SimulatorCallcardRow[]
+  selectedCallcardId: string
+  setSelectedCallcardId: (v: string) => void
+  selectedCallcard: SimulatorCallcardRow | null
+  adaptedLocation: AdaptCallcardLocationResult | null
+  callcardsLoading: boolean
   running: boolean
 }) {
-  const tags = AXES.flatMap((axis) => axis.indexes.map((index) => VECTOR_DIMENSIONS[index].label))
+  const tags = DISPLAY_AXES.flatMap((axis) => axis.indexes.map((index) => VECTOR_DIMENSIONS[index].label))
   return (
     <aside className="panel left-panel">
       <PanelTitle color={C.cyan}>입력된 콜카드</PanelTitle>
       <div className="route"><span>출발 H3 준비</span><b>→</b><span>도착 H3 준비</span></div>
+      <label className="field">실제 콜카드
+        <select
+          value={props.selectedCallcardId}
+          onChange={(event) => props.setSelectedCallcardId(event.target.value)}
+          disabled={props.callcardsLoading || props.callcards.length === 0}
+        >
+          {props.callcards.length === 0 ? (
+            <option value="">{props.callcardsLoading ? '불러오는 중' : '콜카드 없음'}</option>
+          ) : props.callcards.map((callcard) => (
+            <option key={callcard.callcard_id} value={callcard.callcard_id}>
+              {callcard.call_date ?? '-'} / {callcard.callcard_id}
+            </option>
+          ))}
+        </select>
+      </label>
+      <CallcardLocationSummary callcard={props.selectedCallcard} adaptedLocation={props.adaptedLocation} />
       <AxisSnapshot axis={props.callBundle.axis} />
       <div className="rows">
         <Select label="지역" value={props.aspId} onChange={props.setAspId} options={aspOptions} />
@@ -547,10 +616,85 @@ function CallcardPanel(props: {
   )
 }
 
+function locationSourceLabel(source: AdaptCallcardLocationResult['diagnostics']['pickupH3Source']) {
+  if (source === 'STORED') return '저장 데이터'
+  if (source === 'COORDINATE') return '좌표 계산'
+  return '정보 없음'
+}
+
+function formatCoordinate(lat: number | null | undefined, lng: number | null | undefined) {
+  if (lat == null || lng == null) return '정보 없음'
+  return `${lat.toFixed(5)}, ${lng.toFixed(5)}`
+}
+
+function formatH3(value: string | null | undefined) {
+  return value ?? '정보 없음'
+}
+
+function CallcardLocationSummary({
+  callcard,
+  adaptedLocation,
+}: {
+  callcard: SimulatorCallcardRow | null
+  adaptedLocation: AdaptCallcardLocationResult | null
+}) {
+  if (!callcard || !adaptedLocation) {
+    return (
+      <div className="location-card">
+        <b>위치 정보</b>
+        <span>실제 콜카드를 선택하면 출발·도착 H3가 표시됩니다.</span>
+        <style jsx>{locationSummaryCss}</style>
+      </div>
+    )
+  }
+
+  const { route, diagnostics } = adaptedLocation
+  const hasMismatch = diagnostics.pickupH3Mismatch || diagnostics.destinationH3Mismatch
+
+  return (
+    <div className="location-card">
+      <div className="location-head">
+        <b>콜카드 위치</b>
+        <span>{callcard.call_date ?? '-'} / {callcard.callcard_id}</span>
+      </div>
+      <div className="location-grid">
+        <div>
+          <span>출발 좌표</span>
+          <strong>{formatCoordinate(route.pickup.lat, route.pickup.lng)}</strong>
+        </div>
+        <div>
+          <span>도착 좌표</span>
+          <strong>{formatCoordinate(route.destination.lat, route.destination.lng)}</strong>
+        </div>
+        <div>
+          <span>출발 H3</span>
+          <strong>{formatH3(route.pickup.h3Res7)}</strong>
+        </div>
+        <div>
+          <span>도착 H3</span>
+          <strong>{formatH3(route.destination.h3Res7)}</strong>
+        </div>
+      </div>
+      <div className="od-key">
+        <span>OD 경로 키</span>
+        <strong>{route.originDestinationKey ?? '정보 없음'}</strong>
+      </div>
+      <div className="diag">
+        <span>H3 출처: 출발 {locationSourceLabel(diagnostics.pickupH3Source)} · 도착 {locationSourceLabel(diagnostics.destinationH3Source)}</span>
+        <span>좌표 검증: 출발 {diagnostics.pickupCoordinateValid ? '정상' : '정보 없음'} · 도착 {diagnostics.destinationCoordinateValid ? '정상' : '정보 없음'}</span>
+      </div>
+      {hasMismatch && (
+        <div className="mismatch">주의: 저장 H3와 좌표 기반 H3가 일치하지 않습니다.</div>
+      )}
+      <style jsx>{locationSummaryCss}</style>
+    </div>
+  )
+}
+
 function AxisSnapshot({ axis }: { axis: number[] }) {
   return (
     <div className="axis-snapshot">
-      {AXES.map((item, index) => (
+      {DISPLAY_AXES.map((item, index) => (
         <div key={item.name} className="axis-card">
           <span>{item.name}</span>
           <b>{Math.round(axis[index] ?? 0)}</b>
@@ -1057,15 +1201,15 @@ function MatchRadar({
     }
 
     function point(cx: number, cy: number, r: number, i: number, value: number) {
-      const angle = -Math.PI / 2 + i * 2 * Math.PI / AXES.length
+      const angle = -Math.PI / 2 + i * 2 * Math.PI / DISPLAY_AXES.length
       return [cx + r * (value / 100) * Math.cos(angle), cy + r * (value / 100) * Math.sin(angle)]
     }
 
     function drawPoly(cx: number, cy: number, r: number, vals: number[], stroke: string, fill: string, progress = 1) {
       const next = vals.map((value) => value * progress)
       context.beginPath()
-      for (let i = 0; i <= AXES.length; i++) {
-        const [x, y] = point(cx, cy, r, i % AXES.length, next[i % AXES.length] ?? 0)
+      for (let i = 0; i <= DISPLAY_AXES.length; i++) {
+        const [x, y] = point(cx, cy, r, i % DISPLAY_AXES.length, next[i % DISPLAY_AXES.length] ?? 0)
         if (i === 0) context.moveTo(x, y)
         else context.lineTo(x, y)
       }
@@ -1104,8 +1248,8 @@ function MatchRadar({
 
       for (let g = 1; g <= 4; g++) {
         context.beginPath()
-        for (let i = 0; i <= AXES.length; i++) {
-          const [x, y] = point(cx, cy, r, i % AXES.length, g * 25)
+        for (let i = 0; i <= DISPLAY_AXES.length; i++) {
+          const [x, y] = point(cx, cy, r, i % DISPLAY_AXES.length, g * 25)
           if (i === 0) context.moveTo(x, y)
           else context.lineTo(x, y)
         }
@@ -1117,7 +1261,7 @@ function MatchRadar({
       context.font = `800 ${labelFont}px Pretendard, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif`
       context.textAlign = 'center'
       context.textBaseline = 'middle'
-      AXES.forEach((axis, i) => {
+      DISPLAY_AXES.forEach((axis, i) => {
         const [x, y] = point(cx, cy, r, i, 100)
         context.beginPath()
         context.moveTo(cx, cy)
@@ -1286,7 +1430,7 @@ function FactorDrilldown({
   driverValues: number[]
   onClose: () => void
 }) {
-  const axis = AXES[axisIndex]
+  const axis = DISPLAY_AXES[axisIndex]
   return (
     <div className="modal-bg" onClick={(event) => {
       if (event.currentTarget === event.target) onClose()
@@ -1464,6 +1608,69 @@ function Two({ children }: { children: ReactNode }) {
   return <div className="two">{children}</div>
 }
 
+const locationSummaryCss = `
+  .location-card {
+    display: grid;
+    gap: .65rem;
+    margin: .8rem 0 1rem;
+    border: 1px solid rgba(34,211,238,.22);
+    border-radius: 12px;
+    background: rgba(34,211,238,.05);
+    padding: .8rem;
+  }
+  .location-card b {
+    color: ${C.cyan};
+    font-weight: 950;
+  }
+  .location-card span {
+    color: ${C.sub};
+    font-size: clamp(.72rem, 1.2vw, .82rem);
+    font-weight: 800;
+    line-height: 1.35;
+  }
+  .location-head {
+    display: grid;
+    gap: .2rem;
+  }
+  .location-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: .45rem;
+  }
+  .location-grid div,
+  .od-key {
+    min-width: 0;
+    display: grid;
+    gap: .15rem;
+    border: 1px solid rgba(255,255,255,.06);
+    border-radius: 8px;
+    background: rgba(15,23,42,.58);
+    padding: .5rem;
+  }
+  .location-grid strong,
+  .od-key strong {
+    color: ${C.ink};
+    font-size: clamp(.72rem, 1.2vw, .82rem);
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+  .diag {
+    display: grid;
+    gap: .2rem;
+  }
+  .mismatch {
+    border: 1px solid rgba(245,158,11,.35);
+    border-radius: 8px;
+    background: rgba(245,158,11,.1);
+    color: #FDBA74;
+    padding: .5rem;
+    font-size: clamp(.72rem, 1.2vw, .82rem);
+    font-weight: 850;
+    line-height: 1.35;
+  }
+`
+
 const panelCss = `
   .route {
     background: rgba(34,211,238,.08);
@@ -1513,3 +1720,4 @@ const panelCss = `
     box-shadow: 0 0 10px rgba(139,92,246,.38);
   }
 `
+

@@ -10,6 +10,10 @@ import {
   driverToVector,
   type DriverVectorRow,
 } from '@/lib/matching-vector'
+import {
+  DISPLAY_AXES,
+  vectorToDisplayAxisBundle,
+} from '@/lib/matching-display-axis'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -73,13 +77,7 @@ const groupColors: Record<string, string> = {
   ETA: C.cyan,
 }
 
-const displayAxes = [
-  { name: '픽업 수용도', indexes: [21, 11, 12, 13], color: C.cyan },
-  { name: '출발지·시간 적합도', indexes: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10], color: C.purple },
-  { name: '운행거리·시간', indexes: [11, 12, 13, 18, 19, 20], color: C.green },
-  { name: '수익 매력도', indexes: [14, 15, 16, 17], color: C.orange },
-  { name: '상품·콜유형 선호', indexes: [17, 18, 19, 20], color: C.yellow },
-]
+const displayAxisColors = [C.cyan, C.purple, C.green, C.orange, C.yellow] as const
 
 const slots = [
   { x: 20, y: 20 },
@@ -121,11 +119,6 @@ function groupAverage(values: number[], group: string) {
     .map((dim, index) => ({ dim, index }))
     .filter((item) => item.dim.group === group)
     .map((item) => item.index)
-  if (!indexes.length) return 0
-  return indexes.reduce((sum, index) => sum + Number(values[index] ?? 0), 0) / indexes.length
-}
-
-function axisAverage(values: number[], indexes: readonly number[]) {
   if (!indexes.length) return 0
   return indexes.reduce((sum, index) => sum + Number(values[index] ?? 0), 0) / indexes.length
 }
@@ -465,6 +458,9 @@ function DriverPlayerCard({ match }: { match?: RankedDriver }) {
 }
 
 function DisplayAxisCompare({ callVector, driverVector }: { callVector: number[]; driverVector: number[] }) {
+  const callAxis = vectorToDisplayAxisBundle(callVector).axis
+  const driverAxis = vectorToDisplayAxisBundle(driverVector).axis
+
   return (
     <div style={{ marginTop: 14, border: `1px solid ${C.border}`, borderRadius: 14, background: C.panel, padding: 16 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'baseline' }}>
@@ -475,14 +471,15 @@ function DisplayAxisCompare({ callVector, driverVector }: { callVector: number[]
         <div style={{ color: C.yellow, fontSize: 12, fontWeight: 900, textAlign: 'right' }}>계산은 22D<br />표시는 5축</div>
       </div>
       <div style={{ display: 'grid', gap: 10, marginTop: 14 }}>
-        {displayAxes.map((axis) => {
-          const call = axisAverage(callVector, axis.indexes)
-          const driver = axisAverage(driverVector, axis.indexes)
+        {DISPLAY_AXES.map((axis, index) => {
+          const color = displayAxisColors[index] ?? C.cyan
+          const call = (callAxis[index] ?? 0) / 100
+          const driver = (driverAxis[index] ?? 0) / 100
           const fit = 1 - Math.abs(call - driver)
           return (
-            <div key={axis.name} style={{ border: `1px solid ${axis.color}33`, borderRadius: 12, background: `${axis.color}0F`, padding: 10 }}>
+            <div key={axis.name} style={{ border: `1px solid ${color}33`, borderRadius: 12, background: `${color}0F`, padding: 10 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
-                <b style={{ color: axis.color, fontSize: 14 }}>{axis.name}</b>
+                <b style={{ color, fontSize: 14 }}>{axis.name}</b>
                 <span style={{ color: fit >= 0.78 ? C.green : fit >= 0.55 ? C.yellow : C.red, fontSize: 13, fontWeight: 950 }}>{Math.round(fit * 100)}%</span>
               </div>
               <div style={{ display: 'grid', gap: 5 }}>
