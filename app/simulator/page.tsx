@@ -247,7 +247,6 @@ export default function SimulatorPage() {
   }, [ranked, selectedDriverId])
 
   const selected = ranked.find((row) => row.driver.driver_id === selectedDriverId) ?? ranked[0]
-  const top4 = ranked.slice(0, 4)
 
   async function runSimulation() {
     setRunning(true)
@@ -297,11 +296,12 @@ export default function SimulatorPage() {
           <MatchRadar callAxis={callBundle.axis} driverAxis={selected?.axis ?? []} callSub={callBundle.sub} driverSub={selected?.sub ?? []} />
           <div className="lead">{selected ? selected.lead : '콜 조건과 기사 성향을 비교할 준비가 됐습니다.'}</div>
           <DispatchPipeline selected={selected} />
+          <RadiusExpansionPanel ranked={ranked} selectedId={selectedDriverId} onSelect={setSelectedDriverId} />
           <MatchWaterfall why={selected?.why ?? []} />
         </section>
 
         <DecisionPanel
-          ranked={top4}
+          ranked={ranked}
           selectedId={selectedDriverId}
           setSelectedId={setSelectedDriverId}
           selected={selected}
@@ -743,6 +743,137 @@ function DispatchPipeline({ selected }: { selected?: Ranked }) {
   )
 }
 
+function RadiusExpansionPanel({
+  ranked,
+  selectedId,
+  onSelect,
+}: {
+  ranked: Ranked[]
+  selectedId: string
+  onSelect: (id: string) => void
+}) {
+  const tiers = [
+    { label: '1차', radius: 2.5, note: '근거리 우선 발송' },
+    { label: '2차', radius: 5, note: '미수락 시 확장' },
+    { label: '3차', radius: 8, note: '순차 배차 전 마지막 후보군' },
+  ].map((tier) => ({
+    ...tier,
+    candidates: ranked.filter((row) => row.simDistanceKm <= tier.radius),
+  }))
+
+  return (
+    <div className="radius-panel">
+      <div className="radius-head">
+        <b>반경 확장 시나리오</b>
+        <span>실시간 위치 연결 전까지 거리/ETA는 시뮬레이션 값</span>
+      </div>
+      <div className="rings">
+        {tiers.map((tier) => {
+          const best = tier.candidates[0]
+          const isSelected = best?.driver.driver_id === selectedId
+          return (
+            <button
+              key={tier.label}
+              type="button"
+              className={isSelected ? 'ring active' : 'ring'}
+              onClick={() => best && onSelect(best.driver.driver_id)}
+              disabled={!best}
+            >
+              <span>{tier.label}</span>
+              <b>{tier.radius.toFixed(1)}km</b>
+              <small>{tier.candidates.length}명 · {best ? `${best.driver.driver_id} / ${Math.round(best.similarityScore)}%` : '후보 없음'}</small>
+              <em>{tier.note}</em>
+            </button>
+          )
+        })}
+      </div>
+      <style jsx>{`
+        .radius-panel {
+          border: 1px solid rgba(34,211,238,.18);
+          border-radius: 16px;
+          background:
+            radial-gradient(circle at 16% 50%, rgba(34,211,238,.14), transparent 28%),
+            rgba(255,255,255,.025);
+          padding: .9rem;
+          margin: .75rem 0 .4rem;
+        }
+        .radius-head {
+          display: flex;
+          justify-content: space-between;
+          gap: .8rem;
+          align-items: baseline;
+          margin-bottom: .7rem;
+          flex-wrap: wrap;
+        }
+        .radius-head b {
+          color: ${C.ink};
+          font-size: clamp(.95rem, 1.7vw, 1.1rem);
+          font-weight: 950;
+        }
+        .radius-head span {
+          color: ${C.yellow};
+          font-size: clamp(.72rem, 1.25vw, .82rem);
+          font-weight: 850;
+        }
+        .rings {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: .65rem;
+        }
+        .ring {
+          min-width: 0;
+          border: 1px solid ${C.line};
+          border-radius: 14px;
+          background: rgba(5,8,16,.56);
+          color: ${C.ink};
+          padding: .78rem;
+          text-align: left;
+          display: grid;
+          gap: .18rem;
+          cursor: pointer;
+        }
+        .ring:disabled {
+          cursor: not-allowed;
+          opacity: .45;
+        }
+        .ring.active {
+          border-color: ${C.cyan};
+          box-shadow: 0 0 0 1px ${C.cyan}, 0 0 22px rgba(34,211,238,.18);
+          background: rgba(34,211,238,.09);
+        }
+        .ring span {
+          color: ${C.muted};
+          font-size: .72rem;
+          font-weight: 950;
+        }
+        .ring b {
+          color: ${C.cyan};
+          font-size: clamp(1.15rem, 2vw, 1.45rem);
+          font-weight: 950;
+        }
+        .ring small {
+          min-width: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          color: ${C.sub};
+          font-size: clamp(.72rem, 1.25vw, .82rem);
+          font-weight: 850;
+        }
+        .ring em {
+          color: ${C.muted};
+          font-size: .68rem;
+          font-style: normal;
+          font-weight: 800;
+        }
+        @media (max-width: 760px) {
+          .rings { grid-template-columns: 1fr; }
+        }
+      `}</style>
+    </div>
+  )
+}
+
 function DecisionPanel({
   ranked,
   selectedId,
@@ -754,10 +885,12 @@ function DecisionPanel({
   setSelectedId: (id: string) => void
   selected?: Ranked
 }) {
+  const [showAll, setShowAll] = useState(false)
   const delta = Math.round((selected?.acceptanceProbability ?? 0) - BASELINE_ACCEPTANCE)
+  const visible = showAll ? ranked : ranked.slice(0, 4)
   return (
     <aside className="panel right-panel">
-      <PanelTitle color={C.orange}>유사도 랭킹 Top 4</PanelTitle>
+      <PanelTitle color={C.orange}>{showAll ? '유사도 랭킹 Top 10' : '유사도 랭킹 Top 4'}</PanelTitle>
       <div className="data-note">
         기사 성향은 Supabase `driver_mbti` 기준입니다. 거리와 ETA는 실시간 위치 테이블 연결 전까지 시뮬레이션용 표시값입니다.
       </div>
@@ -767,7 +900,7 @@ function DecisionPanel({
             <b>추천 후보 없음</b>
             <span>선택한 ASP에 기사 벡터가 없거나 아직 로딩 중입니다.</span>
           </div>
-        ) : ranked.map((row, index) => (
+        ) : visible.map((row, index) => (
           <button
             key={row.driver.driver_id}
             className={row.driver.driver_id === selectedId ? 'driver active' : 'driver'}
@@ -782,6 +915,11 @@ function DecisionPanel({
           </button>
         ))}
       </div>
+      {ranked.length > 4 && (
+        <button type="button" className="toggle-rank" onClick={() => setShowAll(!showAll)}>
+          {showAll ? 'Top 4만 보기' : `Top 10 전체 보기 (${ranked.length}명)`}
+        </button>
+      )}
 
       <PanelTitle color={C.green}>예상 수락률 KPI</PanelTitle>
       <div className="kpi-box">
@@ -798,6 +936,19 @@ function DecisionPanel({
       </div>
       <style jsx>{`
         .rank-list { display: grid; gap: .75rem; margin-bottom: 1.2rem; }
+        .toggle-rank {
+          width: 100%;
+          border: 1px solid rgba(34,211,238,.32);
+          border-radius: 12px;
+          background: rgba(34,211,238,.08);
+          color: ${C.cyan};
+          padding: .7rem;
+          font: inherit;
+          font-size: clamp(.78rem, 1.35vw, .9rem);
+          font-weight: 950;
+          cursor: pointer;
+          margin: -.45rem 0 1.2rem;
+        }
         .data-note {
           border: 1px solid rgba(245,158,11,.24);
           border-radius: 12px;
