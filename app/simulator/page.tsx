@@ -19,6 +19,11 @@ import {
   type AdaptCallcardLocationResult,
   type CallcardLocationRow,
 } from '@/lib/callcard-location-adapter'
+import {
+  calculateSpatialScore,
+  calculateV2FinalScore,
+  type SpatialScoreResult,
+} from '@/lib/h3-match-score'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -30,6 +35,8 @@ type DriverRow = DriverVectorRow & {
   asp_id: number
   reliability: number | null
   data_days: number | null
+  pref_s_hexagons?: string[] | null
+  pref_d_hexagons?: string[] | null
 }
 
 type SimulatorCallcardRow = CallcardLocationRow & {
@@ -54,6 +61,7 @@ type Ranked = {
   acceptanceProbability: number
   completionProbability: number
   pickupAccessibilityScore: number
+  spatial: SpatialScoreResult
   finalScore: number
   reliability: number
   simDistanceKm: number
@@ -118,11 +126,14 @@ function axisGap(callAxis: number[], driverAxis: number[], index: number) {
   return Math.abs((callAxis[index] ?? 0) - (driverAxis[index] ?? 0))
 }
 
-function makeLead(row: Pick<Ranked, 'axis' | 'similarityScore' | 'simEtaMin'>, callAxis: number[]) {
+function makeLead(row: Pick<Ranked, 'axis' | 'similarityScore' | 'simEtaMin' | 'spatial'>, callAxis: number[]) {
   const bestAxis = DISPLAY_AXES
     .map((axis, index) => ({ axis: axis.name, diff: axisGap(callAxis, row.axis, index) }))
     .sort((a, b) => a.diff - b.diff)[0]
-  return `${bestAxis.axis}이 가장 잘 맞고, 픽업 ETA ${row.simEtaMin}분 조건에서 성향 유사도 ${Math.round(row.similarityScore)}점입니다.`
+  const spatialReason = row.spatial.spatialScore == null
+    ? ' 기사 선호 H3 데이터가 부족하여 성향 유사도를 중심으로 추천했습니다.'
+    : ` 출발지 적합도 ${pct(row.spatial.originScore)}, 목적지 적합도 ${pct(row.spatial.destinationScore)}로 공간 적합도 ${pct(row.spatial.spatialScore)}입니다.`
+  return `${bestAxis.axis}이 가장 잘 맞고, 픽업 ETA ${row.simEtaMin}분 조건에서 성향 유사도 ${Math.round(row.similarityScore)}점입니다.${spatialReason}`
 }
 
 function makeWhy(driverAxis: number[], callAxis: number[], acceptance: number, etaMin: number): Why[] {
@@ -226,6 +237,11 @@ export default function SimulatorPage() {
 
   const callVector = useMemo(() => callToVector(callInput), [callInput])
   const callBundle = useMemo(() => vectorToDisplayAxisBundle(callVector), [callVector])
+  const selectedCallcard = callcards.find((row) => row.callcard_id === selectedCallcardId) ?? callcards[0] ?? null
+  const adaptedLocation = useMemo(() => {
+    if (!selectedCallcard) return null
+    return adaptCallcardLocation(selectedCallcard)
+  }, [selectedCallcard])
 
   const ranked = useMemo<Ranked[]>(() => {
     return drivers
@@ -240,13 +256,13 @@ export default function SimulatorPage() {
         const pickupAccessibilityScore = clamp(100 - simEtaMin * 4)
         const acceptanceProbability = clamp(similarityScore * 0.62 + reliability * 22 + pickupAccessibilityScore * 0.16)
         const completionProbability = clamp(acceptanceProbability * 0.82 + reliability * 18)
-        const finalScore = clamp(
-          acceptanceProbability * 0.4 +
-          similarityScore * 0.25 +
-          pickupAccessibilityScore * 0.2 +
-          completionProbability * 0.1 +
-          reliability * 100 * 0.05
-        )
+        const spatial = calculateSpatialScore({
+          originH3: adaptedLocation?.route.pickup.h3Res7 ?? null,
+          destinationH3: adaptedLocation?.route.destination.h3Res7 ?? null,
+          preferredOriginH3Cells: driver.pref_s_hexagons,
+          preferredDestinationH3Cells: driver.pref_d_hexagons,
+        })
+        const finalScore = calculateV2FinalScore(similarityScore, spatial.spatialScore)
         const base = {
           driver,
           vector,
@@ -257,6 +273,7 @@ export default function SimulatorPage() {
           acceptanceProbability,
           completionProbability,
           pickupAccessibilityScore,
+          spatial,
           finalScore,
           reliability,
           simDistanceKm,
@@ -269,9 +286,14 @@ export default function SimulatorPage() {
           why: makeWhy(bundle.axis, callBundle.axis, acceptanceProbability, simEtaMin),
         }
       })
-      .sort((a, b) => b.similarityScore - a.similarityScore)
+      .sort((a, b) => (
+        b.finalScore - a.finalScore ||
+        b.similarityScore - a.similarityScore ||
+        b.reliability - a.reliability ||
+        a.driver.driver_id.localeCompare(b.driver.driver_id)
+      ))
       .slice(0, 10)
-  }, [drivers, callVector, callBundle.axis])
+  }, [drivers, callVector, callBundle.axis, adaptedLocation])
 
   useEffect(() => {
     const nextDriverId = !selectedDriverId && ranked[0]
@@ -283,11 +305,6 @@ export default function SimulatorPage() {
   }, [ranked, selectedDriverId])
 
   const selected = ranked.find((row) => row.driver.driver_id === selectedDriverId) ?? ranked[0]
-  const selectedCallcard = callcards.find((row) => row.callcard_id === selectedCallcardId) ?? callcards[0] ?? null
-  const adaptedLocation = useMemo(() => {
-    if (!selectedCallcard) return null
-    return adaptCallcardLocation(selectedCallcard)
-  }, [selectedCallcard])
 
   async function runSimulation() {
     setRunning(true)
@@ -331,7 +348,7 @@ export default function SimulatorPage() {
         <section className="panel center-panel">
           <div className="headline">
             {loading ? '기사 벡터를 불러오는 중입니다' : selected ? (
-              <>추천 1순위 <b>{selected.driver.driver_id}</b> · 유사도 {pct(selected.similarityScore)}</>
+              <>추천 1순위 <b>{selected.driver.driver_id}</b> · 최종점수 {pct(selected.finalScore)}</>
             ) : '추천 후보를 기다리는 중입니다'}
           </div>
           <div className="legend">
@@ -342,6 +359,7 @@ export default function SimulatorPage() {
           <DataSourceStrip driverCount={drivers.length} />
           <MatchRadar callAxis={callBundle.axis} driverAxis={selected?.axis ?? []} callSub={callBundle.sub} driverSub={selected?.sub ?? []} />
           <div className="lead">{selected ? selected.lead : '콜 조건과 기사 성향을 비교할 준비가 됐습니다.'}</div>
+          <SpatialFitSummary selected={selected} />
           <DispatchPipeline selected={selected} />
           <RadiusExpansionPanel ranked={ranked} selectedId={selectedDriverId} onSelect={setSelectedDriverId} />
           <MatchWaterfall why={selected?.why ?? []} />
@@ -754,7 +772,7 @@ function DataSourceStrip({ driverCount }: { driverCount: number }) {
     { label: '계산', value: '22D 코사인', tone: C.cyan },
     { label: '기사군', value: `driver_mbti ${driverCount.toLocaleString()}명`, tone: C.green },
     { label: '레이더', value: '5축 표시용', tone: C.purple },
-    { label: '위치/H3', value: '미연결', tone: C.yellow },
+    { label: '위치/H3', value: '콜 H3 연결', tone: C.yellow },
   ]
 
   return (
@@ -887,6 +905,91 @@ function DispatchPipeline({ selected }: { selected?: Ranked }) {
   )
 }
 
+function spatialDistanceLabel(distance: number | null) {
+  if (distance == null) return '데이터 없음'
+  if (distance === 0) return '동일 H3'
+  if (distance >= 1 && distance <= 3) return `${distance}-ring`
+  return '3-ring 밖'
+}
+
+function SpatialFitSummary({ selected }: { selected?: Ranked }) {
+  if (!selected) return null
+
+  return (
+    <div className="spatial-summary">
+      <div>
+        <span>최종 추천점수</span>
+        <b>{pct(selected.finalScore)}</b>
+      </div>
+      <div>
+        <span>성향 유사도</span>
+        <b>{pct(selected.similarityScore)}</b>
+      </div>
+      <div>
+        <span>공간 적합도</span>
+        <b>{pct(selected.spatial.spatialScore)}</b>
+      </div>
+      <div>
+        <span>출발지 적합도</span>
+        <b>{pct(selected.spatial.originScore)}</b>
+        <small>{spatialDistanceLabel(selected.spatial.originBestDistance)}</small>
+      </div>
+      <div>
+        <span>목적지 적합도</span>
+        <b>{pct(selected.spatial.destinationScore)}</b>
+        <small>{spatialDistanceLabel(selected.spatial.destinationBestDistance)}</small>
+      </div>
+      <p>
+        공간 적합도는 실제 콜카드 H3와 기사 선호 H3를 비교한 값입니다. 픽업거리와 ETA는 기사 실시간 위치가 없어 시뮬레이션 값입니다.
+      </p>
+      <style jsx>{`
+        .spatial-summary {
+          display: grid;
+          grid-template-columns: repeat(5, minmax(0, 1fr));
+          gap: .55rem;
+          margin: .75rem 0;
+        }
+        .spatial-summary div {
+          min-width: 0;
+          border: 1px solid rgba(34,211,238,.18);
+          border-radius: 12px;
+          background: rgba(34,211,238,.055);
+          padding: .65rem;
+          display: grid;
+          gap: .15rem;
+        }
+        .spatial-summary span {
+          color: ${C.sub};
+          font-size: clamp(.68rem, 1.2vw, .78rem);
+          font-weight: 850;
+        }
+        .spatial-summary b {
+          color: ${C.cyan};
+          font-size: clamp(1.05rem, 2vw, 1.35rem);
+          font-weight: 950;
+        }
+        .spatial-summary small {
+          color: ${C.muted};
+          font-weight: 800;
+        }
+        .spatial-summary p {
+          grid-column: 1 / -1;
+          margin: 0;
+          color: ${C.sub};
+          font-size: clamp(.76rem, 1.25vw, .86rem);
+          line-height: 1.45;
+        }
+        @media (max-width: 920px) {
+          .spatial-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+        @media (max-width: 520px) {
+          .spatial-summary { grid-template-columns: 1fr; }
+        }
+      `}</style>
+    </div>
+  )
+}
+
 function RadiusExpansionPanel({
   ranked,
   selectedId,
@@ -925,7 +1028,7 @@ function RadiusExpansionPanel({
             >
               <span>{tier.label}</span>
               <b>{tier.radius.toFixed(1)}km</b>
-              <small>{tier.candidates.length}명 · {best ? `${best.driver.driver_id} / ${Math.round(best.similarityScore)}%` : '후보 없음'}</small>
+              <small>{tier.candidates.length}명 · {best ? `${best.driver.driver_id} / 최종 ${Math.round(best.finalScore)}%` : '후보 없음'}</small>
               <em>{tier.note}</em>
             </button>
           )
@@ -1034,9 +1137,9 @@ function DecisionPanel({
   const visible = showAll ? ranked : ranked.slice(0, 4)
   return (
     <aside className="panel right-panel">
-      <PanelTitle color={C.orange}>{showAll ? '유사도 랭킹 Top 10' : '유사도 랭킹 Top 4'}</PanelTitle>
+      <PanelTitle color={C.orange}>{showAll ? '최종 추천 랭킹 Top 10' : '최종 추천 랭킹 Top 4'}</PanelTitle>
       <div className="data-note">
-        기사 성향은 Supabase `driver_mbti` 기준입니다. 거리와 ETA는 실시간 위치 테이블 연결 전까지 시뮬레이션용 표시값입니다.
+        최종 추천점수는 성향 유사도 75%와 공간 적합도 25% 기준입니다. 예상 수락률, 픽업거리, ETA는 실제 운영 검증 전 시뮬레이션 비교값입니다.
       </div>
       <div className="rank-list">
         {ranked.length === 0 ? (
@@ -1053,9 +1156,9 @@ function DecisionPanel({
             <span className="badge">{index + 1}</span>
             <span className="meta">
               <b>{row.driver.driver_id}</b>
-              <small>{row.simDistanceKm.toFixed(1)}km · ETA {row.simEtaMin}분 · {row.confidence}</small>
+              <small>성향 {pct(row.similarityScore)} · 공간 {pct(row.spatial.spatialScore)} · 거리 {row.simDistanceKm.toFixed(1)}km 시뮬레이션 · ETA {row.simEtaMin}분 시뮬레이션</small>
             </span>
-            <span className="score">{Math.round(row.similarityScore)}<small>%</small></span>
+            <span className="score">{Math.round(row.finalScore)}<small>%</small></span>
           </button>
         ))}
       </div>
@@ -1065,18 +1168,21 @@ function DecisionPanel({
         </button>
       )}
 
-      <PanelTitle color={C.green}>예상 수락률 KPI</PanelTitle>
+      <PanelTitle color={C.green}>예상 수락률 KPI · 시뮬레이션 비교값</PanelTitle>
       <div className="kpi-box">
-        <KpiRow label="기존 순번" value={BASELINE_ACCEPTANCE} color={C.muted} />
-        <KpiRow label="우선 배차" value={Math.round(selected?.acceptanceProbability ?? 0)} color={C.green} delta={delta} />
+        <KpiRow label="기존 순번 추정" value={BASELINE_ACCEPTANCE} color={C.muted} />
+        <KpiRow label="우선 배차 추정" value={Math.round(selected?.acceptanceProbability ?? 0)} color={C.green} delta={delta} />
       </div>
 
       <PanelTitle color={C.cyan}>점수 분리</PanelTitle>
       <div className="split">
-        <Metric label="성향 유사도" value={pct(selected?.similarityScore)} />
-        <Metric label="예상 수락률" value={pct(selected?.acceptanceProbability)} />
-        <Metric label="완료 가능성" value={pct(selected?.completionProbability)} />
         <Metric label="최종 추천점수" value={pct(selected?.finalScore)} />
+        <Metric label="성향 유사도" value={pct(selected?.similarityScore)} />
+        <Metric label="공간 적합도" value={pct(selected?.spatial.spatialScore)} />
+        <Metric label="출발지 적합도" value={pct(selected?.spatial.originScore)} />
+        <Metric label="목적지 적합도" value={pct(selected?.spatial.destinationScore)} />
+        <Metric label="예상 수락률 · 시뮬레이션" value={pct(selected?.acceptanceProbability)} />
+        <Metric label="완료 가능성 · 추정" value={pct(selected?.completionProbability)} />
       </div>
       <style jsx>{`
         .rank-list { display: grid; gap: .75rem; margin-bottom: 1.2rem; }
