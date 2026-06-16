@@ -1,0 +1,13 @@
+
+> pmo-agent@0.1.0 dev
+> next dev -p 3133
+
+▲ Next.js 16.2.9 (Turbopack)
+- Local:         http://localhost:3133
+- Network:       http://10.205.0.127:3133
+- Environments: .env.local
+✓ Ready in 733ms
+
+ GET /simulator 200 in 619ms (next.js: 249ms, application-code: 370ms)
+ GET /simulator 200 in 51ms (next.js: 5ms, application-code: 46ms)
+[?25h

@@ -1,0 +1,92 @@
+pmo-agent/                              # Next.js 16 프로젝트 루트
+│
+├── app/                                # Next.js App Router 진입점
+│   ├── api/                            # 서버사이드 API Routes
+│   │   ├── analyze/
+│   │   │   └── route.ts               # ★ KPI 분석 + Claude AI 요약 → daily_snapshots
+│   │   ├── callcard-mbti/
+│   │   │   └── route.ts               # ★ 엑셀 파싱 → callcard_mbti (22D 벡터 원천)
+│   │   ├── callcard-mbti-compute/
+│   │   │   └── route.ts               # callcard_mbti 집계 → callcard_profile
+│   │   ├── driver-logs/
+│   │   │   └── route.ts               # ★ 엑셀 파싱 → driver_daily_logs (기사 일별)
+│   │   ├── driver-mbti/
+│   │   │   └── route.ts               # ★ driver_daily_logs 30일 가중 → driver_mbti
+│   │   ├── matching/
+│   │   │   └── route.ts               # ★★ 코사인 유사도 매칭 (22D) → matching_scores
+│   │   ├── meter-excel/
+│   │   │   └── route.ts               # 미터 엑셀(2시트) → meter_hourly/driver_logs
+│   │   ├── meter-logs/
+│   │   │   └── route.ts               # 미터 Driver Summary → meter_daily_logs
+│   │   └── recommend/
+│   │       └── route.ts               # ★★ 실시간 기사 추천 (20D ⚠️ 불일치)
+│   │
+│   ├── dashboard/
+│   │   └── page.tsx                   # 누적 분석 대시보드 (KPI 트렌드, 레이더차트, 로그)
+│   ├── simulator/
+│   │   └── page.tsx                   # ★ MBTI 매칭 시뮬레이터 (빌드오류 있음)
+│   ├── page.tsx                       # ★ 홈 - 일일 데이터 업로드 + 파이프라인 실행
+│   ├── layout.tsx                     # 루트 HTML 레이아웃
+│   ├── design-tokens.ts               # 디자인 시스템 색상/폰트 상수
+│   └── globals.css                    # 전역 Tailwind CSS
+│
+├── lib/
+│   └── agent-logger.ts                # ★ Supabase agent_logs INSERT 유틸
+│
+├── supabase/
+│   └── migrations/                    # DB 마이그레이션 SQL (supabase CLI용)
+│       ├── 20260611_agent_logs.sql    # agent_logs 테이블
+│       ├── 20260611_callcard_mbti.sql # callcard_mbti 테이블 + 트리거
+│       ├── 20260611_callcard_profile.sql # callcard_profile 테이블 + 트리거
+│       ├── 20260611_daily_snapshots.sql  # daily_snapshots 테이블 + 트리거
+│       ├── 20260611_driver_daily_logs.sql # driver_daily_logs 테이블 + 트리거
+│       ├── 20260611_driver_mbti.sql   # driver_mbti 테이블 + 트리거
+│       ├── 20260611_matching_scores.sql  # matching_scores 테이블 + 트리거
+│       └── 20260612_meter_daily_logs.sql # meter_daily_logs 테이블 + 트리거
+│
+├── .vercel/
+│   ├── project.json                   # Vercel 프로젝트 ID 및 org ID (비공개 아님)
+│   └── README.txt                     # Vercel 연결 안내
+│
+├── .claude/
+│   └── settings.local.json            # Claude Code 로컬 설정
+│
+├── handoff/                           # ← 이 폴더 (인수인계 문서)
+│   ├── PROJECT_OVERVIEW.md
+│   ├── ARCHITECTURE.md
+│   ├── DATABASE_SCHEMA.md
+│   ├── API_INVENTORY.md
+│   ├── MATCHING_LOGIC.md
+│   ├── ENVIRONMENT.md
+│   ├── CURRENT_STATUS.md
+│   ├── END_TO_END_TRACE.md
+│   ├── CODEX_NEXT_TASK.md
+│   ├── FILE_TREE.txt
+│   └── HANDOFF_SUMMARY.md
+│
+├── happycall-pmo/                     # 별도 서브 프로젝트 (독립 Git 저장소)
+│   ├── index.html                     # 이전 버전 단일 HTML 대시보드
+│   └── node_modules/                  # playwright 등 독립 의존성
+│   (pmo-agent의 Next.js 코드와 무관)
+│
+├── CLAUDE.md                          # Claude Code 지시사항 (@AGENTS.md 참조)
+├── AGENTS.md                          # 에이전트 지시사항 (Next.js 버전 주의)
+├── README.md                          # 프로젝트 README
+├── dashboard_design_guidelines.md     # 미커밋 — 디자인 가이드라인 (참조용)
+├── test-analyze.mjs                   # 개발용 API 테스트 스크립트
+├── package.json                       # 의존성 정의
+├── package-lock.json                  # npm lock 파일
+├── tsconfig.json                      # TypeScript 설정
+├── next.config.ts                     # Next.js 설정 (현재 빈 설정)
+├── eslint.config.mjs                  # ESLint 9 설정
+├── postcss.config.mjs                 # PostCSS (Tailwind용)
+├── .gitignore                         # Git 제외 목록
+└── .env.local                         # 로컬 환경변수 (Git 제외, 공유 금지)
+
+======================================================================
+★  = 핵심 파일 (기능 로직)
+★★ = 매칭 핵심 파일 (가장 중요)
+⚠️  = 알려진 문제 있음
+======================================================================
+
+node_modules/, .next/, .git/ 제외

@@ -1,0 +1,8 @@
+
+> pmo-agent@0.1.0 start
+> next start -p 3104
+
+▲ Next.js 16.2.9
+- Local:         http://localhost:3104
+- Network:       http://172.30.1.87:3104
+✓ Ready in 282ms
