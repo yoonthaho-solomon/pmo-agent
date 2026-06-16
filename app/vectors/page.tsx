@@ -73,6 +73,14 @@ const groupColors: Record<string, string> = {
   ETA: C.cyan,
 }
 
+const displayAxes = [
+  { name: '픽업 수용도', indexes: [21, 11, 12, 13], color: C.cyan },
+  { name: '출발지·시간 적합도', indexes: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10], color: C.purple },
+  { name: '운행거리·시간', indexes: [11, 12, 13, 18, 19, 20], color: C.green },
+  { name: '수익 매력도', indexes: [14, 15, 16, 17], color: C.orange },
+  { name: '상품·콜유형 선호', indexes: [17, 18, 19, 20], color: C.yellow },
+]
+
 const slots = [
   { x: 20, y: 20 },
   { x: 78, y: 18 },
@@ -113,6 +121,11 @@ function groupAverage(values: number[], group: string) {
     .map((dim, index) => ({ dim, index }))
     .filter((item) => item.dim.group === group)
     .map((item) => item.index)
+  if (!indexes.length) return 0
+  return indexes.reduce((sum, index) => sum + Number(values[index] ?? 0), 0) / indexes.length
+}
+
+function axisAverage(values: number[], indexes: readonly number[]) {
   if (!indexes.length) return 0
   return indexes.reduce((sum, index) => sum + Number(values[index] ?? 0), 0) / indexes.length
 }
@@ -228,8 +241,9 @@ export default function VectorsPage() {
             <div>
               <div style={{ color: C.cyan, fontSize: 14, fontWeight: 950, letterSpacing: '.12em' }}>VECTOR MATCHING FIELD</div>
               <h1 style={{ margin: '8px 0 0', fontSize: 36, lineHeight: 1.08, fontWeight: 950 }}>콜 하나가 들어오면 기사군이 재정렬됩니다</h1>
-              <p style={{ margin: '12px 0 0', color: C.sub, fontSize: 16, lineHeight: 1.55, maxWidth: 620 }}>
+              <p style={{ margin: '12px 0 0', color: C.sub, fontSize: 16, lineHeight: 1.55, maxWidth: 680 }}>
                 기존 배차 범위 안의 기사 후보를 버리지 않고, 콜카드 22D와 기사 22D의 코사인 유사도로 먼저 받을 기사 순서를 바꿉니다.
+                오른쪽 5축은 이해를 돕기 위한 표시 레이어이며 실제 정렬 계산은 22차원 전체 벡터로 합니다.
               </p>
             </div>
             <div style={{ textAlign: 'right' }}>
@@ -245,6 +259,7 @@ export default function VectorsPage() {
         <aside style={rightPanel}>
           <PanelTitle kicker="DRIVER" title="선택 기사 능력치" />
           <DriverPlayerCard match={focused} />
+          <DisplayAxisCompare callVector={callVector} driverVector={focused?.vector ?? []} />
           <VectorGroups callVector={callVector} driverVector={focused?.vector ?? []} />
         </aside>
 
@@ -288,7 +303,7 @@ function KpiRail({ call, ranked, loading }: { call?: CallRow; ranked: RankedDriv
     ['후보 기사', `${ranked.length}명`, '동일 ASP 기준 Top 10', C.green],
     ['최고 유사도', pct(ranked[0]?.cosine), '코사인 유사도 기준', C.purple],
     ['강한 연결', `${ranked.filter((row) => row.cosine >= 0.78).length}명`, 'A등급 이상 후보', C.yellow],
-    ['적용 방식', '우선 발송', '미수락 시 기존 순차 배차', C.orange],
+    ['표시 방식', '5축 요약', '시뮬레이터 레이더와 동일', C.orange],
   ]
 
   return (
@@ -445,6 +460,39 @@ function DriverPlayerCard({ match }: { match?: RankedDriver }) {
         <Mini label="ASP" value={match?.driver.asp_id == null ? '-' : String(match.driver.asp_id)} />
       </div>
       <RadarBars values={match?.vector ?? []} tone={C.green} />
+    </div>
+  )
+}
+
+function DisplayAxisCompare({ callVector, driverVector }: { callVector: number[]; driverVector: number[] }) {
+  return (
+    <div style={{ marginTop: 14, border: `1px solid ${C.border}`, borderRadius: 14, background: C.panel, padding: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'baseline' }}>
+        <div>
+          <div style={{ color: C.sub, fontSize: 13, fontWeight: 950, letterSpacing: '.1em' }}>5-AXIS DISPLAY</div>
+          <div style={{ color: C.ink, fontSize: 18, fontWeight: 950, marginTop: 5 }}>시뮬레이터 표시축</div>
+        </div>
+        <div style={{ color: C.yellow, fontSize: 12, fontWeight: 900, textAlign: 'right' }}>계산은 22D<br />표시는 5축</div>
+      </div>
+      <div style={{ display: 'grid', gap: 10, marginTop: 14 }}>
+        {displayAxes.map((axis) => {
+          const call = axisAverage(callVector, axis.indexes)
+          const driver = axisAverage(driverVector, axis.indexes)
+          const fit = 1 - Math.abs(call - driver)
+          return (
+            <div key={axis.name} style={{ border: `1px solid ${axis.color}33`, borderRadius: 12, background: `${axis.color}0F`, padding: 10 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
+                <b style={{ color: axis.color, fontSize: 14 }}>{axis.name}</b>
+                <span style={{ color: fit >= 0.78 ? C.green : fit >= 0.55 ? C.yellow : C.red, fontSize: 13, fontWeight: 950 }}>{Math.round(fit * 100)}%</span>
+              </div>
+              <div style={{ display: 'grid', gap: 5 }}>
+                <Track value={call} color={C.cyan} />
+                <Track value={driver} color={C.green} />
+              </div>
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
