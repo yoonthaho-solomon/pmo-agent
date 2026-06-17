@@ -2,11 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { logAgentRun } from '@/lib/agent-logger'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
-
 interface CallcardRow {
   asp_id: number
   call_date: string
@@ -59,7 +54,26 @@ const COLUMNS = [
   's_hexagon', 'd_hexagon',
 ].join(',')
 
-async function fetchAllRows(aspId?: number): Promise<CallcardRow[]> {
+function getSupabaseClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  if (!supabaseUrl || !supabaseKey) {
+    return {
+      error: 'Supabase 환경변수가 설정되지 않았습니다. NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY를 확인하세요.',
+      supabase: null,
+    }
+  }
+
+  return {
+    error: null,
+    supabase: createClient(supabaseUrl, supabaseKey),
+  }
+}
+
+type SupabaseClientForCompute = NonNullable<ReturnType<typeof getSupabaseClient>['supabase']>
+
+async function fetchAllRows(supabase: SupabaseClientForCompute, aspId?: number): Promise<CallcardRow[]> {
   const all: CallcardRow[] = []
   const PAGE = 1000
   let offset = 0
@@ -231,8 +245,14 @@ export async function POST(request: NextRequest) {
   }
 
   let rows: CallcardRow[]
+  const { supabase, error: supabaseConfigError } = getSupabaseClient()
+  if (!supabase) {
+    await logAgentRun({ run_date: new Date().toISOString().slice(0, 10), agent_name: 'callcard-mbti-compute', input_rows: 0, status: 'failed', duration_ms: Date.now() - startedAt, error_msg: supabaseConfigError })
+    return NextResponse.json({ error: supabaseConfigError }, { status: 500 })
+  }
+
   try {
-    rows = await fetchAllRows(aspId)
+    rows = await fetchAllRows(supabase, aspId)
   } catch (err) {
     console.error('[callcard-mbti-compute] callcard_mbti 조회 실패', err)
     await logAgentRun({ run_date: new Date().toISOString().slice(0, 10), agent_name: 'callcard-mbti-compute', input_rows: 0, status: 'failed', duration_ms: Date.now() - startedAt, error_msg: String(err) })
