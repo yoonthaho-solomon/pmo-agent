@@ -27,6 +27,23 @@ function log(record) {
   console.log(JSON.stringify({ at: now(), ...record }))
 }
 
+function compactDate(value) {
+  return value ? String(value).replaceAll('-', '').slice(0, 8) : null
+}
+
+async function loadedCallMaxDate(baseUrl) {
+  try {
+    const res = await fetch(`${baseUrl}/api/system-status`, { cache: 'no-store' })
+    if (!res.ok) throw new Error(`status api ${res.status}`)
+    const json = await res.json()
+    const row = json.callTables?.find((item) => item.table === 'callcard_mbti')
+    return compactDate(row?.maxDate)
+  } catch (error) {
+    log({ step: 'loaded_range_unavailable', source: 'callcard_mbti', error: error.message })
+    return null
+  }
+}
+
 function dateDirs(root) {
   if (!fs.existsSync(root)) return []
   return fs.readdirSync(root, { withFileTypes: true })
@@ -102,6 +119,7 @@ async function main() {
   const stableMs = Number(argValue('stable-ms', DEFAULT_STABLE_MS))
   const stateFile = argValue('state', path.join('work', 'call-pipeline-watch-state.json'))
   const processExisting = hasArg('process-existing')
+  const skipLoaded = !hasArg('no-skip-loaded')
   const once = hasArg('once')
   const extraArgs = []
   for (const name of ['skip-callcards', 'skip-driver-logs', 'skip-driver-mbti', 'skip-matching']) {
@@ -112,6 +130,7 @@ async function main() {
 
   const state = loadState(stateFile)
   const seenAtStart = new Set(dateDirs(root).map((item) => item.date))
+  const loadedThrough = processExisting && skipLoaded ? await loadedCallMaxDate(baseUrl) : null
 
   log({
     step: 'watch_start',
@@ -120,6 +139,8 @@ async function main() {
     interval_ms: intervalMs,
     stable_ms: stableMs,
     process_existing: processExisting,
+    skip_loaded: skipLoaded,
+    loaded_through: loadedThrough,
     state_file: stateFile,
   })
 
@@ -131,6 +152,12 @@ async function main() {
     try {
       for (const item of dateDirs(root)) {
         if (!processExisting && seenAtStart.has(item.date)) continue
+        if (loadedThrough && item.date <= loadedThrough) {
+          log({ step: 'skip_loaded', date: item.date, loaded_through: loadedThrough })
+          state.processed[item.date] = state.processed[item.date] || { at: now(), source: 'loaded_range' }
+          saveState(stateFile, state)
+          continue
+        }
         if (state.processed[item.date]) continue
 
         const current = pairState(item)

@@ -27,6 +27,27 @@ function log(record) {
   console.log(JSON.stringify({ at: now(), ...record }))
 }
 
+function compactDate(value) {
+  return value ? String(value).replaceAll('-', '').slice(0, 8) : null
+}
+
+async function loadedMeterMaxDate(baseUrl) {
+  try {
+    const res = await fetch(`${baseUrl}/api/system-status`, { cache: 'no-store' })
+    if (!res.ok) throw new Error(`status api ${res.status}`)
+    const json = await res.json()
+    const dates = (json.meterTables || [])
+      .filter((item) => item.table === 'meter_hourly_logs' || item.table === 'meter_driver_logs')
+      .map((item) => compactDate(item.maxDate))
+      .filter(Boolean)
+      .sort()
+    return dates.at(-1) || null
+  } catch (error) {
+    log({ step: 'loaded_range_unavailable', source: 'meter', error: error.message })
+    return null
+  }
+}
+
 function extractDateFromFileName(fileName) {
   const match = fileName.match(/(\d{8})_(\d{8})/)
   return match ? match[1] : null
@@ -106,6 +127,7 @@ async function main() {
   const stableMs = Number(argValue('stable-ms', DEFAULT_STABLE_MS))
   const stateFile = argValue('state', path.join('work', 'meter-pipeline-watch-state.json'))
   const processExisting = hasArg('process-existing')
+  const skipLoaded = !hasArg('no-skip-loaded')
   const once = hasArg('once')
   const mode = argValue('mode', 'excel')
   const aspId = argValue('asp-id', '147')
@@ -117,6 +139,7 @@ async function main() {
 
   const state = loadState(stateFile)
   const seenAtStart = new Set(meterFiles(root).map((item) => fileKey(item.file)))
+  const loadedThrough = processExisting && skipLoaded ? await loadedMeterMaxDate(baseUrl) : null
 
   log({
     step: 'watch_start',
@@ -125,6 +148,8 @@ async function main() {
     interval_ms: intervalMs,
     stable_ms: stableMs,
     process_existing: processExisting,
+    skip_loaded: skipLoaded,
+    loaded_through: loadedThrough,
     state_file: stateFile,
     mode,
     asp_id: aspId,
@@ -139,6 +164,12 @@ async function main() {
       for (const item of meterFiles(root)) {
         const key = fileKey(item.file)
         if (!processExisting && seenAtStart.has(key)) continue
+        if (loadedThrough && item.date <= loadedThrough) {
+          log({ step: 'skip_loaded', date: item.date, file: item.file, loaded_through: loadedThrough })
+          state.processed[key] = state.processed[key] || { at: now(), date: item.date, file: item.file, source: 'loaded_range' }
+          saveState(stateFile, state)
+          continue
+        }
         if (state.processed[key]) continue
 
         const current = fileState(item.file)
