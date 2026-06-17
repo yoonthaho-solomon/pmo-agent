@@ -78,9 +78,21 @@ export default function IngestPage() {
     async function load() {
       setLoading(true)
       setStatusError(null)
-      const nextStatus = await fetch('/api/system-status', { cache: 'no-store' })
-        .then((res) => res.json() as Promise<SystemStatusResponse>)
-        .catch((error: Error) => ({ error: error.message } as SystemStatusResponse))
+      const controller = new AbortController()
+      const timeout = window.setTimeout(() => controller.abort(), 8000)
+      const nextStatus = await fetch('/api/system-status', { cache: 'no-store', signal: controller.signal })
+        .then(async (res) => {
+          if (!res.ok) {
+            return { error: `상태 API 응답 실패 (${res.status})` } as SystemStatusResponse
+          }
+          return res.json() as Promise<SystemStatusResponse>
+        })
+        .catch((error: Error) => ({
+          error: error.name === 'AbortError'
+            ? '상태 API 응답이 지연되고 있습니다. Preview 보호 설정 또는 네트워크 상태를 확인하세요.'
+            : error.message,
+        } as SystemStatusResponse))
+        .finally(() => window.clearTimeout(timeout))
 
       if (cancelled) return
       setStatus(nextStatus)
@@ -275,6 +287,7 @@ function StatusNotice({ loading, status, error }: { loading: boolean; status: Sy
 
 function EnvChecklist({ status }: { status: SystemStatusResponse | null }) {
   const env = status?.env ?? {}
+  const pending = !status
   const items = [
     ['Supabase URL', env.NEXT_PUBLIC_SUPABASE_URL],
     ['Supabase anon', env.NEXT_PUBLIC_SUPABASE_ANON_KEY],
@@ -289,7 +302,7 @@ function EnvChecklist({ status }: { status: SystemStatusResponse | null }) {
         {items.map(([label, ok]) => (
           <div key={label} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, color: C.sub, fontSize: 13, fontWeight: 850 }}>
             <span>{label}</span>
-            <span style={{ color: ok ? C.green : C.yellow }}>{ok ? '설정됨' : '없음'}</span>
+            <span style={{ color: pending ? C.cyan : ok ? C.green : C.yellow }}>{pending ? '확인 중' : ok ? '설정됨' : '없음'}</span>
           </div>
         ))}
       </div>
