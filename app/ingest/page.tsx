@@ -140,6 +140,12 @@ export default function IngestPage() {
             <p style={{ color: C.sub, fontSize: 16, lineHeight: 1.55, maxWidth: 760, marginTop: 12 }}>
               폴더 감시 파이프라인이 Supabase에 적재한 결과를 기준으로, AI 우선배차 검증에 필요한 콜카드, 기사 로그, 매칭 결과가 날짜별로 이어져 있는지 확인합니다.
             </p>
+            <ReadinessSummary
+              callcards={callcards}
+              driverLogs={driverLogs}
+              meterMain={meterMain}
+              matching={callTables.find((row) => row.table === 'matching_scores')}
+            />
           </div>
           <CoverageTimeline rows={dateRows} />
         </section>
@@ -210,6 +216,47 @@ function KpiRail({ loading, callcards, meterMain, driverVectors, missing, status
         </div>
       ))}
     </section>
+  )
+}
+
+function ReadinessSummary({
+  callcards,
+  driverLogs,
+  meterMain,
+  matching,
+}: {
+  callcards?: TableStatus
+  driverLogs?: TableStatus
+  meterMain?: TableStatus
+  matching?: TableStatus
+}) {
+  const items = [
+    { title: '호출데이터', row: callcards, desc: '콜카드·출도착·상태 원천' },
+    { title: '기사 로그', row: driverLogs, desc: '수락/미수락 기반 기사 성향' },
+    { title: '앱미터', row: meterMain, desc: '천안 시장 흐름 보조 기준' },
+    { title: '매칭 결과', row: matching, desc: 'Top 10 추천 저장 결과' },
+  ]
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 12, marginTop: 22, maxWidth: 980 }}>
+      {items.map((item) => {
+        const errored = item.row?.status === 'error'
+        const empty = item.row?.status === 'empty' || !item.row
+        const tone = errored ? C.red : empty ? C.yellow : C.green
+        const state = errored ? '오류' : empty ? '확인 필요' : '준비됨'
+        return (
+          <div key={item.title} style={{ border: `1px solid ${tone}55`, borderRadius: 14, background: `${tone}12`, padding: 14, minHeight: 126 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+              <div style={{ color: tone, fontSize: 15, fontWeight: 950 }}>{item.title}</div>
+              <div style={{ color: tone, fontSize: 12, fontWeight: 950 }}>{state}</div>
+            </div>
+            <div style={{ color: C.ink, fontSize: 18, fontWeight: 950, marginTop: 10 }}>{range(item.row)}</div>
+            <div style={{ color: C.sub, fontSize: 13, lineHeight: 1.45, marginTop: 8 }}>{dayCount(item.row?.minDate, item.row?.maxDate)} · {fmt(item.row?.count)}건</div>
+            <div style={{ color: C.muted, fontSize: 12, lineHeight: 1.4, marginTop: 8 }}>{item.row?.error ?? item.desc}</div>
+          </div>
+        )
+      })}
+    </div>
   )
 }
 
