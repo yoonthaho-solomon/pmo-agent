@@ -249,6 +249,7 @@ export default function VectorsPage() {
                 drivers={drivers.length}
                 ranked={ranked.length}
               />
+              <VectorFlowSummary selectedCall={selectedCall} best={best} />
             </div>
             <div style={{ textAlign: 'right' }}>
               <div style={{ color: C.muted, fontSize: 13, fontWeight: 850 }}>BEST MATCH</div>
@@ -366,6 +367,41 @@ function VectorReadinessBanner({
     <div style={{ marginTop: 14, border: `1px solid ${state.tone}55`, borderRadius: 12, background: `${state.tone}14`, padding: '10px 12px', maxWidth: 760 }}>
       <div style={{ color: state.tone, fontSize: 13, fontWeight: 950 }}>{state.title}</div>
       <div style={{ color: C.sub, fontSize: 14, marginTop: 4, lineHeight: 1.45, overflowWrap: 'anywhere' }}>{state.body}</div>
+    </div>
+  )
+}
+
+function VectorFlowSummary({ selectedCall, best }: { selectedCall?: CallRow; best?: RankedDriver }) {
+  const items = [
+    {
+      title: '1. 콜카드 선택',
+      value: selectedCall?.callcard_id ?? '-',
+      body: selectedCall ? callSummary(selectedCall) : '왼쪽에서 실제 콜카드를 선택합니다.',
+      color: C.cyan,
+    },
+    {
+      title: '2. 22D 코사인 계산',
+      value: best ? pct(best.cosine) : '-',
+      body: '정렬 기준은 5축 요약이 아니라 원본 22차원 전체 벡터입니다.',
+      color: C.purple,
+    },
+    {
+      title: '3. 기사 후보 Top 10',
+      value: best?.driver.driver_id ?? '-',
+      body: '동일 ASP 기사군에서 가장 유사한 기사부터 표시합니다.',
+      color: C.green,
+    },
+  ]
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10, marginTop: 14, maxWidth: 840 }}>
+      {items.map((item) => (
+        <div key={item.title} style={{ border: `1px solid ${item.color}44`, borderRadius: 12, background: `${item.color}10`, padding: 12, minHeight: 112 }}>
+          <div style={{ color: item.color, fontSize: 13, fontWeight: 950 }}>{item.title}</div>
+          <div style={{ color: C.ink, fontSize: 18, fontWeight: 950, marginTop: 8, overflowWrap: 'anywhere' }}>{item.value}</div>
+          <div style={{ color: C.sub, fontSize: 13, lineHeight: 1.42, marginTop: 7 }}>{item.body}</div>
+        </div>
+      ))}
     </div>
   )
 }
