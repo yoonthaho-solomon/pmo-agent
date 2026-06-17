@@ -2,11 +2,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { callToVector, cosineSimilarity, driverToVector, scoreDriverForCall, type CallVectorInput, type DriverVectorRow } from '@/lib/matching-vector'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
-
 interface CallInput extends CallVectorInput {
   asp_id: number
 }
@@ -30,7 +25,26 @@ const DRIVER_COLS = [
   'pref_s_hexagons', 'pref_d_hexagons',
 ].join(',')
 
-async function fetchDriversByAsp(aspId: number): Promise<DriverRow[]> {
+function getSupabaseClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  if (!supabaseUrl || !supabaseKey) {
+    return {
+      error: 'Supabase 환경변수가 설정되지 않았습니다. NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY를 확인하세요.',
+      supabase: null,
+    }
+  }
+
+  return {
+    error: null,
+    supabase: createClient(supabaseUrl, supabaseKey),
+  }
+}
+
+type SupabaseClientForRecommend = NonNullable<ReturnType<typeof getSupabaseClient>['supabase']>
+
+async function fetchDriversByAsp(supabase: SupabaseClientForRecommend, aspId: number): Promise<DriverRow[]> {
   const all: DriverRow[] = []
   const PAGE = 1000
   let offset = 0
@@ -165,8 +179,13 @@ export async function POST(request: NextRequest) {
   }
 
   let drivers: DriverRow[]
+  const { supabase, error: supabaseConfigError } = getSupabaseClient()
+  if (!supabase) {
+    return NextResponse.json({ error: supabaseConfigError }, { status: 500 })
+  }
+
   try {
-    drivers = await fetchDriversByAsp(asp_id)
+    drivers = await fetchDriversByAsp(supabase, asp_id)
   } catch (err) {
     console.error('[recommend] driver_mbti 조회 실패', err)
     return NextResponse.json({ error: 'driver_mbti 조회 실패', detail: String(err) }, { status: 500 })

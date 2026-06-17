@@ -3,11 +3,6 @@ import { createClient } from '@supabase/supabase-js'
 import { logAgentRun } from '@/lib/agent-logger'
 import { scoreDriverForCall, type CallVectorInput, type DriverVectorRow } from '@/lib/matching-vector'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
-
 interface CallcardRow extends CallVectorInput {
   callcard_id: string
   asp_id: number
@@ -80,7 +75,26 @@ const DRIVER_COLS = [
   'pref_s_hexagons',
 ].join(',')
 
-async function fetchCallcards(callDate: string): Promise<CallcardRow[]> {
+function getSupabaseClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  if (!supabaseUrl || !supabaseKey) {
+    return {
+      error: 'Supabase 환경변수가 설정되지 않았습니다. NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY를 확인하세요.',
+      supabase: null,
+    }
+  }
+
+  return {
+    error: null,
+    supabase: createClient(supabaseUrl, supabaseKey),
+  }
+}
+
+type SupabaseClientForMatching = NonNullable<ReturnType<typeof getSupabaseClient>['supabase']>
+
+async function fetchCallcards(supabase: SupabaseClientForMatching, callDate: string): Promise<CallcardRow[]> {
   const all: CallcardRow[] = []
   const PAGE = 1000
   let offset = 0
@@ -99,7 +113,7 @@ async function fetchCallcards(callDate: string): Promise<CallcardRow[]> {
   return all
 }
 
-async function fetchDrivers(): Promise<DriverRow[]> {
+async function fetchDrivers(supabase: SupabaseClientForMatching): Promise<DriverRow[]> {
   const all: DriverRow[] = []
   const PAGE = 1000
   let offset = 0
@@ -180,10 +194,16 @@ export async function POST(request: NextRequest) {
 
   let callcards: CallcardRow[]
   let drivers: DriverRow[]
+  const { supabase, error: supabaseConfigError } = getSupabaseClient()
+  if (!supabase) {
+    await logAgentRun({ run_date: new Date().toISOString().slice(0, 10), agent_name: 'matching', input_rows: 0, status: 'failed', duration_ms: Date.now() - startedAt, error_msg: supabaseConfigError })
+    return NextResponse.json({ error: supabaseConfigError }, { status: 500 })
+  }
+
   try {
     ;[callcards, drivers] = await Promise.all([
-      fetchCallcards(callDate),
-      fetchDrivers(),
+      fetchCallcards(supabase, callDate),
+      fetchDrivers(supabase),
     ])
   } catch (err) {
     console.error('[matching] 데이터 조회 실패', err)
@@ -258,6 +278,11 @@ interface UpdateEntry {
 }
 
 export async function PATCH(request: NextRequest) {
+  const { supabase, error: supabaseConfigError } = getSupabaseClient()
+  if (!supabase) {
+    return NextResponse.json({ error: supabaseConfigError }, { status: 500 })
+  }
+
   let updates: UpdateEntry[]
   try {
     const body = await request.json()

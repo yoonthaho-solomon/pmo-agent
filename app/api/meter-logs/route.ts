@@ -3,11 +3,6 @@ import { createClient } from '@supabase/supabase-js'
 import * as XLSX from 'xlsx'
 import { logAgentRun } from '@/lib/agent-logger'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
-
 const ASP_ID = 147000000000
 
 // 파일명에서 날짜 추출: 통계_천안_20260608_20260608.xlsx → 2026-06-08
@@ -53,6 +48,23 @@ interface MeterLog {
   hourly_rides: Record<string, number>
   hourly_platform: Record<string, number>
   driver_id: null
+}
+
+function getSupabaseClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  if (!supabaseUrl || !supabaseKey) {
+    return {
+      error: 'Supabase 환경변수가 설정되지 않았습니다. NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY를 확인하세요.',
+      supabase: null,
+    }
+  }
+
+  return {
+    error: null,
+    supabase: createClient(supabaseUrl, supabaseKey),
+  }
 }
 
 function numOrNull(v: unknown): number | null {
@@ -195,6 +207,19 @@ export async function POST(request: NextRequest) {
       },
       { status: 422 }
     )
+  }
+
+  const { supabase, error: supabaseConfigError } = getSupabaseClient()
+  if (!supabase) {
+    await logAgentRun({
+      run_date: new Date().toISOString().slice(0, 10),
+      agent_name: 'meter-logs',
+      input_rows: inputRows,
+      status: 'failed',
+      duration_ms: Date.now() - startedAt,
+      error_msg: supabaseConfigError,
+    })
+    return NextResponse.json({ error: supabaseConfigError }, { status: 500 })
   }
 
   const BATCH = 500

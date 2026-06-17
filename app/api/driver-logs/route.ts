@@ -3,11 +3,6 @@ import { createClient } from '@supabase/supabase-js'
 import * as XLSX from 'xlsx'
 import { logAgentRun } from '@/lib/agent-logger'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
-
 interface CallcardRow {
   driver_id?: string | number
   asp_id?: string | number
@@ -73,6 +68,23 @@ interface DriverLog {
   medium_cnt: number
   long_cnt: number
   avg_accept_eta: number | null
+}
+
+function getSupabaseClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  if (!supabaseUrl || !supabaseKey) {
+    return {
+      error: 'Supabase 환경변수가 설정되지 않았습니다. NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY를 확인하세요.',
+      supabase: null,
+    }
+  }
+
+  return {
+    error: null,
+    supabase: createClient(supabaseUrl, supabaseKey),
+  }
 }
 
 
@@ -412,6 +424,12 @@ export async function POST(request: NextRequest) {
 
   inputRows = callcardRows.length
   const logs = aggregateDriverLogs(callcardRows, remappedRows, serviceDate)
+
+  const { supabase, error: supabaseConfigError } = getSupabaseClient()
+  if (!supabase) {
+    await logAgentRun({ run_date: new Date().toISOString().slice(0, 10), agent_name: 'driver-logs', input_rows: inputRows, status: 'failed', duration_ms: Date.now() - startedAt, error_msg: supabaseConfigError })
+    return NextResponse.json({ error: supabaseConfigError }, { status: 500 })
+  }
 
   if (logs.length === 0) {
     const sample = callcardRows[0] ?? null
