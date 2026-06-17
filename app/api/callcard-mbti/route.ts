@@ -3,11 +3,6 @@ import { createClient } from '@supabase/supabase-js'
 import * as XLSX from 'xlsx'
 import { logAgentRun } from '@/lib/agent-logger'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
-
 type SourceRow = Record<string, unknown>
 
 interface CallcardMbti {
@@ -67,6 +62,25 @@ const SOURCE_FIELD_COLUMNS = [
 ] as const
 
 type SourceFieldColumn = typeof SOURCE_FIELD_COLUMNS[number]
+
+function getSupabaseClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  if (!supabaseUrl || !supabaseKey) {
+    return {
+      error: 'Supabase 환경변수가 설정되지 않았습니다. NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY를 확인하세요.',
+      supabase: null,
+    }
+  }
+
+  return {
+    error: null,
+    supabase: createClient(supabaseUrl, supabaseKey),
+  }
+}
+
+type SupabaseClientForCallcardMbti = NonNullable<ReturnType<typeof getSupabaseClient>['supabase']>
 
 function parseSheet<T>(buffer: ArrayBuffer): T[] {
   const workbook = XLSX.read(buffer, { type: 'array' })
@@ -263,7 +277,7 @@ function buildVector(row: SourceRow, remapped: SourceRow | undefined): CallcardM
   }
 }
 
-async function availableSourceColumns(): Promise<Set<SourceFieldColumn>> {
+async function availableSourceColumns(supabase: SupabaseClientForCallcardMbti): Promise<Set<SourceFieldColumn>> {
   const checks = await Promise.all(
     SOURCE_FIELD_COLUMNS.map(async (column) => {
       const { error } = await supabase.from('callcard_mbti').select(column).limit(1)
@@ -317,6 +331,12 @@ export async function POST(request: NextRequest) {
 
   inputRows = callcardRows.length
 
+  const { supabase, error: supabaseConfigError } = getSupabaseClient()
+  if (!supabase) {
+    await logAgentRun({ run_date: new Date().toISOString().slice(0, 10), agent_name: 'callcard-mbti', input_rows: inputRows, status: 'failed', duration_ms: Date.now() - startedAt, error_msg: supabaseConfigError })
+    return NextResponse.json({ error: supabaseConfigError }, { status: 500 })
+  }
+
   const remappedMap = new Map<string, SourceRow>()
   for (const row of remappedRows) {
     const id = getCallcardId(row)
@@ -347,7 +367,7 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const sourceColumns = await availableSourceColumns()
+  const sourceColumns = await availableSourceColumns(supabase)
   const upsertVectors = vectors.map((row) => stripUnavailableSourceColumns(row, sourceColumns))
 
   const BATCH = 500
