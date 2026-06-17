@@ -28,7 +28,7 @@ function source() {
 }
 
 function readableError(message: string | undefined) {
-  return message?.trim() || '조회 권한 또는 테이블 상태를 확인해야 합니다.'
+  return message?.trim() || 'Check table access or table status.'
 }
 
 async function tableStatus(
@@ -38,7 +38,7 @@ async function tableStatus(
   dateColumn: string,
   importance: TableStatus['importance'] = 'core',
 ): Promise<TableStatus> {
-  const { count, error } = await supabase.from(table).select('*', { count: 'exact', head: true })
+  const { count, error } = await supabase.from(table).select('*', { count: 'planned', head: true })
   if (error) {
     return { table, label, count: null, minDate: null, maxDate: null, status: 'error', importance, error: readableError(error.message) }
   }
@@ -67,7 +67,7 @@ async function tableStatus(
 }
 
 async function countByDate(supabase: SupabaseClient, table: string, column: string, date: string) {
-  const { count, error } = await supabase.from(table).select('*', { count: 'exact', head: true }).eq(column, date)
+  const { count, error } = await supabase.from(table).select('*', { count: 'planned', head: true }).eq(column, date)
   return error ? null : count ?? 0
 }
 
@@ -96,14 +96,14 @@ export async function GET() {
       ok: false,
       source: 'none',
       env,
-      message: 'Supabase 환경변수가 없어 데이터를 조회할 수 없습니다.',
+      message: 'Missing Supabase environment variables.',
       callTables: [],
       meterTables: [],
       vectorTables: [],
       dateRows: [],
       watchProcesses: [
-        { name: '호출데이터 자동 적재', command: 'npm run call:watch', runsInVercel: false },
-        { name: '앱미터 자동 적재', command: 'npm run meter:watch', runsInVercel: false },
+        { name: 'Call data watch', command: 'npm run call:watch', runsInVercel: false },
+        { name: 'Meter data watch', command: 'npm run meter:watch', runsInVercel: false },
       ],
     }, { status: 200 })
   }
@@ -111,18 +111,18 @@ export async function GET() {
   const supabase = createClient(supabaseUrl, supabaseKey)
   const [callTables, meterTables, vectorTables] = await Promise.all([
     Promise.all([
-      tableStatus(supabase, 'callcard_mbti', '호출데이터 / 콜카드', 'call_date'),
-      tableStatus(supabase, 'driver_daily_logs', '기사 호출 로그', 'service_date'),
-      tableStatus(supabase, 'matching_scores', '매칭 Top 10 결과', 'match_date', 'optional'),
+      tableStatus(supabase, 'callcard_mbti', 'Callcards', 'call_date'),
+      tableStatus(supabase, 'driver_daily_logs', 'Driver call logs', 'service_date'),
+      tableStatus(supabase, 'matching_scores', 'Matching Top 10', 'match_date', 'optional'),
     ]),
     Promise.all([
-      tableStatus(supabase, 'meter_hourly_logs', '앱미터 시간대', 'log_date'),
-      tableStatus(supabase, 'meter_driver_logs', '앱미터 기사별', 'log_date'),
-      tableStatus(supabase, 'meter_daily_logs', '앱미터 일별', 'service_date', 'optional'),
+      tableStatus(supabase, 'meter_hourly_logs', 'Meter hourly', 'log_date'),
+      tableStatus(supabase, 'meter_driver_logs', 'Meter drivers', 'log_date'),
+      tableStatus(supabase, 'meter_daily_logs', 'Meter daily', 'service_date', 'optional'),
     ]),
     Promise.all([
-      tableStatus(supabase, 'driver_mbti', '기사 22D 벡터', 'updated_at'),
-      tableStatus(supabase, 'callcard_profile', '콜카드 프로필', 'created_at', 'optional'),
+      tableStatus(supabase, 'driver_mbti', 'Driver 22D vectors', 'updated_at'),
+      tableStatus(supabase, 'callcard_profile', 'Callcard profiles', 'created_at', 'optional'),
     ]),
   ])
 
@@ -143,17 +143,17 @@ export async function GET() {
     source: source(),
     env,
     message: hasCoreError
-      ? '핵심 적재 테이블 조회에 실패했습니다.'
+      ? 'Core ingest table check failed.'
       : hasOptionalWarning
-        ? '핵심 데이터는 정상이며 일부 보조 테이블만 확인이 필요합니다.'
-        : 'Supabase 조회가 정상입니다.',
+        ? 'Core data is ready. Some optional tables need review.'
+        : 'Supabase status check is normal.',
     callTables,
     meterTables,
     vectorTables,
     dateRows,
     watchProcesses: [
-      { name: '호출데이터 자동 적재', command: 'npm run call:watch', runsInVercel: false },
-      { name: '앱미터 자동 적재', command: 'npm run meter:watch', runsInVercel: false },
+      { name: 'Call data watch', command: 'npm run call:watch', runsInVercel: false },
+      { name: 'Meter data watch', command: 'npm run meter:watch', runsInVercel: false },
     ],
   })
 }
