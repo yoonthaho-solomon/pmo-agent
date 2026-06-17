@@ -176,12 +176,15 @@ export default function SimulatorPage() {
   const [running, setRunning] = useState(false)
   const [loading, setLoading] = useState(false)
   const [callcardsLoading, setCallcardsLoading] = useState(false)
+  const [driverLoadError, setDriverLoadError] = useState<string | null>(null)
+  const [callcardLoadError, setCallcardLoadError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
     async function load() {
       setLoading(true)
-      const { data } = await supabase
+      setDriverLoadError(null)
+      const { data, error } = await supabase
         .from('driver_mbti')
         .select('*')
         .eq('asp_id', aspId)
@@ -190,6 +193,7 @@ export default function SimulatorPage() {
 
       if (!cancelled) {
         setDrivers((data ?? []) as DriverRow[])
+        setDriverLoadError(error?.message ?? null)
         setLoading(false)
       }
     }
@@ -203,7 +207,8 @@ export default function SimulatorPage() {
     let cancelled = false
     async function loadCallcards() {
       setCallcardsLoading(true)
-      const { data } = await supabase
+      setCallcardLoadError(null)
+      const { data, error } = await supabase
         .from('callcard_mbti')
         .select(CALLCARD_LOCATION_COLS)
         .eq('asp_id', aspId)
@@ -216,6 +221,7 @@ export default function SimulatorPage() {
         setSelectedCallcardId((current) => (
           rows.some((row) => row.callcard_id === current) ? current : rows[0]?.callcard_id ?? ''
         ))
+        setCallcardLoadError(error?.message ?? null)
         setCallcardsLoading(false)
       }
     }
@@ -356,6 +362,15 @@ export default function SimulatorPage() {
             <span><i style={{ background: C.orange }} />기사 성향</span>
             <span className="hint">축 클릭 시 22팩터 드릴다운</span>
           </div>
+          <SimulatorReadinessBanner
+            drivers={drivers.length}
+            callcards={callcards.length}
+            ranked={ranked.length}
+            driverLoading={loading}
+            callcardLoading={callcardsLoading}
+            driverError={driverLoadError}
+            callcardError={callcardLoadError}
+          />
           <DataSourceStrip driverCount={drivers.length} />
           <MatchRadar callAxis={callBundle.axis} driverAxis={selected?.axis ?? []} callSub={callBundle.sub} driverSub={selected?.sub ?? []} />
           <div className="lead">{selected ? selected.lead : '콜 조건과 기사 성향을 비교할 준비가 됐습니다.'}</div>
@@ -763,6 +778,43 @@ function AxisSnapshot({ axis }: { axis: number[] }) {
           transition: width .55s ease;
         }
       `}</style>
+    </div>
+  )
+}
+
+function SimulatorReadinessBanner({
+  drivers,
+  callcards,
+  ranked,
+  driverLoading,
+  callcardLoading,
+  driverError,
+  callcardError,
+}: {
+  drivers: number
+  callcards: number
+  ranked: number
+  driverLoading: boolean
+  callcardLoading: boolean
+  driverError: string | null
+  callcardError: string | null
+}) {
+  const state = driverLoading || callcardLoading
+    ? { tone: C.yellow, title: '실데이터 조회 중', body: 'callcard_mbti와 driver_mbti를 불러오는 중입니다.' }
+    : driverError || callcardError
+      ? { tone: C.red, title: '실데이터 조회 실패', body: driverError ?? callcardError ?? '알 수 없는 조회 오류입니다.' }
+      : callcards === 0
+        ? { tone: C.red, title: '콜카드 없음', body: '선택한 지역에서 시뮬레이션할 콜카드를 찾지 못했습니다.' }
+        : drivers === 0
+          ? { tone: C.red, title: '기사 벡터 없음', body: '선택한 지역에서 driver_mbti 기사 벡터를 찾지 못했습니다.' }
+          : ranked === 0
+            ? { tone: C.yellow, title: '추천 후보 없음', body: '콜카드와 기사 데이터는 있지만 현재 조건으로 추천 후보가 만들어지지 않았습니다.' }
+            : { tone: C.green, title: '시뮬레이션 가능', body: `${callcards.toLocaleString()}개 콜카드와 ${drivers.toLocaleString()}명 기사 벡터를 기준으로 Top 10을 계산했습니다.` }
+
+  return (
+    <div style={{ margin: '0 auto .75rem', maxWidth: 760, border: `1px solid ${state.tone}55`, borderRadius: 12, background: `${state.tone}14`, padding: '.7rem .9rem' }}>
+      <div style={{ color: state.tone, fontSize: '.82rem', fontWeight: 950 }}>{state.title}</div>
+      <div style={{ color: C.sub, fontSize: '.86rem', lineHeight: 1.45, marginTop: 4, overflowWrap: 'anywhere' }}>{state.body}</div>
     </div>
   )
 }

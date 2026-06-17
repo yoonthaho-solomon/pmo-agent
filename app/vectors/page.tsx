@@ -139,12 +139,14 @@ export default function VectorsPage() {
   const [selectedDriverId, setSelectedDriverId] = useState('')
   const [hoverDriverId, setHoverDriverId] = useState('')
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
 
     async function load() {
       setLoading(true)
+      setLoadError(null)
       const [callRes, driverRes] = await Promise.all([
         supabase
           .from('callcard_mbti')
@@ -163,6 +165,7 @@ export default function VectorsPage() {
       setCalls(nextCalls)
       setDrivers((driverRes.data ?? []) as DriverRow[])
       setSelectedCallId(nextCalls[0]?.callcard_id ?? '')
+      setLoadError(callRes.error?.message ?? driverRes.error?.message ?? null)
       setLoading(false)
     }
 
@@ -196,13 +199,12 @@ export default function VectorsPage() {
   }, [drivers, selectedCall, callVector])
 
   useEffect(() => {
-    if (!ranked.length) {
-      setSelectedDriverId('')
-      return
-    }
-    if (!ranked.some((row) => row.driver.driver_id === selectedDriverId)) {
-      setSelectedDriverId(ranked[0].driver.driver_id)
-    }
+    const nextDriverId = !ranked.length
+      ? ''
+      : ranked.some((row) => row.driver.driver_id === selectedDriverId)
+        ? null
+        : ranked[0].driver.driver_id
+    if (nextDriverId !== null) queueMicrotask(() => setSelectedDriverId(nextDriverId))
   }, [ranked, selectedDriverId])
 
   const focusedId = hoverDriverId || selectedDriverId
@@ -212,7 +214,7 @@ export default function VectorsPage() {
   return (
     <main style={{ minHeight: '100vh', background: C.bg, color: C.ink, fontFamily: 'Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}>
       <Topbar />
-      <KpiRail call={selectedCall} ranked={ranked} loading={loading} />
+      <KpiRail call={selectedCall} ranked={ranked} loading={loading} loadError={loadError} calls={calls.length} drivers={drivers.length} />
 
       <section style={{ position: 'relative', minHeight: 'calc(100vh - 126px)', overflow: 'hidden', borderTop: `1px solid ${C.border}` }}>
         <MapBackdrop />
@@ -220,7 +222,9 @@ export default function VectorsPage() {
         <aside style={leftPanel}>
           <PanelTitle kicker="CALLCARD" title="콜카드 팩터" />
           <select value={selectedCallId} onChange={(event) => setSelectedCallId(event.target.value)} style={selectStyle}>
-            {calls.map((call) => (
+            {calls.length === 0 ? (
+              <option value="">{loading ? '콜카드 불러오는 중' : '조회된 콜카드 없음'}</option>
+            ) : calls.map((call) => (
               <option key={call.callcard_id} value={call.callcard_id}>
                 {call.call_date} / {call.callcard_id}
               </option>
@@ -238,6 +242,13 @@ export default function VectorsPage() {
                 기존 배차 범위 안의 기사 후보를 버리지 않고, 콜카드 22D와 기사 22D의 코사인 유사도로 먼저 받을 기사 순서를 바꿉니다.
                 오른쪽 5축은 이해를 돕기 위한 표시 레이어이며 실제 정렬 계산은 22차원 전체 벡터로 합니다.
               </p>
+              <VectorReadinessBanner
+                loading={loading}
+                loadError={loadError}
+                calls={calls.length}
+                drivers={drivers.length}
+                ranked={ranked.length}
+              />
             </div>
             <div style={{ textAlign: 'right' }}>
               <div style={{ color: C.muted, fontSize: 13, fontWeight: 850 }}>BEST MATCH</div>
@@ -290,12 +301,26 @@ function Topbar() {
   )
 }
 
-function KpiRail({ call, ranked, loading }: { call?: CallRow; ranked: RankedDriver[]; loading: boolean }) {
+function KpiRail({
+  call,
+  ranked,
+  loading,
+  loadError,
+  calls,
+  drivers,
+}: {
+  call?: CallRow
+  ranked: RankedDriver[]
+  loading: boolean
+  loadError: string | null
+  calls: number
+  drivers: number
+}) {
   const items = [
+    ['조회 상태', loading ? '로딩 중' : loadError ? '오류' : '정상', loadError ?? `${calls.toLocaleString()} 콜 · ${drivers.toLocaleString()} 기사`, loadError ? C.red : loading ? C.yellow : C.green],
     ['콜카드', call ? '1건 선택' : loading ? '로딩 중' : '없음', callSummary(call), C.cyan],
     ['후보 기사', `${ranked.length}명`, '동일 ASP 기준 Top 10', C.green],
     ['최고 유사도', pct(ranked[0]?.cosine), '코사인 유사도 기준', C.purple],
-    ['강한 연결', `${ranked.filter((row) => row.cosine >= 0.78).length}명`, 'A등급 이상 후보', C.yellow],
     ['표시 방식', '5축 요약', '시뮬레이터 레이더와 동일', C.orange],
   ]
 
@@ -309,6 +334,39 @@ function KpiRail({ call, ranked, loading }: { call?: CallRow; ranked: RankedDriv
         </div>
       ))}
     </section>
+  )
+}
+
+function VectorReadinessBanner({
+  loading,
+  loadError,
+  calls,
+  drivers,
+  ranked,
+}: {
+  loading: boolean
+  loadError: string | null
+  calls: number
+  drivers: number
+  ranked: number
+}) {
+  const state = loading
+    ? { tone: C.yellow, title: '데이터 조회 중', body: 'Supabase에서 콜카드와 기사 벡터를 불러오고 있습니다.' }
+    : loadError
+      ? { tone: C.red, title: '데이터 조회 실패', body: `Supabase 응답 오류: ${loadError}` }
+      : calls === 0
+        ? { tone: C.red, title: '콜카드 없음', body: 'callcard_mbti에서 표시할 콜카드를 찾지 못했습니다.' }
+        : drivers === 0
+          ? { tone: C.red, title: '기사 벡터 없음', body: 'driver_mbti에서 기사 벡터를 찾지 못했습니다.' }
+          : ranked === 0
+            ? { tone: C.yellow, title: '동일 지역 후보 없음', body: '선택한 콜카드의 ASP와 일치하는 기사 후보가 없습니다.' }
+            : { tone: C.green, title: '벡터 비교 가능', body: `${calls.toLocaleString()}개 콜카드와 ${drivers.toLocaleString()}명 기사 벡터를 기준으로 Top 10을 계산했습니다.` }
+
+  return (
+    <div style={{ marginTop: 14, border: `1px solid ${state.tone}55`, borderRadius: 12, background: `${state.tone}14`, padding: '10px 12px', maxWidth: 760 }}>
+      <div style={{ color: state.tone, fontSize: 13, fontWeight: 950 }}>{state.title}</div>
+      <div style={{ color: C.sub, fontSize: 14, marginTop: 4, lineHeight: 1.45, overflowWrap: 'anywhere' }}>{state.body}</div>
+    </div>
   )
 }
 
