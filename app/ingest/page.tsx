@@ -2,12 +2,6 @@
 
 import Link from 'next/link'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { createClient } from '@supabase/supabase-js'
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'https://example.supabase.co',
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? 'preview-build-key'
-)
 
 type TableStatus = {
   table: string
@@ -15,6 +9,7 @@ type TableStatus = {
   count: number | null
   minDate: string | null
   maxDate: string | null
+  status?: 'ok' | 'empty' | 'error'
   error?: string
 }
 
@@ -25,9 +20,17 @@ type DateRow = {
   matches: number | null
 }
 
-type MeterStatusResponse = {
-  tables?: TableStatus[]
-  dateCounts?: { date: string; hourly: number | null; driver: number | null }[]
+type SystemStatusResponse = {
+  ok?: boolean
+  source?: string
+  message?: string
+  env?: Record<string, boolean>
+  callTables?: TableStatus[]
+  meterTables?: TableStatus[]
+  vectorTables?: TableStatus[]
+  dateRows?: DateRow[]
+  watchProcesses?: { name: string; command: string; runsInVercel: boolean }[]
+  error?: string
 }
 
 const C = {
@@ -60,68 +63,32 @@ function dayCount(start?: string | null, end?: string | null) {
   return `${Math.max(0, Math.round(diff / 86400000) + 1)}일`
 }
 
-function recentDates(maxDate: string | null | undefined, count = 14) {
-  if (!maxDate) return []
-  const base = new Date(`${maxDate}T00:00:00`)
-  return Array.from({ length: count }, (_, index) => {
-    const d = new Date(base)
-    d.setDate(base.getDate() - (count - 1 - index))
-    return d.toISOString().slice(0, 10)
-  })
-}
-
-async function tableStatus(table: string, label: string, dateColumn: string): Promise<TableStatus> {
-  const { count, error } = await supabase.from(table).select('*', { count: 'exact', head: true })
-  if (error) return { table, label, count: null, minDate: null, maxDate: null, error: error.message }
-  const [minRes, maxRes] = await Promise.all([
-    supabase.from(table).select(dateColumn).order(dateColumn, { ascending: true }).limit(1),
-    supabase.from(table).select(dateColumn).order(dateColumn, { ascending: false }).limit(1),
-  ])
-  return {
-    table,
-    label,
-    count: count ?? 0,
-    minDate: (minRes.data?.[0] as Record<string, string> | undefined)?.[dateColumn] ?? null,
-    maxDate: (maxRes.data?.[0] as Record<string, string> | undefined)?.[dateColumn] ?? null,
-    error: minRes.error?.message ?? maxRes.error?.message,
-  }
-}
-
-async function countByDate(table: string, column: string, date: string) {
-  const { count, error } = await supabase.from(table).select('*', { count: 'exact', head: true }).eq(column, date)
-  return error ? null : count ?? 0
-}
-
 export default function IngestPage() {
   const [loading, setLoading] = useState(true)
+  const [status, setStatus] = useState<SystemStatusResponse | null>(null)
+  const [statusError, setStatusError] = useState<string | null>(null)
   const [callTables, setCallTables] = useState<TableStatus[]>([])
   const [meterTables, setMeterTables] = useState<TableStatus[]>([])
+  const [vectorTables, setVectorTables] = useState<TableStatus[]>([])
   const [dateRows, setDateRows] = useState<DateRow[]>([])
-  const [meterDates, setMeterDates] = useState<MeterStatusResponse['dateCounts']>([])
 
   useEffect(() => {
     let cancelled = false
 
     async function load() {
       setLoading(true)
-      const calls = await Promise.all([
-        tableStatus('callcard_mbti', '호출데이터 / 콜카드', 'call_date'),
-        tableStatus('driver_daily_logs', '기사 호출 로그', 'service_date'),
-        tableStatus('matching_scores', '매칭 Top 10 결과', 'match_date'),
-      ])
-      const rows = await Promise.all(recentDates(calls[0].maxDate).map(async (date) => ({
-        date,
-        callcards: await countByDate('callcard_mbti', 'call_date', date),
-        driverLogs: await countByDate('driver_daily_logs', 'service_date', date),
-        matches: await countByDate('matching_scores', 'match_date', date),
-      })))
-      const meter = await fetch('/api/meter-status', { cache: 'no-store' }).then((res) => res.json()).catch(() => ({} as MeterStatusResponse))
+      setStatusError(null)
+      const nextStatus = await fetch('/api/system-status', { cache: 'no-store' })
+        .then((res) => res.json() as Promise<SystemStatusResponse>)
+        .catch((error: Error) => ({ error: error.message } as SystemStatusResponse))
 
       if (cancelled) return
-      setCallTables(calls)
-      setDateRows(rows)
-      setMeterTables(meter.tables ?? [])
-      setMeterDates(meter.dateCounts ?? [])
+      setStatus(nextStatus)
+      setStatusError(nextStatus.error ?? null)
+      setCallTables(nextStatus.callTables ?? [])
+      setDateRows(nextStatus.dateRows ?? [])
+      setMeterTables(nextStatus.meterTables ?? [])
+      setVectorTables(nextStatus.vectorTables ?? [])
       setLoading(false)
     }
 
@@ -133,14 +100,14 @@ export default function IngestPage() {
 
   const callcards = callTables.find((row) => row.table === 'callcard_mbti')
   const driverLogs = callTables.find((row) => row.table === 'driver_daily_logs')
-  const matches = callTables.find((row) => row.table === 'matching_scores')
   const meterMain = meterTables.find((row) => row.table === 'meter_hourly_logs') ?? meterTables[0]
+  const driverVectors = vectorTables.find((row) => row.table === 'driver_mbti')
   const missingRows = useMemo(() => dateRows.filter((row) => !row.callcards || !row.driverLogs || !row.matches), [dateRows])
 
   return (
     <main style={{ minHeight: '100vh', background: C.bg, color: C.ink, fontFamily: 'Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}>
       <Topbar />
-      <KpiRail loading={loading} callcards={callcards} meterMain={meterMain} missing={missingRows.length} />
+      <KpiRail loading={loading} callcards={callcards} meterMain={meterMain} driverVectors={driverVectors} missing={missingRows.length} status={status} />
 
       <section style={{ position: 'relative', minHeight: 'calc(100vh - 126px)', overflow: 'hidden', borderTop: `1px solid ${C.border}` }}>
         <MapBackdrop />
@@ -150,6 +117,7 @@ export default function IngestPage() {
           <CoverageCard title="호출데이터" range={range(callcards)} days={dayCount(callcards?.minDate, callcards?.maxDate)} count={fmt(callcards?.count)} color={C.green} />
           <CoverageCard title="기사 로그" range={range(driverLogs)} days={dayCount(driverLogs?.minDate, driverLogs?.maxDate)} count={fmt(driverLogs?.count)} color={C.cyan} />
           <CoverageCard title="앱미터데이터" range={range(meterMain)} days={dayCount(meterMain?.minDate, meterMain?.maxDate)} count={fmt(meterMain?.count)} color={C.purple} />
+          <StatusNotice loading={loading} status={status} error={statusError} />
         </aside>
 
         <section style={stagePanel}>
@@ -173,9 +141,10 @@ export default function IngestPage() {
               앱미터는 기사 MBTI의 주 원천이 아니라 천안 택시 흐름과 시장 기준을 보는 보조 데이터입니다.
             </p>
           </div>
+          <EnvChecklist status={status} />
         </aside>
 
-        <BottomDock callTables={callTables} meterDates={meterDates ?? []} />
+        <BottomDock callTables={callTables} meterTables={meterTables} vectorTables={vectorTables} />
       </section>
     </main>
   )
@@ -209,13 +178,13 @@ function Topbar() {
   )
 }
 
-function KpiRail({ loading, callcards, meterMain, missing }: { loading: boolean; callcards?: TableStatus; meterMain?: TableStatus; missing: number }) {
+function KpiRail({ loading, callcards, meterMain, driverVectors, missing, status }: { loading: boolean; callcards?: TableStatus; meterMain?: TableStatus; driverVectors?: TableStatus; missing: number; status: SystemStatusResponse | null }) {
   const items = [
+    ['연결 상태', loading ? '확인 중' : status?.ok ? '정상' : '주의', status?.message ?? 'Supabase 상태 확인', status?.ok ? C.green : C.yellow],
     ['호출데이터', loading ? '로딩 중' : range(callcards), dayCount(callcards?.minDate, callcards?.maxDate), C.green],
     ['앱미터데이터', range(meterMain), meterMain?.label ?? '보조 시장 기준', C.cyan],
-    ['콜카드 건수', fmt(callcards?.count), 'callcard_mbti', C.purple],
+    ['기사 벡터', fmt(driverVectors?.count), 'driver_mbti', C.purple],
     ['누락 확인', `${missing}일`, '최근 14일 기준', missing ? C.yellow : C.green],
-    ['적재 방식', '폴더 감시', '업로드 버튼 제거 방향', C.orange],
   ]
 
   return (
@@ -232,6 +201,17 @@ function KpiRail({ loading, callcards, meterMain, missing }: { loading: boolean;
 }
 
 function CoverageTimeline({ rows }: { rows: DateRow[] }) {
+  if (!rows.length) {
+    return (
+      <div style={{ position: 'absolute', left: 28, right: 28, bottom: 28, zIndex: 4, border: `1px solid ${C.yellow}66`, borderRadius: 16, background: 'rgba(245,158,11,.1)', padding: 18 }}>
+        <div style={{ color: C.yellow, fontSize: 15, fontWeight: 950 }}>날짜별 적재 현황을 표시할 데이터가 없습니다.</div>
+        <p style={{ color: C.sub, fontSize: 14, lineHeight: 1.5, margin: '8px 0 0' }}>
+          Supabase 연결 실패, 호출데이터 0건, 또는 날짜 컬럼 조회 실패 중 하나입니다. 좌측 상태 카드의 원인을 먼저 확인하세요.
+        </p>
+      </div>
+    )
+  }
+
   return (
     <div style={{ position: 'absolute', left: 28, right: 28, bottom: 28, zIndex: 4 }}>
       <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.max(rows.length, 1)}, 1fr)`, gap: 9 }}>
@@ -256,12 +236,12 @@ function CoverageTimeline({ rows }: { rows: DateRow[] }) {
   )
 }
 
-function BottomDock({ callTables, meterDates }: { callTables: TableStatus[]; meterDates: { date: string; hourly: number | null; driver: number | null }[] }) {
+function BottomDock({ callTables, meterTables, vectorTables }: { callTables: TableStatus[]; meterTables: TableStatus[]; vectorTables: TableStatus[] }) {
+  const rows = [...callTables, ...meterTables.filter((row) => row.table !== 'meter_daily_logs'), ...vectorTables].slice(0, 4)
   return (
     <section style={{ position: 'absolute', left: 350, right: 350, bottom: 18, minHeight: 112, border: `1px solid ${C.border}`, borderRadius: 18, background: 'linear-gradient(90deg, rgba(9,14,26,.96), rgba(9,14,26,.76))', boxShadow: '0 20px 70px rgba(0,0,0,.32)', zIndex: 8, padding: 14 }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
-        {callTables.map((row) => <Dock key={row.table} title={row.label} value={fmt(row.count)} sub={range(row)} color={C.green} />)}
-        {meterDates.slice(-1).map((row) => <Dock key={row.date} title="앱미터 최근일" value={row.date} sub={`시간대 ${fmt(row.hourly)} / 기사 ${fmt(row.driver)}`} color={C.cyan} />)}
+        {rows.map((row) => <Dock key={row.table} title={row.label} value={fmt(row.count)} sub={row.error ? `오류: ${row.error}` : range(row)} color={row.status === 'error' ? C.red : C.green} />)}
       </div>
     </section>
   )
@@ -273,6 +253,46 @@ function CoverageCard({ title, range, days, count, color }: { title: string; ran
       <div style={{ color, fontSize: 16, fontWeight: 950 }}>{title}</div>
       <div style={{ color: C.ink, fontSize: 22, lineHeight: 1.25, fontWeight: 950, marginTop: 10 }}>{range}</div>
       <div style={{ color: C.sub, fontSize: 14, marginTop: 8 }}>{days} · {count}건</div>
+    </div>
+  )
+}
+
+function StatusNotice({ loading, status, error }: { loading: boolean; status: SystemStatusResponse | null; error: string | null }) {
+  const tone = loading ? C.cyan : status?.ok ? C.green : C.yellow
+  const title = loading ? '상태 확인 중' : status?.ok ? '조회 정상' : '확인 필요'
+  const message = error ?? status?.message ?? 'Supabase와 적재 테이블 상태를 확인합니다.'
+
+  return (
+    <div style={{ marginTop: 14, border: `1px solid ${tone}66`, borderRadius: 16, background: `${tone}12`, padding: 16 }}>
+      <div style={{ color: tone, fontSize: 16, fontWeight: 950 }}>{title}</div>
+      <p style={{ color: C.sub, fontSize: 14, lineHeight: 1.5, margin: '8px 0 0' }}>{message}</p>
+      <p style={{ color: C.muted, fontSize: 13, lineHeight: 1.45, margin: '8px 0 0' }}>
+        자동 적재는 Vercel 화면이 아니라 PC/서버의 watch 프로세스가 담당합니다.
+      </p>
+    </div>
+  )
+}
+
+function EnvChecklist({ status }: { status: SystemStatusResponse | null }) {
+  const env = status?.env ?? {}
+  const items = [
+    ['Supabase URL', env.NEXT_PUBLIC_SUPABASE_URL],
+    ['Supabase anon', env.NEXT_PUBLIC_SUPABASE_ANON_KEY],
+    ['Service role', env.SUPABASE_SERVICE_ROLE_KEY],
+    ['AI 분석 키', env.ANTHROPIC_API_KEY],
+  ] as const
+
+  return (
+    <div style={{ marginTop: 14, border: `1px solid ${C.border}`, borderRadius: 16, background: 'rgba(15,22,40,.72)', padding: 16 }}>
+      <div style={{ color: C.ink, fontSize: 15, fontWeight: 950 }}>환경 연결</div>
+      <div style={{ display: 'grid', gap: 8, marginTop: 12 }}>
+        {items.map(([label, ok]) => (
+          <div key={label} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, color: C.sub, fontSize: 13, fontWeight: 850 }}>
+            <span>{label}</span>
+            <span style={{ color: ok ? C.green : C.yellow }}>{ok ? '설정됨' : '없음'}</span>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
