@@ -8,6 +8,7 @@ type TableStatus = {
   minDate: string | null
   maxDate: string | null
   status: 'ok' | 'empty' | 'error'
+  importance: 'core' | 'optional'
   error?: string
 }
 
@@ -35,10 +36,11 @@ async function tableStatus(
   table: string,
   label: string,
   dateColumn: string,
+  importance: TableStatus['importance'] = 'core',
 ): Promise<TableStatus> {
   const { count, error } = await supabase.from(table).select('*', { count: 'exact', head: true })
   if (error) {
-    return { table, label, count: null, minDate: null, maxDate: null, status: 'error', error: readableError(error.message) }
+    return { table, label, count: null, minDate: null, maxDate: null, status: 'error', importance, error: readableError(error.message) }
   }
 
   const [minRes, maxRes] = await Promise.all([
@@ -47,7 +49,7 @@ async function tableStatus(
   ])
   const rangeError = minRes.error?.message ?? maxRes.error?.message
   if (rangeError) {
-    return { table, label, count: count ?? 0, minDate: null, maxDate: null, status: 'error', error: readableError(rangeError) }
+    return { table, label, count: count ?? 0, minDate: null, maxDate: null, status: 'error', importance, error: readableError(rangeError) }
   }
 
   const minDate = (minRes.data?.[0] as Record<string, string> | undefined)?.[dateColumn] ?? null
@@ -60,6 +62,7 @@ async function tableStatus(
     minDate,
     maxDate,
     status: count ? 'ok' : 'empty',
+    importance,
   }
 }
 
@@ -110,16 +113,16 @@ export async function GET() {
     Promise.all([
       tableStatus(supabase, 'callcard_mbti', '호출데이터 / 콜카드', 'call_date'),
       tableStatus(supabase, 'driver_daily_logs', '기사 호출 로그', 'service_date'),
-      tableStatus(supabase, 'matching_scores', '매칭 Top 10 결과', 'match_date'),
+      tableStatus(supabase, 'matching_scores', '매칭 Top 10 결과', 'match_date', 'optional'),
     ]),
     Promise.all([
       tableStatus(supabase, 'meter_hourly_logs', '앱미터 시간대', 'log_date'),
       tableStatus(supabase, 'meter_driver_logs', '앱미터 기사별', 'log_date'),
-      tableStatus(supabase, 'meter_daily_logs', '앱미터 일별', 'service_date'),
+      tableStatus(supabase, 'meter_daily_logs', '앱미터 일별', 'service_date', 'optional'),
     ]),
     Promise.all([
       tableStatus(supabase, 'driver_mbti', '기사 22D 벡터', 'updated_at'),
-      tableStatus(supabase, 'callcard_profile', '콜카드 프로필', 'created_at'),
+      tableStatus(supabase, 'callcard_profile', '콜카드 프로필', 'created_at', 'optional'),
     ]),
   ])
 
@@ -131,13 +134,19 @@ export async function GET() {
     matches: await countByDate(supabase, 'matching_scores', 'match_date', date),
   })))
 
-  const hasTableError = [...callTables, ...meterTables, ...vectorTables].some((row) => row.status === 'error')
+  const allTables = [...callTables, ...meterTables, ...vectorTables]
+  const hasCoreError = allTables.some((row) => row.importance === 'core' && row.status === 'error')
+  const hasOptionalWarning = allTables.some((row) => row.importance === 'optional' && row.status === 'error')
 
   return NextResponse.json({
-    ok: !hasTableError,
+    ok: !hasCoreError,
     source: source(),
     env,
-    message: hasTableError ? '일부 테이블 조회에 실패했습니다.' : 'Supabase 조회가 정상입니다.',
+    message: hasCoreError
+      ? '핵심 적재 테이블 조회에 실패했습니다.'
+      : hasOptionalWarning
+        ? '핵심 데이터는 정상이며 일부 보조 테이블만 확인이 필요합니다.'
+        : 'Supabase 조회가 정상입니다.',
     callTables,
     meterTables,
     vectorTables,

@@ -10,6 +10,7 @@ type TableStatus = {
   minDate: string | null
   maxDate: string | null
   status?: 'ok' | 'empty' | 'error'
+  importance?: 'core' | 'optional'
   error?: string
 }
 
@@ -249,7 +250,9 @@ function CoverageTimeline({ rows }: { rows: DateRow[] }) {
 }
 
 function BottomDock({ callTables, meterTables, vectorTables }: { callTables: TableStatus[]; meterTables: TableStatus[]; vectorTables: TableStatus[] }) {
-  const rows = [...callTables, ...meterTables.filter((row) => row.table !== 'meter_daily_logs'), ...vectorTables].slice(0, 4)
+  const rows = [...callTables, ...meterTables, ...vectorTables]
+    .filter((row) => row.importance !== 'optional')
+    .slice(0, 4)
   return (
     <section style={{ position: 'absolute', left: 350, right: 350, bottom: 18, minHeight: 112, border: `1px solid ${C.border}`, borderRadius: 18, background: 'linear-gradient(90deg, rgba(9,14,26,.96), rgba(9,14,26,.76))', boxShadow: '0 20px 70px rgba(0,0,0,.32)', zIndex: 8, padding: 14 }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
