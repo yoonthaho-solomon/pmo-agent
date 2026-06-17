@@ -368,7 +368,13 @@ export async function POST(request: NextRequest) {
   }
 
   const sourceColumns = await availableSourceColumns(supabase)
-  const upsertVectors = vectors.map((row) => stripUnavailableSourceColumns(row, sourceColumns))
+  const dedupedByCallcardId = new Map<string, CallcardMbti>()
+  for (const row of vectors) {
+    dedupedByCallcardId.set(row.callcard_id, row)
+  }
+  const dedupedVectors = Array.from(dedupedByCallcardId.values())
+  const duplicateCount = vectors.length - dedupedVectors.length
+  const upsertVectors = dedupedVectors.map((row) => stripUnavailableSourceColumns(row, sourceColumns))
 
   const BATCH = 500
   for (let i = 0; i < upsertVectors.length; i += BATCH) {
@@ -395,9 +401,10 @@ export async function POST(request: NextRequest) {
   await logAgentRun({ run_date: new Date().toISOString().slice(0, 10), agent_name: 'callcard-mbti', input_rows: inputRows, status: 'success', duration_ms: Date.now() - startedAt })
   return NextResponse.json({
     message: 'callcard_mbti 계산 완료',
-    callcard_count: vectors.length,
+    callcard_count: dedupedVectors.length,
     total_rows_read: callcardRows.length,
     remapped_rows_read: remappedRows.length,
+    duplicate_callcard_rows_removed: duplicateCount,
     source_identifiers: { driver_id: 'preserved', vehicle_id: 'preserved' },
     source_fields: {
       available_columns: Array.from(sourceColumns),

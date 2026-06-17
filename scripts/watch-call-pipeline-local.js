@@ -85,7 +85,7 @@ function runPipeline(date, baseUrl, extraArgs) {
     const child = spawn('npm.cmd', args, {
       cwd: process.cwd(),
       stdio: 'inherit',
-      shell: false,
+      shell: process.platform === 'win32',
     })
     child.on('error', reject)
     child.on('exit', (code) => {
