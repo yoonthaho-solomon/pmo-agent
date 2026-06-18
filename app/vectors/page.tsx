@@ -2,7 +2,7 @@
 
 import { PrimaryNav } from '@/app/components/PrimaryNav'
 import { createClient } from '@supabase/supabase-js'
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import {
   VECTOR_DIMENSIONS,
   callToVector,
@@ -10,7 +10,11 @@ import {
   driverToVector,
   type DriverVectorRow,
 } from '@/lib/matching-vector'
-import { DISPLAY_AXES, vectorToDisplayAxisBundle } from '@/lib/matching-display-axis'
+import {
+  DISPLAY_AXES,
+  getDisplayAxisFactors,
+  vectorToDisplayAxisBundle,
+} from '@/lib/matching-display-axis'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'https://example.supabase.co',
@@ -47,8 +51,6 @@ type RankedDriver = {
 
 const C = {
   bg: '#050810',
-  panel: 'rgba(10, 16, 29, 0.88)',
-  panel2: 'rgba(15, 23, 42, 0.72)',
   ink: '#F8FAFC',
   sub: '#B8C7DE',
   muted: '#8290A8',
@@ -62,18 +64,44 @@ const C = {
 } as const
 
 const weekdayLabels = ['월', '화', '수', '목', '금', '토', '일']
-const axisNames = ['픽업 접근성', '시간대 적합도', '요일 적합도', '운행거리 적합도', '수익·상품 적합도']
-const axisColors = [C.cyan, C.purple, C.green, C.orange, C.yellow] as const
 
-const factorDescriptions: Record<string, string> = {
-  시간대: '콜이 발생한 시간대와 기사가 자주 수락한 시간대가 맞는지 봅니다.',
-  요일: '콜의 요일과 기사 누적 운행 패턴의 요일 성향을 비교합니다.',
-  거리: '예상 운행거리가 기사에게 익숙한 거리 구간인지 봅니다.',
-  요금: '예상요금이 기사 수락 패턴과 맞는지 비교합니다.',
-  콜유형: '유료콜과 무료콜 선호 차이를 반영합니다.',
-  상품: '탄력 또는 일반 상품 성향을 구분합니다.',
-  ETA: '승객 위치까지 접근성이 좋은 조건인지 보조로 봅니다.',
-}
+const factorPurpose = [
+  {
+    title: '시간대',
+    count: 4,
+    keys: ['새벽', '오전', '주간', '야간'],
+    desc: '콜이 발생한 시간대와 기사가 자주 반응한 시간대를 비교합니다.',
+    color: C.purple,
+  },
+  {
+    title: '요일',
+    count: 7,
+    keys: ['월', '화', '수', '목', '금', '토', '일'],
+    desc: '요일별 호출 반응과 운행 패턴을 비교합니다.',
+    color: C.green,
+  },
+  {
+    title: '거리',
+    count: 3,
+    keys: ['단거리', '중거리', '장거리'],
+    desc: '예상 운행거리와 기사 선호 거리 구간을 비교합니다.',
+    color: C.orange,
+  },
+  {
+    title: '요금·상품',
+    count: 7,
+    keys: ['저요금', '중요금', '고요금', '유료콜', '무료콜', '탄력', '일반'],
+    desc: '요금대, 유료콜 여부, 상품 성향을 비교합니다.',
+    color: C.yellow,
+  },
+  {
+    title: '픽업 접근성',
+    count: 1,
+    keys: ['근접성'],
+    desc: '콜카드 입력 ETA를 보조 팩터로 사용합니다. 실시간 기사 위치는 아직 포함하지 않습니다.',
+    color: C.cyan,
+  },
+] as const
 
 function pct(n: number | null | undefined) {
   return n == null || Number.isNaN(n) ? '-' : `${Math.round(n * 100)}%`
@@ -114,6 +142,7 @@ export default function VectorsPage() {
   const [drivers, setDrivers] = useState<DriverRow[]>([])
   const [selectedCallId, setSelectedCallId] = useState('')
   const [selectedDriverId, setSelectedDriverId] = useState('')
+  const [selectedAxis, setSelectedAxis] = useState(0)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
 
@@ -178,19 +207,22 @@ export default function VectorsPage() {
   const selectedDriverVector = selectedMatch?.vector ?? []
   const callAxes = vectorToDisplayAxisBundle(callVector).axis
   const driverAxes = vectorToDisplayAxisBundle(selectedDriverVector).axis
+  const axis = DISPLAY_AXES[selectedAxis]
+  const callFactors = getDisplayAxisFactors(callVector, selectedAxis)
+  const driverFactors = getDisplayAxisFactors(selectedDriverVector, selectedAxis)
 
   return (
     <main className="page">
       <PrimaryNav
         active="/vectors"
         title="Happycall PMO"
-        subtitle="Vector Studio"
+        subtitle="콜카드·기사 팩터리스트"
         rightSlot={<><Pill color={C.green}>실데이터</Pill><Pill color={C.cyan}>22D COSINE</Pill></>}
       />
 
       <section className="top-rail" aria-label="팩터리스트 핵심 지표">
-        <RailMetric label="콜카드" value={selectedCall ? '1건 선택' : loading ? '로딩 중' : '없음'} meta={`${calls.toLocaleString('ko-KR')}개 후보`} color={C.cyan} />
-        <RailMetric label="후보 기사" value={`${ranked.length}명`} meta={`${drivers.toLocaleString('ko-KR')}명 driver_mbti 조회`} color={C.green} />
+        <RailMetric label="콜카드" value={selectedCall ? '1건 선택' : loading ? '조회 중' : '없음'} meta={`${calls.length.toLocaleString('ko-KR')}건 후보`} color={C.cyan} />
+        <RailMetric label="후보 기사" value={`${ranked.length}명`} meta={`${drivers.length.toLocaleString('ko-KR')}명 driver_mbti`} color={C.green} />
         <RailMetric label="최고 유사도" value={pct(ranked[0]?.cosine)} meta="22D 코사인 기준" color={C.purple} />
         <RailMetric label="표시 방식" value="22D → 5축" meta="계산은 22D, 화면은 5축 요약" color={C.orange} />
       </section>
@@ -202,14 +234,25 @@ export default function VectorsPage() {
             <h1>콜카드 조건과 기사 운행패턴을 같은 22개 팩터로 비교합니다</h1>
             <p className="lead">
               콜카드는 현재 요청 조건을 22D로 만들고, 기사는 누적 운행패턴을 22D로 저장합니다.
-              두 벡터의 방향이 얼마나 비슷한지 코사인 유사도로 계산하고, 화면에서는 5축으로 요약해 이해를 돕습니다.
+              두 벡터의 방향이 얼마나 비슷한지 코사인 유사도로 계산하고, 화면에서는 5축으로 요약해 설명합니다.
             </p>
           </div>
           <div className="status-card" style={{ '--tone': loadError ? C.red : loading ? C.yellow : C.green } as CSSProperties}>
             <span>조회 상태</span>
             <strong>{loading ? '확인 중' : loadError ? '오류' : '정상'}</strong>
-            <p>{loadError ?? `${calls.toLocaleString('ko-KR')}개 콜카드와 ${drivers.toLocaleString('ko-KR')}명 기사 벡터를 비교할 수 있습니다.`}</p>
+            <p>{loadError ?? `${calls.length.toLocaleString('ko-KR')}개 콜카드와 ${drivers.length.toLocaleString('ko-KR')}명 기사 벡터를 비교할 수 있습니다.`}</p>
           </div>
+        </section>
+
+        <section className="factor-purpose">
+          {factorPurpose.map((item) => (
+            <article key={item.title} style={{ '--tone': item.color } as CSSProperties}>
+              <span>{item.count}D</span>
+              <h2>{item.title}</h2>
+              <p>{item.desc}</p>
+              <div>{item.keys.map((key) => <em key={key}>{key}</em>)}</div>
+            </article>
+          ))}
         </section>
 
         <section className="main-grid">
@@ -234,10 +277,11 @@ export default function VectorsPage() {
                 ['상품', selectedCall?.is_surge ? '탄력' : '일반'],
               ]} />
             </ProfileCard>
+            <AxisBars title="콜카드 5축" axis={callAxes} tone={C.cyan} />
           </aside>
 
           <section className="comparison-stage">
-            <SectionTitle label="CORE" title="22D 팩터 비교판" />
+            <SectionTitle label="CORE" title="22D 팩터 비교" />
             <div className="match-summary">
               <div>
                 <span>현재 비교</span>
@@ -245,7 +289,31 @@ export default function VectorsPage() {
               </div>
               <strong>{pct(selectedMatch?.cosine)}</strong>
             </div>
-            <FactorGrid callVector={callVector} driverVector={selectedDriverVector} />
+            <FactorMatrix callVector={callVector} driverVector={selectedDriverVector} />
+            <div className="axis-tabs">
+              {DISPLAY_AXES.map((item, index) => (
+                <button key={item.key} type="button" className={index === selectedAxis ? 'active' : ''} onClick={() => setSelectedAxis(index)}>
+                  {item.name}
+                </button>
+              ))}
+            </div>
+            <div className="drill-card">
+              <div className="drill-head">
+                <span>5축 선택</span>
+                <h3>{axis?.name}</h3>
+              </div>
+              {callFactors.map((factor, index) => {
+                const driver = driverFactors[index]
+                return (
+                  <CompareRow
+                    key={factor.key}
+                    label={`${factor.group} · ${factor.label}`}
+                    callScore={factor.score ?? 0}
+                    driverScore={driver?.score ?? 0}
+                  />
+                )
+              })}
+            </div>
           </section>
 
           <aside className="profile-panel">
@@ -261,257 +329,38 @@ export default function VectorsPage() {
                 ['등급', selectedMatch?.grade ?? '-'],
               ]} />
             </ProfileCard>
+            <AxisBars title="기사 5축" axis={driverAxes} tone={C.green} />
           </aside>
         </section>
 
-        <section className="bottom-grid">
-          <AxisPanel callAxes={callAxes} driverAxes={driverAxes} />
-          <FormulaPanel />
+        <section className="formula-card">
+          <div>
+            <p className="eyebrow">COSINE FORMULA</p>
+            <h2>코사인 유사도 = 콜카드 22D와 기사 22D의 방향 유사성</h2>
+          </div>
+          <code>similarity = dot(callVector, driverVector) / (|callVector| × |driverVector|)</code>
+          <p>
+            유사도는 기사에게 콜을 반드시 보내라는 결정값이 아니라, 기존 배차 후보군 안에서 “누가 이 콜을 더 잘 받을 가능성이 있는가”를 정렬하는 기준입니다.
+          </p>
         </section>
       </div>
 
-      <style jsx>{`
-        .page {
-          min-height: 100vh;
-          color: ${C.ink};
-          background:
-            linear-gradient(90deg, rgba(34, 211, 238, 0.045) 1px, transparent 1px),
-            linear-gradient(180deg, rgba(34, 211, 238, 0.035) 1px, transparent 1px),
-            radial-gradient(circle at 18% 12%, rgba(34, 211, 238, 0.14), transparent 30rem),
-            radial-gradient(circle at 82% 16%, rgba(139, 92, 246, 0.14), transparent 28rem),
-            ${C.bg};
-          background-size: 72px 72px, 72px 72px, auto, auto, auto;
-          font-family: Pretendard, "Apple SD Gothic Neo", "Malgun Gothic", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        }
-
-        .top-rail {
-          display: grid;
-          grid-template-columns: repeat(4, minmax(0, 1fr));
-          border-bottom: 1px solid ${C.line};
-          background: rgba(5, 8, 16, 0.88);
-        }
-
-        .workspace {
-          width: 100%;
-          max-width: 1780px;
-          margin: 0 auto;
-          padding: 28px;
-          display: grid;
-          gap: 22px;
-        }
-
-        .hero-card,
-        .profile-panel,
-        .comparison-stage,
-        .bottom-panel {
-          border: 1px solid ${C.line};
-          border-radius: 8px;
-          background: linear-gradient(180deg, rgba(15, 23, 42, 0.78), rgba(5, 8, 16, 0.86));
-          box-shadow: 0 28px 90px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.04);
-        }
-
-        .hero-card {
-          display: grid;
-          grid-template-columns: minmax(0, 1fr) 380px;
-          gap: 24px;
-          padding: 34px;
-          align-items: stretch;
-        }
-
-        .eyebrow {
-          margin: 0;
-          color: ${C.cyan};
-          font-size: 20px;
-          font-weight: 900;
-        }
-
-        h1 {
-          max-width: 1050px;
-          margin: 12px 0 0;
-          font-size: 56px;
-          line-height: 1.06;
-          letter-spacing: 0;
-        }
-
-        .lead {
-          max-width: 1040px;
-          margin: 16px 0 0;
-          color: ${C.sub};
-          font-size: 22px;
-          line-height: 1.55;
-          font-weight: 650;
-        }
-
-        .status-card {
-          display: grid;
-          align-content: center;
-          gap: 10px;
-          padding: 26px;
-          border: 1px solid color-mix(in srgb, var(--tone) 48%, transparent);
-          border-radius: 8px;
-          background: linear-gradient(135deg, color-mix(in srgb, var(--tone) 13%, transparent), rgba(15, 23, 42, 0.64));
-        }
-
-        .status-card span {
-          color: ${C.sub};
-          font-size: 20px;
-          font-weight: 900;
-        }
-
-        .status-card strong {
-          color: var(--tone);
-          font-size: 54px;
-          line-height: 1;
-        }
-
-        .status-card p {
-          margin: 0;
-          color: ${C.sub};
-          font-size: 20px;
-          line-height: 1.45;
-          font-weight: 650;
-        }
-
-        .main-grid {
-          display: grid;
-          grid-template-columns: 340px minmax(0, 1fr) 360px;
-          gap: 22px;
-          align-items: start;
-        }
-
-        .profile-panel,
-        .comparison-stage,
-        .bottom-panel {
-          min-width: 0;
-          padding: 24px;
-        }
-
-        select {
-          width: 100%;
-          height: 58px;
-          margin-bottom: 18px;
-          border: 1px solid ${C.line};
-          border-radius: 8px;
-          color: ${C.ink};
-          background: #0B1222;
-          padding: 0 14px;
-          font-size: 20px;
-          font-weight: 800;
-        }
-
-        .match-summary {
-          display: flex;
-          justify-content: space-between;
-          gap: 20px;
-          align-items: center;
-          padding: 20px;
-          margin-bottom: 18px;
-          border: 1px solid rgba(34, 211, 238, 0.35);
-          border-radius: 8px;
-          background: rgba(34, 211, 238, 0.08);
-        }
-
-        .match-summary span {
-          color: ${C.cyan};
-          font-size: 19px;
-          font-weight: 900;
-        }
-
-        .match-summary h2 {
-          margin: 8px 0 0;
-          color: ${C.ink};
-          font-size: 32px;
-          line-height: 1.15;
-          overflow-wrap: anywhere;
-        }
-
-        .match-summary strong {
-          color: ${C.cyan};
-          font-size: 64px;
-          line-height: 1;
-        }
-
-        .bottom-grid {
-          display: grid;
-          grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-          gap: 22px;
-        }
-
-        @media (max-width: 1320px) {
-          .main-grid {
-            grid-template-columns: 1fr;
-          }
-
-          .bottom-grid,
-          .hero-card {
-            grid-template-columns: 1fr;
-          }
-        }
-
-        @media (max-width: 980px) {
-          .top-rail {
-            grid-template-columns: 1fr;
-          }
-
-          .workspace {
-            padding: 18px;
-          }
-
-          h1 {
-            font-size: 40px;
-          }
-
-          .lead {
-            font-size: 20px;
-          }
-        }
-      `}</style>
+      <style jsx>{pageCss}</style>
     </main>
   )
 }
 
+function Pill({ children, color }: { children: string; color: string }) {
+  return <span className="pill" style={{ '--tone': color } as CSSProperties}>{children}</span>
+}
+
 function RailMetric({ label, value, meta, color }: { label: string; value: string; meta: string; color: string }) {
   return (
-    <article className="rail-metric">
+    <div className="rail-metric">
       <span>{label}</span>
-      <strong style={{ color }}>{value}</strong>
-      <p>{meta}</p>
-      <style jsx>{`
-        .rail-metric {
-          min-height: 106px;
-          display: grid;
-          align-content: center;
-          gap: 5px;
-          padding: 18px 24px;
-          border-right: 1px solid ${C.line};
-        }
-
-        span {
-          color: ${C.muted};
-          font-size: 18px;
-          font-weight: 900;
-        }
-
-        strong {
-          min-width: 0;
-          font-size: 30px;
-          line-height: 1.1;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-
-        p {
-          margin: 0;
-          color: ${C.sub};
-          font-size: 18px;
-          line-height: 1.25;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-      `}</style>
-    </article>
+      <b style={{ color }}>{value}</b>
+      <em>{meta}</em>
+    </div>
   )
 }
 
@@ -520,103 +369,22 @@ function SectionTitle({ label, title }: { label: string; title: string }) {
     <div className="section-title">
       <span>{label}</span>
       <h2>{title}</h2>
-      <style jsx>{`
-        .section-title {
-          display: grid;
-          gap: 7px;
-          margin-bottom: 16px;
-        }
-
-        span {
-          color: ${C.muted};
-          font-size: 18px;
-          font-weight: 900;
-        }
-
-        h2 {
-          margin: 0;
-          color: ${C.ink};
-          font-size: 30px;
-          line-height: 1.15;
-        }
-      `}</style>
     </div>
   )
 }
 
-function ProfileCard({ tone, label, score, badge, children }: { tone: string; label: string; score: number; badge: string; children: ReactNode }) {
+function ProfileCard({ tone, label, score, badge, children }: { tone: string; label: string; score: number; badge: string; children: React.ReactNode }) {
   return (
-    <article className="profile-card" style={{ '--tone': tone } as CSSProperties}>
-      <div className="profile-head">
+    <div className="profile-card" style={{ '--tone': tone } as CSSProperties}>
+      <div className="profile-top">
         <div>
           <span>{label}</span>
-          <b>{score || '-'}</b>
+          <b>{score}</b>
         </div>
-        <em>{badge}</em>
+        <strong>{badge}</strong>
       </div>
-      <div className="profile-body">{children}</div>
-      <style jsx>{`
-        .profile-card {
-          padding: 20px;
-          border: 1px solid color-mix(in srgb, var(--tone) 48%, transparent);
-          border-radius: 8px;
-          background: linear-gradient(145deg, color-mix(in srgb, var(--tone) 12%, transparent), rgba(15, 23, 42, 0.64));
-        }
-
-        .profile-head {
-          display: flex;
-          justify-content: space-between;
-          gap: 18px;
-          align-items: center;
-        }
-
-        span {
-          display: block;
-          color: var(--tone);
-          font-size: 20px;
-          font-weight: 900;
-        }
-
-        b {
-          display: block;
-          margin-top: 8px;
-          color: ${C.ink};
-          font-size: 64px;
-          line-height: 1;
-        }
-
-        em {
-          width: 86px;
-          height: 86px;
-          display: grid;
-          place-items: center;
-          border: 1px solid color-mix(in srgb, var(--tone) 58%, transparent);
-          border-radius: 8px;
-          color: var(--tone);
-          background: rgba(5, 8, 16, 0.44);
-          font-size: 36px;
-          font-style: normal;
-          font-weight: 950;
-        }
-
-        .profile-body :global(strong) {
-          display: block;
-          margin-top: 18px;
-          color: ${C.ink};
-          font-size: 26px;
-          line-height: 1.25;
-          overflow-wrap: anywhere;
-        }
-
-        .profile-body :global(p) {
-          margin: 10px 0 0;
-          color: ${C.sub};
-          font-size: 20px;
-          line-height: 1.45;
-          font-weight: 650;
-        }
-      `}</style>
-    </article>
+      {children}
+    </div>
   )
 }
 
@@ -626,411 +394,607 @@ function MiniGrid({ items }: { items: [string, string][] }) {
       {items.map(([label, value]) => (
         <div key={label}>
           <span>{label}</span>
-          <strong>{value}</strong>
+          <b>{value}</b>
         </div>
       ))}
-      <style jsx>{`
-        .mini-grid {
-          display: grid;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 10px;
-          margin-top: 18px;
-        }
-
-        div {
-          min-width: 0;
-          padding: 14px;
-          border: 1px solid ${C.line};
-          border-radius: 8px;
-          background: rgba(5, 8, 16, 0.44);
-        }
-
-        span {
-          display: block;
-          color: ${C.muted};
-          font-size: 18px;
-          font-weight: 850;
-        }
-
-        strong {
-          display: block;
-          margin-top: 7px;
-          color: ${C.ink};
-          font-size: 21px;
-          line-height: 1.25;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-      `}</style>
     </div>
   )
 }
 
-function DriverList({ ranked, selectedDriverId, onSelect }: { ranked: RankedDriver[]; selectedDriverId: string; onSelect: (driverId: string) => void }) {
+function DriverList({ ranked, selectedDriverId, onSelect }: { ranked: RankedDriver[]; selectedDriverId: string; onSelect: (id: string) => void }) {
   return (
     <div className="driver-list">
-      {ranked.slice(0, 4).map((row, index) => {
-        const active = row.driver.driver_id === selectedDriverId
-        return (
-          <button key={row.driver.driver_id} onClick={() => onSelect(row.driver.driver_id)} className={active ? 'active' : ''}>
-            <span>#{index + 1}</span>
-            <b>{row.driver.driver_id}</b>
-            <strong>{pct(row.cosine)}</strong>
-          </button>
-        )
-      })}
-      <style jsx>{`
-        .driver-list {
-          display: grid;
-          gap: 10px;
-          margin-bottom: 18px;
-        }
-
-        button {
-          display: grid;
-          grid-template-columns: 54px minmax(0, 1fr) 72px;
-          gap: 12px;
-          align-items: center;
-          min-height: 62px;
-          border: 1px solid ${C.line};
-          border-radius: 8px;
-          color: ${C.ink};
-          background: rgba(15, 23, 42, 0.62);
-          cursor: pointer;
-          text-align: left;
-        }
-
-        button.active {
-          border-color: ${C.cyan};
-          background: rgba(34, 211, 238, 0.12);
-        }
-
-        span {
-          color: ${C.yellow};
-          font-size: 20px;
-          font-weight: 950;
-          text-align: center;
-        }
-
-        b {
-          min-width: 0;
-          font-size: 19px;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-
-        strong {
-          color: ${C.cyan};
-          font-size: 22px;
-          text-align: right;
-          padding-right: 14px;
-        }
-      `}</style>
+      {ranked.length === 0 ? (
+        <div className="empty">추천 후보가 없습니다.</div>
+      ) : ranked.slice(0, 5).map((row, index) => (
+        <button key={row.driver.driver_id} type="button" className={row.driver.driver_id === selectedDriverId ? 'active' : ''} onClick={() => onSelect(row.driver.driver_id)}>
+          <span>#{index + 1}</span>
+          <b>{row.driver.driver_id}</b>
+          <strong>{pct(row.cosine)}</strong>
+        </button>
+      ))}
     </div>
   )
 }
 
-function FactorGrid({ callVector, driverVector }: { callVector: number[]; driverVector: number[] }) {
+function AxisBars({ title, axis, tone }: { title: string; axis: number[]; tone: string }) {
   return (
-    <div className="factor-grid">
-      {VECTOR_DIMENSIONS.map((dimension, index) => {
-        const call = Number(callVector[index] ?? 0)
-        const driver = Number(driverVector[index] ?? 0)
-        const diff = Math.abs(call - driver)
-        const fit = Math.max(0, 1 - diff)
-        const tone = fit >= 0.8 ? C.green : fit >= 0.55 ? C.yellow : C.red
-        return (
-          <article key={dimension.key} style={{ '--tone': tone } as CSSProperties}>
-            <div className="factor-head">
-              <span>{String(index + 1).padStart(2, '0')}</span>
-              <b>{dimension.group}</b>
-            </div>
-            <h3>{dimension.label}</h3>
-            <div className="bars">
-              <VectorBar label="콜" value={call} color={C.cyan} />
-              <VectorBar label="기사" value={driver} color={C.green} />
-            </div>
-            <strong>{Math.round(fit * 100)}%</strong>
-          </article>
-        )
-      })}
-      <style jsx>{`
-        .factor-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-          gap: 12px;
-        }
-
-        article {
-          min-height: 210px;
-          display: grid;
-          align-content: space-between;
-          gap: 12px;
-          padding: 16px;
-          border: 1px solid color-mix(in srgb, var(--tone) 38%, transparent);
-          border-radius: 8px;
-          background: linear-gradient(145deg, color-mix(in srgb, var(--tone) 8%, transparent), rgba(15, 23, 42, 0.6));
-        }
-
-        .factor-head {
-          display: flex;
-          justify-content: space-between;
-          gap: 12px;
-          align-items: center;
-        }
-
-        .factor-head span,
-        .factor-head b {
-          color: ${C.muted};
-          font-size: 18px;
-          font-weight: 900;
-        }
-
-        h3 {
-          margin: 0;
-          color: ${C.ink};
-          font-size: 26px;
-          line-height: 1.18;
-        }
-
-        .bars {
-          display: grid;
-          gap: 9px;
-        }
-
-        article > strong {
-          color: var(--tone);
-          font-size: 30px;
-          line-height: 1;
-        }
-      `}</style>
-    </div>
-  )
-}
-
-function VectorBar({ label, value, color }: { label: string; value: number; color: string }) {
-  return (
-    <div className="vector-bar">
-      <div><span>{label}</span><b>{scorePct(value)}</b></div>
-      <i><em style={{ width: `${scorePct(value)}%`, background: color }} /></i>
-      <style jsx>{`
-        .vector-bar {
-          display: grid;
-          gap: 5px;
-        }
-
-        div {
-          display: flex;
-          justify-content: space-between;
-          gap: 10px;
-          color: ${C.sub};
-          font-size: 18px;
-          font-weight: 800;
-        }
-
-        b {
-          color: ${C.ink};
-        }
-
-        i {
-          display: block;
-          height: 9px;
-          border-radius: 999px;
-          background: rgba(130, 144, 168, 0.2);
-          overflow: hidden;
-        }
-
-        em {
-          display: block;
-          height: 100%;
-          border-radius: inherit;
-        }
-      `}</style>
-    </div>
-  )
-}
-
-function AxisPanel({ callAxes, driverAxes }: { callAxes: number[]; driverAxes: number[] }) {
-  return (
-    <section className="bottom-panel">
-      <SectionTitle label="5-AXIS SUMMARY" title="22D를 이해하기 위한 5축 요약" />
-      <div className="axis-list">
-        {DISPLAY_AXES.map((axis, index) => {
-          const name = axisNames[index] ?? axis.name
-          const color = axisColors[index] ?? C.cyan
-          const call = (callAxes[index] ?? 0) / 100
-          const driver = (driverAxes[index] ?? 0) / 100
-          const fit = Math.max(0, 1 - Math.abs(call - driver))
-          return (
-            <article key={axis.key} style={{ '--tone': color } as CSSProperties}>
-              <div>
-                <b>{name}</b>
-                <strong>{Math.round(fit * 100)}%</strong>
-              </div>
-              <VectorBar label="콜카드" value={call} color={C.cyan} />
-              <VectorBar label="기사" value={driver} color={C.green} />
-            </article>
-          )
-        })}
-      </div>
-      <style jsx>{`
-        .axis-list {
-          display: grid;
-          grid-template-columns: repeat(5, minmax(0, 1fr));
-          gap: 12px;
-        }
-
-        article {
-          padding: 16px;
-          border: 1px solid color-mix(in srgb, var(--tone) 42%, transparent);
-          border-radius: 8px;
-          background: color-mix(in srgb, var(--tone) 8%, transparent);
-        }
-
-        article > div {
-          display: flex;
-          justify-content: space-between;
-          gap: 12px;
-          align-items: baseline;
-          margin-bottom: 12px;
-        }
-
-        b {
-          color: var(--tone);
-          font-size: 20px;
-          line-height: 1.2;
-        }
-
-        strong {
-          color: ${C.ink};
-          font-size: 28px;
-        }
-
-        @media (max-width: 1280px) {
-          .axis-list {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-          }
-        }
-
-        @media (max-width: 720px) {
-          .axis-list {
-            grid-template-columns: 1fr;
-          }
-        }
-      `}</style>
-    </section>
-  )
-}
-
-function FormulaPanel() {
-  const groups = Array.from(new Set(VECTOR_DIMENSIONS.map((dimension) => dimension.group)))
-  return (
-    <section className="bottom-panel">
-      <SectionTitle label="FORMULA" title="계산식과 팩터 그룹" />
-      <div className="formula-grid">
-        <FormulaCard color={C.cyan} title="콜카드 벡터" body="현재 콜 조건을 시간대, 요일, 거리, 요금, 콜유형, 상품, ETA 팩터로 변환합니다. 해당 조건은 1에 가깝고, 아닌 조건은 0에 가깝습니다." />
-        <FormulaCard color={C.green} title="기사 벡터" body="driver_mbti에 저장된 기사별 누적 운행 패턴입니다. 값이 높을수록 해당 조건에서 수락하거나 운행한 성향이 강합니다." />
-        <FormulaCard color={C.purple} title="코사인 유사도" body="dot(call22D, driver22D) / (|call22D| × |driver22D|). 두 벡터의 방향이 비슷할수록 높아집니다." />
-      </div>
-      <div className="group-grid">
-        {groups.map((group) => (
-          <article key={group}>
-            <h3>{group}</h3>
-            <p>{factorDescriptions[group] ?? '해당 팩터 그룹을 비교합니다.'}</p>
-            <strong>{VECTOR_DIMENSIONS.filter((dimension) => dimension.group === group).map((dimension) => dimension.label).join(' · ')}</strong>
-          </article>
-        ))}
-      </div>
-      <style jsx>{`
-        .formula-grid {
-          display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
-          gap: 12px;
-          margin-bottom: 14px;
-        }
-
-        .group-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-          gap: 12px;
-        }
-
-        .group-grid article {
-          padding: 16px;
-          border: 1px solid ${C.line};
-          border-radius: 8px;
-          background: ${C.panel2};
-        }
-
-        h3 {
-          margin: 0;
-          color: ${C.ink};
-          font-size: 24px;
-        }
-
-        p {
-          margin: 8px 0 0;
-          color: ${C.sub};
-          font-size: 20px;
-          line-height: 1.45;
-        }
-
-        strong {
-          display: block;
-          margin-top: 10px;
-          color: ${C.cyan};
-          font-size: 19px;
-          line-height: 1.45;
-        }
-
-        @media (max-width: 1080px) {
-          .formula-grid {
-            grid-template-columns: 1fr;
-          }
-        }
-      `}</style>
-    </section>
-  )
-}
-
-function FormulaCard({ color, title, body }: { color: string; title: string; body: string }) {
-  return (
-    <article className="formula" style={{ '--tone': color } as CSSProperties}>
+    <div className="axis-box">
       <h3>{title}</h3>
-      <p>{body}</p>
-      <style jsx>{`
-        .formula {
-          padding: 18px;
-          border: 1px solid color-mix(in srgb, var(--tone) 42%, transparent);
-          border-radius: 8px;
-          background: color-mix(in srgb, var(--tone) 8%, transparent);
-        }
-
-        h3 {
-          margin: 0;
-          color: var(--tone);
-          font-size: 24px;
-          line-height: 1.2;
-        }
-
-        p {
-          margin: 10px 0 0;
-          color: ${C.sub};
-          font-size: 20px;
-          line-height: 1.45;
-          font-weight: 650;
-        }
-      `}</style>
-    </article>
+      {DISPLAY_AXES.map((item, index) => (
+        <div key={item.key} className="axis-row">
+          <span>{item.name}</span>
+          <i><em style={{ width: `${axis[index] ?? 0}%`, background: tone }} /></i>
+          <b>{Math.round(axis[index] ?? 0)}</b>
+        </div>
+      ))}
+    </div>
   )
 }
 
-function Pill({ children, color }: { children: ReactNode; color: string }) {
+function FactorMatrix({ callVector, driverVector }: { callVector: number[]; driverVector: number[] }) {
   return (
-    <span style={{ color, border: `1px solid ${color}66`, background: `${color}18`, borderRadius: 8, padding: '10px 14px', fontSize: 16, fontWeight: 900 }}>
-      {children}
-    </span>
+    <div className="matrix">
+      {VECTOR_DIMENSIONS.map((dimension, index) => {
+        const callScore = scorePct(callVector[index])
+        const driverScore = scorePct(driverVector[index])
+        const gap = Math.abs(callScore - driverScore)
+        return (
+          <div key={dimension.key} className="matrix-cell">
+            <span>{dimension.group}</span>
+            <b>{dimension.label}</b>
+            <div className="dual">
+              <i><em style={{ width: `${callScore}%`, background: C.cyan }} /></i>
+              <i><em style={{ width: `${driverScore}%`, background: C.green }} /></i>
+            </div>
+            <strong style={{ color: gap <= 20 ? C.green : gap <= 50 ? C.yellow : C.orange }}>{100 - gap}</strong>
+          </div>
+        )
+      })}
+    </div>
   )
 }
+
+function CompareRow({ label, callScore, driverScore }: { label: string; callScore: number; driverScore: number }) {
+  return (
+    <div className="compare-row">
+      <b>{label}</b>
+      <div><span>콜</span><i><em style={{ width: `${callScore}%`, background: C.cyan }} /></i><strong>{Math.round(callScore)}</strong></div>
+      <div><span>기사</span><i><em style={{ width: `${driverScore}%`, background: C.green }} /></i><strong>{Math.round(driverScore)}</strong></div>
+    </div>
+  )
+}
+
+const pageCss = `
+  .page {
+    min-height: 100vh;
+    color: ${C.ink};
+    background:
+      linear-gradient(90deg, rgba(34, 211, 238, 0.045) 1px, transparent 1px),
+      linear-gradient(180deg, rgba(34, 211, 238, 0.035) 1px, transparent 1px),
+      radial-gradient(circle at 18% 12%, rgba(34, 211, 238, 0.14), transparent 30rem),
+      radial-gradient(circle at 82% 14%, rgba(139, 92, 246, 0.12), transparent 28rem),
+      ${C.bg};
+    background-size: 72px 72px, 72px 72px, auto, auto, auto;
+    font-family: Pretendard, "Apple SD Gothic Neo", "Malgun Gothic", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 20px;
+  }
+  .pill {
+    min-height: 44px;
+    display: inline-grid;
+    place-items: center;
+    border: 1px solid color-mix(in srgb, var(--tone) 45%, transparent);
+    border-radius: 14px;
+    color: var(--tone);
+    background: color-mix(in srgb, var(--tone) 14%, transparent);
+    padding: 0 14px;
+    font-size: 16px;
+    font-weight: 950;
+  }
+  .top-rail {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    border-bottom: 1px solid ${C.line};
+    background: rgba(5, 8, 16, 0.88);
+  }
+  .rail-metric {
+    min-width: 0;
+    border-right: 1px solid ${C.line};
+    padding: 18px 24px;
+    display: grid;
+    gap: 4px;
+  }
+  .rail-metric span {
+    color: ${C.muted};
+    font-size: 20px;
+    font-weight: 900;
+  }
+  .rail-metric b {
+    font-size: clamp(30px, 2.5vw, 46px);
+    line-height: 1;
+    font-weight: 950;
+    white-space: nowrap;
+  }
+  .rail-metric em {
+    color: ${C.sub};
+    font-size: 19px;
+    font-style: normal;
+    font-weight: 800;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .workspace {
+    max-width: 1780px;
+    margin: 0 auto;
+    padding: 28px;
+    display: grid;
+    gap: 22px;
+  }
+  .hero-card,
+  .profile-panel,
+  .comparison-stage,
+  .formula-card,
+  .factor-purpose article {
+    border: 1px solid ${C.line};
+    border-radius: 10px;
+    background: linear-gradient(180deg, rgba(15, 23, 42, 0.8), rgba(5, 8, 16, 0.88));
+    box-shadow: 0 28px 90px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  }
+  .hero-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 360px;
+    gap: 24px;
+    padding: 32px;
+  }
+  .eyebrow,
+  .section-title span {
+    color: ${C.cyan};
+    font-size: 20px;
+    font-weight: 950;
+    letter-spacing: 0;
+    margin-bottom: 10px;
+  }
+  h1, h2, h3, p {
+    margin: 0;
+  }
+  h1 {
+    max-width: 980px;
+    font-size: clamp(40px, 3.2vw, 64px);
+    line-height: 1.06;
+    font-weight: 950;
+  }
+  .lead,
+  .status-card p,
+  .formula-card p {
+    margin-top: 16px;
+    color: ${C.sub};
+    font-size: 22px;
+    line-height: 1.5;
+    font-weight: 750;
+  }
+  .status-card {
+    border: 1px solid color-mix(in srgb, var(--tone) 45%, transparent);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--tone) 10%, transparent);
+    padding: 24px;
+  }
+  .status-card span {
+    color: ${C.sub};
+    font-size: 20px;
+    font-weight: 900;
+  }
+  .status-card strong {
+    display: block;
+    color: var(--tone);
+    font-size: 54px;
+    line-height: 1;
+    font-weight: 950;
+    margin-top: 10px;
+  }
+  .factor-purpose {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 14px;
+  }
+  .factor-purpose article {
+    padding: 22px;
+    border-color: color-mix(in srgb, var(--tone) 35%, ${C.line});
+  }
+  .factor-purpose span {
+    color: var(--tone);
+    font-size: 24px;
+    font-weight: 950;
+  }
+  .factor-purpose h2 {
+    margin-top: 10px;
+    font-size: 28px;
+  }
+  .factor-purpose p {
+    min-height: 90px;
+    margin-top: 10px;
+    color: ${C.sub};
+    font-size: 20px;
+    line-height: 1.42;
+  }
+  .factor-purpose div {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 16px;
+  }
+  .factor-purpose em {
+    border-radius: 999px;
+    color: ${C.ink};
+    background: rgba(255,255,255,.06);
+    padding: 6px 10px;
+    font-size: 18px;
+    font-style: normal;
+    font-weight: 850;
+  }
+  .main-grid {
+    display: grid;
+    grid-template-columns: minmax(320px, .85fr) minmax(620px, 1.55fr) minmax(340px, .95fr);
+    gap: 20px;
+    align-items: start;
+  }
+  .profile-panel,
+  .comparison-stage,
+  .formula-card {
+    padding: 24px;
+  }
+  .section-title h2 {
+    font-size: 34px;
+    line-height: 1.1;
+    font-weight: 950;
+  }
+  select {
+    width: 100%;
+    min-height: 58px;
+    margin-top: 18px;
+    border: 1px solid ${C.line};
+    border-radius: 14px;
+    color: ${C.ink};
+    background: #08101F;
+    padding: 0 16px;
+    font-size: 20px;
+    font-weight: 850;
+  }
+  .profile-card,
+  .axis-box,
+  .drill-card {
+    margin-top: 18px;
+    border: 1px solid color-mix(in srgb, var(--tone, ${C.cyan}) 35%, ${C.line});
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--tone, ${C.cyan}) 8%, transparent);
+    padding: 20px;
+  }
+  .profile-top {
+    display: flex;
+    justify-content: space-between;
+    gap: 18px;
+    align-items: center;
+  }
+  .profile-top span {
+    color: var(--tone);
+    font-size: 20px;
+    font-weight: 950;
+  }
+  .profile-top b {
+    display: block;
+    color: ${C.ink};
+    font-size: 54px;
+    line-height: .95;
+    font-weight: 950;
+  }
+  .profile-top strong {
+    width: 88px;
+    height: 88px;
+    display: grid;
+    place-items: center;
+    border: 1px solid color-mix(in srgb, var(--tone) 45%, transparent);
+    border-radius: 24px;
+    color: var(--tone);
+    background: color-mix(in srgb, var(--tone) 14%, transparent);
+    font-size: 34px;
+    font-weight: 950;
+  }
+  .profile-card > strong {
+    display: block;
+    margin-top: 14px;
+    color: ${C.ink};
+    font-size: 24px;
+    font-weight: 950;
+    overflow-wrap: anywhere;
+  }
+  .profile-card p {
+    margin-top: 8px;
+    color: ${C.sub};
+    font-size: 20px;
+    line-height: 1.4;
+  }
+  .mini-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 16px;
+  }
+  .mini-grid div {
+    min-width: 0;
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: 12px;
+    background: rgba(5,8,16,.42);
+    padding: 12px;
+  }
+  .mini-grid span,
+  .axis-row span,
+  .compare-row span {
+    color: ${C.muted};
+    font-size: 19px;
+    font-weight: 900;
+  }
+  .mini-grid b {
+    display: block;
+    margin-top: 4px;
+    font-size: 21px;
+    overflow-wrap: anywhere;
+  }
+  .axis-box {
+    --tone: ${C.cyan};
+  }
+  .axis-box h3,
+  .drill-head h3 {
+    font-size: 25px;
+    margin-bottom: 14px;
+  }
+  .axis-row {
+    display: grid;
+    grid-template-columns: minmax(150px, 1fr) minmax(120px, 1.2fr) 46px;
+    gap: 10px;
+    align-items: center;
+    margin-top: 12px;
+  }
+  .axis-row i,
+  .compare-row i,
+  .dual i {
+    height: 14px;
+    border-radius: 999px;
+    background: #1B2740;
+    overflow: hidden;
+  }
+  .axis-row em,
+  .compare-row em,
+  .dual em {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+  }
+  .axis-row b {
+    text-align: right;
+    font-size: 20px;
+  }
+  .match-summary {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 18px;
+    align-items: end;
+    border: 1px solid rgba(34,211,238,.26);
+    border-radius: 10px;
+    background: rgba(34,211,238,.06);
+    padding: 20px;
+    margin-top: 18px;
+  }
+  .match-summary span {
+    color: ${C.sub};
+    font-size: 20px;
+    font-weight: 900;
+  }
+  .match-summary h2 {
+    margin-top: 8px;
+    font-size: clamp(30px, 2.2vw, 42px);
+    overflow-wrap: anywhere;
+  }
+  .match-summary strong {
+    color: ${C.cyan};
+    font-size: clamp(52px, 4vw, 82px);
+    line-height: .9;
+    font-weight: 950;
+  }
+  .matrix {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 18px;
+  }
+  .matrix-cell {
+    min-width: 0;
+    border: 1px solid ${C.line};
+    border-radius: 10px;
+    background: rgba(255,255,255,.028);
+    padding: 12px;
+  }
+  .matrix-cell span {
+    color: ${C.muted};
+    font-size: 17px;
+    font-weight: 900;
+  }
+  .matrix-cell b {
+    display: block;
+    margin-top: 4px;
+    font-size: 20px;
+  }
+  .dual {
+    display: grid;
+    gap: 6px;
+    margin-top: 12px;
+  }
+  .matrix-cell strong {
+    display: block;
+    margin-top: 10px;
+    font-size: 24px;
+  }
+  .axis-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 18px;
+  }
+  .axis-tabs button {
+    min-height: 52px;
+    border: 1px solid ${C.line};
+    border-radius: 14px;
+    color: ${C.sub};
+    background: rgba(255,255,255,.035);
+    padding: 0 16px;
+    font-size: 20px;
+    font-weight: 950;
+    cursor: pointer;
+  }
+  .axis-tabs button.active {
+    color: ${C.bg};
+    border-color: ${C.cyan};
+    background: ${C.cyan};
+  }
+  .drill-card {
+    --tone: ${C.cyan};
+  }
+  .drill-head span {
+    color: ${C.muted};
+    font-size: 20px;
+    font-weight: 900;
+  }
+  .compare-row {
+    border-top: 1px solid ${C.line};
+    padding-top: 14px;
+    margin-top: 14px;
+    display: grid;
+    grid-template-columns: minmax(180px, .8fr) 1fr 1fr;
+    gap: 16px;
+    align-items: center;
+  }
+  .compare-row > b {
+    font-size: 21px;
+  }
+  .compare-row div {
+    display: grid;
+    grid-template-columns: 52px 1fr 42px;
+    gap: 10px;
+    align-items: center;
+  }
+  .compare-row strong {
+    text-align: right;
+    font-size: 20px;
+  }
+  .driver-list {
+    display: grid;
+    gap: 10px;
+    margin-top: 18px;
+  }
+  .driver-list button {
+    min-width: 0;
+    min-height: 68px;
+    border: 1px solid ${C.line};
+    border-radius: 14px;
+    color: ${C.ink};
+    background: rgba(255,255,255,.028);
+    padding: 12px;
+    display: grid;
+    grid-template-columns: 54px 1fr auto;
+    gap: 10px;
+    align-items: center;
+    text-align: left;
+    cursor: pointer;
+  }
+  .driver-list button.active {
+    border-color: ${C.green};
+    background: rgba(16,185,129,.09);
+  }
+  .driver-list span {
+    color: ${C.orange};
+    font-size: 20px;
+    font-weight: 950;
+  }
+  .driver-list b {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 21px;
+  }
+  .driver-list strong {
+    color: ${C.cyan};
+    font-size: 24px;
+  }
+  .empty {
+    border: 1px dashed ${C.line};
+    border-radius: 14px;
+    padding: 18px;
+    color: ${C.sub};
+    font-size: 20px;
+  }
+  .formula-card {
+    display: grid;
+    grid-template-columns: 1fr minmax(360px, .8fr);
+    gap: 20px;
+    align-items: center;
+  }
+  .formula-card h2 {
+    font-size: clamp(30px, 2.2vw, 44px);
+  }
+  .formula-card code {
+    border: 1px solid rgba(34,211,238,.28);
+    border-radius: 10px;
+    color: ${C.cyan};
+    background: rgba(34,211,238,.08);
+    padding: 20px;
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: 21px;
+    font-weight: 850;
+    overflow-wrap: anywhere;
+  }
+  .formula-card p {
+    grid-column: 1 / -1;
+  }
+  @media (max-width: 1380px) {
+    .factor-purpose {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    .main-grid {
+      grid-template-columns: 1fr 1fr;
+    }
+    .comparison-stage {
+      grid-column: 1 / -1;
+      order: -1;
+    }
+    .matrix {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+  }
+  @media (max-width: 920px) {
+    .top-rail,
+    .hero-card,
+    .main-grid,
+    .formula-card {
+      grid-template-columns: 1fr;
+    }
+    .factor-purpose {
+      grid-template-columns: 1fr;
+    }
+    .matrix {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .compare-row {
+      grid-template-columns: 1fr;
+    }
+  }
+  @media (max-width: 620px) {
+    .workspace {
+      padding: 16px;
+    }
+    .matrix {
+      grid-template-columns: 1fr;
+    }
+    .mini-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+`
