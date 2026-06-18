@@ -371,6 +371,7 @@ export default function SimulatorPage() {
             driverError={driverLoadError}
             callcardError={callcardLoadError}
           />
+          <SimulatorFlowSummary selected={selected} selectedCallcard={selectedCallcard} />
           <DataSourceStrip driverCount={drivers.length} />
           <MatchRadar callAxis={callBundle.axis} driverAxis={selected?.axis ?? []} callSub={callBundle.sub} driverSub={selected?.sub ?? []} />
           <div className="lead">{selected ? selected.lead : '콜 조건과 기사 성향을 비교할 준비가 됐습니다.'}</div>
@@ -815,6 +816,90 @@ function SimulatorReadinessBanner({
     <div style={{ margin: '0 auto .75rem', maxWidth: 760, border: `1px solid ${state.tone}55`, borderRadius: 12, background: `${state.tone}14`, padding: '.7rem .9rem' }}>
       <div style={{ color: state.tone, fontSize: '.82rem', fontWeight: 950 }}>{state.title}</div>
       <div style={{ color: C.sub, fontSize: '.86rem', lineHeight: 1.45, marginTop: 4, overflowWrap: 'anywhere' }}>{state.body}</div>
+    </div>
+  )
+}
+
+function SimulatorFlowSummary({
+  selected,
+  selectedCallcard,
+}: {
+  selected?: Ranked
+  selectedCallcard: SimulatorCallcardRow | null
+}) {
+  const items = [
+    {
+      title: '1. 실제 콜카드',
+      value: selectedCallcard?.callcard_id ?? '-',
+      body: '출발·도착 좌표와 H3를 읽어 콜카드 조건을 만듭니다.',
+      tone: C.cyan,
+    },
+    {
+      title: '2. 기사 성향 매칭',
+      value: selected ? `${Math.round(selected.similarityScore)}%` : '-',
+      body: '콜카드 22D와 기사 운행패턴 22D를 코사인 유사도로 비교합니다.',
+      tone: C.purple,
+    },
+    {
+      title: '3. 공간 적합도',
+      value: selected?.spatial.spatialScore == null ? '-' : `${Math.round(selected.spatial.spatialScore)}%`,
+      body: '콜 H3와 기사 선호 출발·도착 H3를 비교해 보조 점수로 사용합니다.',
+      tone: C.green,
+    },
+    {
+      title: '4. 우선발송 후보',
+      value: selected?.driver.driver_id ?? '-',
+      body: '최종점수 순으로 먼저 보내고, 미수락 시 기존 순차/반경 확장으로 넘기는 실험입니다.',
+      tone: C.orange,
+    },
+  ]
+
+  return (
+    <div className="flow-summary">
+      {items.map((item) => (
+        <div key={item.title} className="flow-card" style={{ borderColor: `${item.tone}55`, background: `${item.tone}10` }}>
+          <span style={{ color: item.tone }}>{item.title}</span>
+          <b>{item.value}</b>
+          <small>{item.body}</small>
+        </div>
+      ))}
+      <style jsx>{`
+        .flow-summary {
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: .55rem;
+          margin: .75rem 0 1rem;
+        }
+        .flow-card {
+          min-width: 0;
+          border: 1px solid;
+          border-radius: 12px;
+          padding: .65rem;
+          display: grid;
+          gap: .24rem;
+        }
+        .flow-card span {
+          font-size: clamp(.68rem, 1.2vw, .78rem);
+          font-weight: 950;
+        }
+        .flow-card b {
+          color: ${C.ink};
+          font-size: clamp(.88rem, 1.6vw, 1.05rem);
+          font-weight: 950;
+          overflow-wrap: anywhere;
+        }
+        .flow-card small {
+          color: ${C.sub};
+          font-size: clamp(.66rem, 1.15vw, .76rem);
+          line-height: 1.32;
+        }
+        @media (max-width: 920px) {
+          .flow-summary { grid-template-columns: 1fr 1fr; }
+        }
+        @media (max-width: 560px) {
+          .flow-summary { grid-template-columns: 1fr; }
+        }
+      `}</style>
     </div>
   )
 }
