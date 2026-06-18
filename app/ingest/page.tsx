@@ -140,6 +140,7 @@ export default function IngestPage() {
             <p style={{ color: C.sub, fontSize: 16, lineHeight: 1.55, maxWidth: 760, marginTop: 12 }}>
               폴더 감시 파이프라인이 Supabase에 적재한 결과를 기준으로, AI 우선배차 검증에 필요한 콜카드, 기사 로그, 매칭 결과가 날짜별로 이어져 있는지 확인합니다.
             </p>
+            <IngestCorePanel />
             <ReadinessSummary
               callcards={callcards}
               driverLogs={driverLogs}
@@ -219,6 +220,24 @@ function KpiRail({ loading, callcards, meterMain, driverVectors, missing, status
   )
 }
 
+function IngestCorePanel() {
+  const items = [
+    ['보는 것', '호출데이터, 기사 로그, 앱미터, 매칭 결과가 어느 날짜까지 준비됐는지 확인합니다.', C.cyan],
+    ['보지 않는 것', '이 화면에서는 파일을 직접 업로드하지 않습니다. 적재는 폴더 감시 프로세스가 담당합니다.', C.orange],
+    ['준비 기준', '콜카드와 기사 로그가 날짜별로 이어지고 driver_mbti와 matching_scores가 생성되면 시뮬레이션 준비 상태입니다.', C.green],
+  ] as const
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10, marginTop: 16, maxWidth: 980 }}>
+      {items.map(([title, body, color]) => (
+        <div key={title} style={{ border: `1px solid ${color}44`, borderRadius: 14, background: `${color}10`, padding: 13, minHeight: 104 }}>
+          <div style={{ color, fontSize: 14, fontWeight: 950 }}>{title}</div>
+          <p style={{ color: C.sub, fontSize: 13, lineHeight: 1.45, margin: '7px 0 0', fontWeight: 650 }}>{body}</p>
+        </div>
+      ))}
+    </div>
+  )
+}
 function ReadinessSummary({
   callcards,
   driverLogs,
