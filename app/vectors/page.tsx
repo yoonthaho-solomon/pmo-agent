@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import Link from 'next/link'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
@@ -236,11 +236,11 @@ export default function VectorsPage() {
         <section style={stagePanel}>
           <div style={{ position: 'relative', zIndex: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
-              <div style={{ color: C.cyan, fontSize: 14, fontWeight: 950, letterSpacing: '.12em' }}>VECTOR MATCHING FIELD</div>
-              <h1 style={{ margin: '8px 0 0', fontSize: 36, lineHeight: 1.08, fontWeight: 950 }}>콜 하나가 들어오면 기사군이 재정렬됩니다</h1>
+              <div style={{ color: C.cyan, fontSize: 14, fontWeight: 950, letterSpacing: '.12em' }}>FACTOR LIST & COSINE CHECK</div>
+              <h1 style={{ margin: '8px 0 0', fontSize: 36, lineHeight: 1.08, fontWeight: 950 }}>콜카드와 기사 팩터를 22D로 비교합니다</h1>
               <p style={{ margin: '12px 0 0', color: C.sub, fontSize: 16, lineHeight: 1.55, maxWidth: 680 }}>
-                기존 배차 범위 안의 기사 후보를 버리지 않고, 콜카드 22D와 기사 22D의 코사인 유사도로 먼저 받을 기사 순서를 바꿉니다.
-                오른쪽 5축은 이해를 돕기 위한 표시 레이어이며 실제 정렬 계산은 22차원 전체 벡터로 합니다.
+                콜카드는 현재 요청 조건을 22개 팩터로 바꾸고, 기사는 누적 운행 패턴을 같은 22개 팩터로 저장합니다.
+                두 벡터의 방향이 얼마나 비슷한지 코사인 유사도로 비교하며, 5축은 이해를 돕는 요약 표시입니다.
               </p>
               <VectorReadinessBanner
                 loading={loading}
@@ -250,6 +250,7 @@ export default function VectorsPage() {
                 ranked={ranked.length}
               />
               <VectorFlowSummary selectedCall={selectedCall} best={best} />
+              <FactorCorePanel selectedCall={selectedCall} best={best} />
             </div>
             <div style={{ textAlign: 'right' }}>
               <div style={{ color: C.muted, fontSize: 13, fontWeight: 850 }}>BEST MATCH</div>
@@ -406,6 +407,67 @@ function VectorFlowSummary({ selectedCall, best }: { selectedCall?: CallRow; bes
   )
 }
 
+function FactorCorePanel({ selectedCall, best }: { selectedCall?: CallRow; best?: RankedDriver }) {
+  const groupDefs = groups.map((group) => ({
+    group,
+    color: groupColors[group],
+    factors: VECTOR_DIMENSIONS.filter((dim) => dim.group === group).map((dim) => dim.label).join(' / '),
+  }))
+
+  const formulas = [
+    {
+      title: '콜카드 벡터',
+      body: '시간, 요일, 거리, 요금, 유료/무료, 탄력/일반, ETA 조건을 22개 팩터 값으로 변환합니다. 해당 조건은 1, 아닌 조건은 0에 가깝게 둡니다.',
+      color: C.cyan,
+    },
+    {
+      title: '기사 벡터',
+      body: '기사의 누적 수락/완료 운행 패턴을 같은 22개 팩터 점수로 저장합니다. 점수는 0~1 범위이며 높을수록 해당 조건에서 잘 받았다는 뜻입니다.',
+      color: C.green,
+    },
+    {
+      title: '유사도 계산',
+      body: 'cosine = dot(call22D, driver22D) / (|call22D| × |driver22D|). 값이 높을수록 현재 콜 조건과 기사 성향 방향이 비슷합니다.',
+      color: C.purple,
+    },
+  ]
+
+  return (
+    <div style={{ position: 'relative', zIndex: 5, display: 'grid', gridTemplateColumns: '1.2fr .8fr', gap: 12, marginTop: 14, maxWidth: 1040 }}>
+      <div style={{ border: `1px solid ${C.cyan}33`, borderRadius: 14, background: 'rgba(5,8,16,.78)', padding: 14, boxShadow: '0 18px 50px rgba(0,0,0,.22)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'baseline' }}>
+          <div>
+            <div style={{ color: C.cyan, fontSize: 13, fontWeight: 950, letterSpacing: '.1em' }}>22D FACTOR DICTIONARY</div>
+            <div style={{ color: C.ink, fontSize: 20, fontWeight: 950, marginTop: 5 }}>콜카드와 기사가 공유하는 팩터</div>
+          </div>
+          <div style={{ color: C.yellow, fontSize: 12, fontWeight: 950, textAlign: 'right' }}>원본 계산 22D<br />화면 요약 5축</div>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8, marginTop: 12 }}>
+          {groupDefs.map((item) => (
+            <div key={item.group} style={{ minWidth: 0, border: `1px solid ${item.color}33`, borderRadius: 10, background: `${item.color}10`, padding: 10 }}>
+              <b style={{ color: item.color, fontSize: 13 }}>{item.group}</b>
+              <p style={{ margin: '5px 0 0', color: C.sub, fontSize: 13, lineHeight: 1.35, overflowWrap: 'anywhere' }}>{item.factors}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div style={{ display: 'grid', gap: 8 }}>
+        {formulas.map((item) => (
+          <div key={item.title} style={{ border: `1px solid ${item.color}44`, borderRadius: 12, background: `${item.color}12`, padding: 11 }}>
+            <b style={{ color: item.color, fontSize: 14 }}>{item.title}</b>
+            <p style={{ margin: '6px 0 0', color: C.sub, fontSize: 13, lineHeight: 1.42 }}>{item.body}</p>
+          </div>
+        ))}
+        <div style={{ border: `1px solid ${C.border}`, borderRadius: 12, background: C.panel, padding: 11 }}>
+          <b style={{ color: C.ink, fontSize: 14 }}>현재 예시</b>
+          <p style={{ margin: '6px 0 0', color: C.sub, fontSize: 13, lineHeight: 1.42 }}>
+            콜카드 {selectedCall?.callcard_id ?? '-'}와 기사 {best?.driver.driver_id ?? '-'}의 22D 코사인 유사도는 <b style={{ color: C.cyan }}>{pct(best?.cosine)}</b>입니다.
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
 function MapBackdrop() {
   return (
     <div aria-hidden style={{ position: 'absolute', inset: 0 }}>
