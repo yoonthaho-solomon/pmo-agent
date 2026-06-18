@@ -69,20 +69,20 @@ const pipeline = [
   },
 ]
 
-const contractRows = [
-  ['Request', 'callcard', 'asp_id, request_datetime, passenger_lat/lng, dest_lat/lng, expected_distance, expected_fare, call_fee, eta_distance'],
-  ['Request', 'candidate_drivers', '기존 배차 엔진이 만든 후보 기사 ID, 상태, 거리 또는 ETA'],
-  ['Lookup', 'driver_mbti', 'driver_id 기준 22차원 기사 성향 벡터'],
-  ['Compute', 'call_vector', '콜카드를 22D 벡터로 변환한 값'],
-  ['Compute', 'vector_cosine', 'cosine_similarity(call_vector, driver_vector)'],
-  ['Response', 'ranked_candidates', 'rank, driver_id, cosine_score, score_components, send_order'],
+const handoffRows = [
+  ['콜카드 정보', '호출 발생 시점의 시간, 요일, 출발/도착 좌표, 거리, 요금, 유료콜, ETA 조건을 사용합니다.'],
+  ['후보 기사군', '기존 배차 로직이 만든 반경/지역/상태 기준 후보 기사 목록을 그대로 받습니다.'],
+  ['콜카드 임베딩', '콜 조건을 시간대, 요일, 거리, 요금, 상품, ETA 기준의 22D 벡터로 변환합니다.'],
+  ['기사 임베딩', 'driver_mbti에 저장된 기사별 누적 운행 패턴 22D 벡터를 조회합니다.'],
+  ['유사도 비교', '콜카드 벡터와 기사 벡터의 코사인 유사도를 계산해 받을 가능성이 높은 순서를 만듭니다.'],
+  ['우선 발송', '가장 유사한 기사에게 먼저 콜카드를 보내고, 미수락/무응답이면 기존 배차 흐름으로 이어집니다.'],
 ]
 
 const scoreParts = [
-  ['성향 유사도', '22D 코사인 유사도. 초기 운영 점수의 중심값입니다.', C.cyan],
-  ['예상 수락률', '검증 전에는 설명 지표로만 표시하고 최종 점수에 바로 섞지 않습니다.', C.green],
-  ['ETA/접근성', '실시간 위치 데이터가 연결되면 거리보다 ETA를 우선 반영합니다.', C.orange],
-  ['콜 위험도', 'expired/canceled 위험도는 정책 비교용 별도 지표로 유지합니다.', C.red],
+  ['성향 유사도', '현재 구현의 핵심입니다. 콜카드 22D와 기사 22D가 얼마나 같은 방향인지 보여줍니다.', C.cyan],
+  ['공간 적합도', '출발 H3와 도착 H3가 기사 선호 H3와 가까운지 보조로 확인합니다. 22D 벡터에는 섞지 않습니다.', C.green],
+  ['수락률/위험도', '운영 검증 전에는 설명 지표로만 사용합니다. 최종 배차 정책에 바로 고정하지 않습니다.', C.orange],
+  ['거리/ETA', '실시간 기사 위치가 연결되기 전까지는 시뮬레이션 값입니다. 운영값처럼 표시하지 않습니다.', C.red],
 ]
 
 const references = [
@@ -92,10 +92,10 @@ const references = [
 ]
 
 const decisions = [
-  '실시간 기사 상태를 기존 배차 엔진에서 받을지, driver_realtime_state 테이블로 받을지 결정',
-  '1차 운영은 코사인 유사도 정렬만 적용하고 ETA/위험도는 설명값으로만 노출',
-  '미수락 시 다음 AI 후보로 갈지, 일정 횟수 후 기존 순차 배차로 돌아갈지 정책 결정',
-  '효과 검증을 위해 발송, 수락, 무응답, 만료, 취소, 운행완료 이벤트 저장 필요',
+  '초기 적용 범위: 기존 후보 기사군 안에서 발송 순서만 AI 유사도 순으로 바꿀지 결정',
+  '미수락 처리: 다음 유사도 후보에게 넘길지, 일정 횟수 후 기존 순차/반경 배차로 돌릴지 결정',
+  '실시간 위치 연동: 기사 위치/온라인/공차 상태는 개발 배차 시스템에서 받을지 별도 테이블로 받을지 결정',
+  '효과 검증: 발송, 수락, 무응답, 만료, 취소, 운행완료 이벤트를 저장해 기존 배차와 비교',
 ]
 
 export default function DispatchLogicPage() {
@@ -105,11 +105,11 @@ export default function DispatchLogicPage() {
 
       <section className="hero">
         <div>
-          <p className="eyebrow">DEVELOPER HANDOFF</p>
-          <h1>기존 배차 후보를 22D 코사인 유사도 순서로 재정렬한다</h1>
+          <p className="eyebrow">AI DISPATCH HANDOFF</p>
+          <h1>호출 발생 시 후보 기사군을 AI 유사도 순서로 재정렬한다</h1>
           <p className="lead">
             배차 엔진을 갈아엎는 작업이 아닙니다. 콜 발생 후 기존 로직이 만든 후보 기사군을 유지하고,
-            그 안에서 콜카드와 기사 성향이 가장 잘 맞는 순서로 콜카드 발송 순서만 바꾸는 작업입니다.
+            그 안에서 콜카드 팩터와 기사 누적 패턴이 가장 잘 맞는 기사에게 먼저 콜카드를 보내는 우선순위 레이어입니다.
           </p>
         </div>
         <div className="hero-card">
@@ -138,11 +138,11 @@ export default function DispatchLogicPage() {
 
       <section className="grid">
         <div className="panel wide">
-          <SectionTitle kicker="API CONTRACT" title="개발자에게 넘길 입출력 계약" />
+          <SectionTitle kicker="HANDOFF" title="개발자에게 전달할 데이터 흐름" />
           <div className="contract">
-            {contractRows.map(([kind, name, desc]) => (
+            {handoffRows.map(([name, desc], index) => (
               <div key={name} className="contract-row">
-                <span>{kind}</span>
+                <span>{String(index + 1).padStart(2, '0')}</span>
                 <b>{name}</b>
                 <p>{desc}</p>
               </div>
@@ -151,7 +151,7 @@ export default function DispatchLogicPage() {
         </div>
 
         <div className="panel">
-          <SectionTitle kicker="SCORE" title="점수는 섞지 말고 분리" />
+          <SectionTitle kicker="SCORE" title="점수 구성요소는 분리해서 설명" />
           <div className="score-list">
             {scoreParts.map(([name, desc, color]) => (
               <div key={name} className="score-card">
@@ -177,7 +177,7 @@ export default function DispatchLogicPage() {
         </div>
 
         <div className="panel wide">
-          <SectionTitle kicker="NEXT DECISIONS" title="개발 전에 결정할 것" />
+          <SectionTitle kicker="POLICY" title="개발팀과 함께 결정할 운영 정책" />
           <div className="decision-list">
             {decisions.map((item, index) => (
               <div key={item} className="decision">
