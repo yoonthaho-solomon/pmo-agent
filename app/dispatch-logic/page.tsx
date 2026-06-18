@@ -85,7 +85,7 @@ const references = [
 ]
 
 const decisions = [
-  '초기 적용 범위: 기존 후보 기사군 안에서 발송 순서만 AI 유사도 순으로 바꿀지 결정',
+  '초기 적용 범위: 기존 후보 기사군 안에서 우선발송 순서만 AI 유사도 순으로 바꿀지 결정',
   '미수락 처리: 다음 유사도 후보에게 넘길지, 일정 횟수 후 기존 순차/반경 배차로 돌릴지 결정',
   '실시간 위치 연동: 기사 위치/온라인/공차 상태는 개발 배차 시스템에서 받을지 별도 테이블로 받을지 결정',
   '효과 검증: 발송, 수락, 무응답, 만료, 취소, 운행완료 이벤트를 저장해 기존 배차와 비교',
@@ -202,21 +202,21 @@ export default function DispatchLogicPage() {
         .eyebrow {
           margin: 0 0 .6rem;
           color: ${C.cyan};
-          font-size: clamp(.78rem, 1.4vw, .92rem);
+          font-size: clamp(1rem, 1.4vw, 1rem);
           font-weight: 950;
           letter-spacing: .14em;
         }
         h1 {
           max-width: 980px;
           margin: 0;
-          font-size: clamp(2rem, 4.6vw, 4.6rem);
+          font-size: clamp(3rem, 5vw, 6rem);
           line-height: 1.02;
           letter-spacing: 0;
         }
         .lead {
           max-width: 860px;
           color: ${C.sub};
-          font-size: clamp(1rem, 1.8vw, 1.22rem);
+          font-size: clamp(1.15rem, 1.8vw, 1.45rem);
           line-height: 1.58;
           margin: 1rem 0 0;
           font-weight: 650;
@@ -241,7 +241,7 @@ export default function DispatchLogicPage() {
         .pipeline {
           display: grid;
           grid-template-columns: repeat(6, minmax(160px, 1fr));
-          gap: .9rem;
+          gap: 1rem;
           overflow-x: auto;
           padding-bottom: .2rem;
         }
@@ -260,7 +260,7 @@ export default function DispatchLogicPage() {
           align-items: center;
         }
         .step-top span {
-          font-size: clamp(.95rem, 1.7vw, 1.2rem);
+          font-size: clamp(1rem, 1.7vw, 1.2rem);
           font-weight: 950;
         }
         .step-top i {
@@ -270,7 +270,7 @@ export default function DispatchLogicPage() {
         }
         .step h3 {
           margin: 0;
-          font-size: clamp(1.05rem, 1.8vw, 1.35rem);
+          font-size: clamp(1.3rem, 2vw, 1.7rem);
           line-height: 1.18;
         }
         .step p,
@@ -281,7 +281,7 @@ export default function DispatchLogicPage() {
           margin: 0;
           color: ${C.sub};
           line-height: 1.46;
-          font-size: clamp(.84rem, 1.45vw, .96rem);
+          font-size: clamp(1rem, 1.45vw, 1rem);
           font-weight: 650;
         }
         .step em {
@@ -290,7 +290,7 @@ export default function DispatchLogicPage() {
           border-radius: 999px;
           padding: .28rem .55rem;
           font-style: normal;
-          font-size: .72rem;
+          font-size: 1rem;
           font-weight: 950;
         }
         .grid {
@@ -322,12 +322,12 @@ export default function DispatchLogicPage() {
         }
         .contract-row span {
           color: ${C.cyan};
-          font-size: .78rem;
+          font-size: 1rem;
           font-weight: 950;
         }
         .contract-row b {
           color: ${C.ink};
-          font-size: clamp(.95rem, 1.7vw, 1.15rem);
+          font-size: clamp(1rem, 1.7vw, 1.15rem);
           font-weight: 950;
         }
         .score-list,
@@ -409,17 +409,17 @@ function Metric({ label, value, color }: { label: string; value: string; color: 
           border: 1px solid ${C.line};
           border-radius: 16px;
           background: rgba(255,255,255,.025);
-          padding: .9rem;
+          padding: 1rem;
           display: grid;
           gap: .3rem;
         }
         span {
           color: ${C.muted};
-          font-size: clamp(.78rem, 1.3vw, .9rem);
+          font-size: clamp(1rem, 1.3vw, 1rem);
           font-weight: 900;
         }
         b {
-          font-size: clamp(1.35rem, 2.6vw, 1.75rem);
+          font-size: clamp(1.8rem, 3vw, 2.8rem);
           font-weight: 950;
         }
       `}</style>
@@ -438,13 +438,13 @@ function SectionTitle({ kicker, title }: { kicker: string; title: string }) {
         }
         span {
           color: ${C.muted};
-          font-size: clamp(.72rem, 1.25vw, .84rem);
+          font-size: clamp(1rem, 1.25vw, 1rem);
           font-weight: 950;
           letter-spacing: .14em;
         }
         h2 {
           margin: .32rem 0 0;
-          font-size: clamp(1.3rem, 2.6vw, 2rem);
+          font-size: clamp(1.8rem, 3vw, 3rem);
           line-height: 1.15;
         }
       `}</style>

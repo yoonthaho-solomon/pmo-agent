@@ -216,7 +216,7 @@ export default function VectorsPage() {
       <Topbar />
       <KpiRail call={selectedCall} ranked={ranked} loading={loading} loadError={loadError} calls={calls.length} drivers={drivers.length} />
 
-      <section style={{ position: 'relative', minHeight: 'calc(100vh - 126px)', overflow: 'hidden', borderTop: `1px solid ${C.border}` }}>
+      <section style={{ position: 'relative', minHeight: 'calc(100vh - 152px)', overflow: 'hidden', borderTop: `1px solid ${C.border}` }}>
         <MapBackdrop />
 
         <aside style={leftPanel}>
@@ -236,9 +236,9 @@ export default function VectorsPage() {
         <section style={stagePanel}>
           <div style={{ position: 'relative', zIndex: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
-              <div style={{ color: C.cyan, fontSize: 14, fontWeight: 950, letterSpacing: '.12em' }}>FACTOR LIST & COSINE CHECK</div>
-              <h1 style={{ margin: '8px 0 0', fontSize: 36, lineHeight: 1.08, fontWeight: 950 }}>콜카드와 기사 팩터를 22D로 비교합니다</h1>
-              <p style={{ margin: '12px 0 0', color: C.sub, fontSize: 16, lineHeight: 1.55, maxWidth: 680 }}>
+              <div style={{ color: C.cyan, fontSize: 22, fontWeight: 950, letterSpacing: '.12em' }}>FACTOR LIST & COSINE CHECK</div>
+              <h1 style={{ margin: '8px 0 0', fontSize: 56, lineHeight: 1.08, fontWeight: 950 }}>콜카드와 기사 팩터를 22D로 비교합니다</h1>
+              <p style={{ margin: '12px 0 0', color: C.sub, fontSize: 22, lineHeight: 1.55, maxWidth: 680 }}>
                 콜카드는 현재 요청 조건을 22개 팩터로 바꾸고, 기사는 누적 운행 패턴을 같은 22개 팩터로 저장합니다.
                 두 벡터의 방향이 얼마나 비슷한지 코사인 유사도로 비교하며, 5축은 이해를 돕는 요약 표시입니다.
               </p>
@@ -253,9 +253,9 @@ export default function VectorsPage() {
               <FactorCorePanel selectedCall={selectedCall} best={best} />
             </div>
             <div style={{ textAlign: 'right' }}>
-              <div style={{ color: C.muted, fontSize: 13, fontWeight: 850 }}>BEST MATCH</div>
-              <div style={{ color: C.cyan, fontSize: 42, lineHeight: 1, fontWeight: 950 }}>{pct(best?.cosine)}</div>
-              <div style={{ color: C.sub, fontSize: 13, marginTop: 5 }}>{best?.driver.driver_id ?? '-'}</div>
+              <div style={{ color: C.muted, fontSize: 22, fontWeight: 850 }}>BEST MATCH</div>
+              <div style={{ color: C.cyan, fontSize: 58, lineHeight: 1, fontWeight: 950 }}>{pct(best?.cosine)}</div>
+              <div style={{ color: C.sub, fontSize: 22, marginTop: 5 }}>{best?.driver.driver_id ?? '-'}</div>
             </div>
           </div>
 
@@ -315,12 +315,12 @@ function KpiRail({
   ]
 
   return (
-    <section style={{ height: 70, background: '#080B13', display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', borderBottom: `1px solid ${C.border}` }}>
+    <section style={{ height: 96, background: '#080B13', display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', borderBottom: `1px solid ${C.border}` }}>
       {items.map(([label, value, sub, color]) => (
         <div key={label} style={{ borderRight: `1px solid ${C.border}`, padding: '10px 18px' }}>
-          <div style={{ color: C.muted, fontSize: 13, fontWeight: 900 }}>{label}</div>
-          <div style={{ color: String(color), fontSize: 26, lineHeight: 1.05, fontWeight: 950, marginTop: 3 }}>{value}</div>
-          <div style={{ color: C.muted, fontSize: 12, marginTop: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sub}</div>
+          <div style={{ color: C.muted, fontSize: 22, fontWeight: 900 }}>{label}</div>
+          <div style={{ color: String(color), fontSize: 34, lineHeight: 1.05, fontWeight: 950, marginTop: 3 }}>{value}</div>
+          <div style={{ color: C.muted, fontSize: 22, marginTop: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sub}</div>
         </div>
       ))}
     </section>
@@ -354,8 +354,8 @@ function VectorReadinessBanner({
 
   return (
     <div style={{ marginTop: 14, border: `1px solid ${state.tone}55`, borderRadius: 12, background: `${state.tone}14`, padding: '10px 12px', maxWidth: 760 }}>
-      <div style={{ color: state.tone, fontSize: 13, fontWeight: 950 }}>{state.title}</div>
-      <div style={{ color: C.sub, fontSize: 14, marginTop: 4, lineHeight: 1.45, overflowWrap: 'anywhere' }}>{state.body}</div>
+      <div style={{ color: state.tone, fontSize: 22, fontWeight: 950 }}>{state.title}</div>
+      <div style={{ color: C.sub, fontSize: 22, marginTop: 4, lineHeight: 1.45, overflowWrap: 'anywhere' }}>{state.body}</div>
     </div>
   )
 }
@@ -386,9 +386,9 @@ function VectorFlowSummary({ selectedCall, best }: { selectedCall?: CallRow; bes
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10, marginTop: 14, maxWidth: 840 }}>
       {items.map((item) => (
         <div key={item.title} style={{ border: `1px solid ${item.color}44`, borderRadius: 12, background: `${item.color}10`, padding: 12, minHeight: 112 }}>
-          <div style={{ color: item.color, fontSize: 13, fontWeight: 950 }}>{item.title}</div>
-          <div style={{ color: C.ink, fontSize: 18, fontWeight: 950, marginTop: 8, overflowWrap: 'anywhere' }}>{item.value}</div>
-          <div style={{ color: C.sub, fontSize: 13, lineHeight: 1.42, marginTop: 7 }}>{item.body}</div>
+          <div style={{ color: item.color, fontSize: 22, fontWeight: 950 }}>{item.title}</div>
+          <div style={{ color: C.ink, fontSize: 28, fontWeight: 950, marginTop: 8, overflowWrap: 'anywhere' }}>{item.value}</div>
+          <div style={{ color: C.sub, fontSize: 22, lineHeight: 1.42, marginTop: 7 }}>{item.body}</div>
         </div>
       ))}
     </div>
@@ -425,16 +425,16 @@ function FactorCorePanel({ selectedCall, best }: { selectedCall?: CallRow; best?
       <div style={{ border: `1px solid ${C.cyan}33`, borderRadius: 14, background: 'rgba(5,8,16,.78)', padding: 14, boxShadow: '0 18px 50px rgba(0,0,0,.22)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'baseline' }}>
           <div>
-            <div style={{ color: C.cyan, fontSize: 13, fontWeight: 950, letterSpacing: '.1em' }}>22D FACTOR DICTIONARY</div>
-            <div style={{ color: C.ink, fontSize: 20, fontWeight: 950, marginTop: 5 }}>콜카드와 기사가 공유하는 팩터</div>
+            <div style={{ color: C.cyan, fontSize: 22, fontWeight: 950, letterSpacing: '.1em' }}>22D FACTOR DICTIONARY</div>
+            <div style={{ color: C.ink, fontSize: 22, fontWeight: 950, marginTop: 5 }}>콜카드와 기사가 공유하는 팩터</div>
           </div>
-          <div style={{ color: C.yellow, fontSize: 12, fontWeight: 950, textAlign: 'right' }}>원본 계산 22D<br />화면 요약 5축</div>
+          <div style={{ color: C.yellow, fontSize: 22, fontWeight: 950, textAlign: 'right' }}>원본 계산 22D<br />화면 요약 5축</div>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8, marginTop: 12 }}>
           {groupDefs.map((item) => (
             <div key={item.group} style={{ minWidth: 0, border: `1px solid ${item.color}33`, borderRadius: 10, background: `${item.color}10`, padding: 10 }}>
-              <b style={{ color: item.color, fontSize: 13 }}>{item.group}</b>
-              <p style={{ margin: '5px 0 0', color: C.sub, fontSize: 13, lineHeight: 1.35, overflowWrap: 'anywhere' }}>{item.factors}</p>
+              <b style={{ color: item.color, fontSize: 22 }}>{item.group}</b>
+              <p style={{ margin: '5px 0 0', color: C.sub, fontSize: 22, lineHeight: 1.35, overflowWrap: 'anywhere' }}>{item.factors}</p>
             </div>
           ))}
         </div>
@@ -442,13 +442,13 @@ function FactorCorePanel({ selectedCall, best }: { selectedCall?: CallRow; best?
       <div style={{ display: 'grid', gap: 8 }}>
         {formulas.map((item) => (
           <div key={item.title} style={{ border: `1px solid ${item.color}44`, borderRadius: 12, background: `${item.color}12`, padding: 11 }}>
-            <b style={{ color: item.color, fontSize: 14 }}>{item.title}</b>
-            <p style={{ margin: '6px 0 0', color: C.sub, fontSize: 13, lineHeight: 1.42 }}>{item.body}</p>
+            <b style={{ color: item.color, fontSize: 22 }}>{item.title}</b>
+            <p style={{ margin: '6px 0 0', color: C.sub, fontSize: 22, lineHeight: 1.42 }}>{item.body}</p>
           </div>
         ))}
         <div style={{ border: `1px solid ${C.border}`, borderRadius: 12, background: C.panel, padding: 11 }}>
-          <b style={{ color: C.ink, fontSize: 14 }}>현재 예시</b>
-          <p style={{ margin: '6px 0 0', color: C.sub, fontSize: 13, lineHeight: 1.42 }}>
+          <b style={{ color: C.ink, fontSize: 22 }}>현재 예시</b>
+          <p style={{ margin: '6px 0 0', color: C.sub, fontSize: 22, lineHeight: 1.42 }}>
             콜카드 {selectedCall?.callcard_id ?? '-'}와 기사 {best?.driver.driver_id ?? '-'}의 22D 코사인 유사도는 <b style={{ color: C.cyan }}>{pct(best?.cosine)}</b>입니다.
           </p>
         </div>
@@ -508,9 +508,9 @@ function MatchField({
       <div style={{ position: 'absolute', left: '50%', top: '52%', transform: 'translate(-50%, -50%)', zIndex: 4 }}>
         <div style={{ width: 150, height: 150, borderRadius: 26, border: `2px solid ${C.cyan}`, background: 'linear-gradient(160deg, rgba(34,211,238,.22), rgba(8,12,24,.96))', display: 'grid', placeItems: 'center', boxShadow: `0 0 60px ${C.cyan}44` }}>
           <div style={{ textAlign: 'center' }}>
-            <div style={{ color: C.cyan, fontSize: 16, fontWeight: 950 }}>CALLCARD</div>
-            <div style={{ color: C.ink, fontSize: 46, lineHeight: 1, fontWeight: 950, marginTop: 8 }}>22D</div>
-            <div style={{ color: C.sub, fontSize: 13, marginTop: 8 }}>요청 조건</div>
+            <div style={{ color: C.cyan, fontSize: 22, fontWeight: 950 }}>CALLCARD</div>
+            <div style={{ color: C.ink, fontSize: 68, lineHeight: 1, fontWeight: 950, marginTop: 8 }}>22D</div>
+            <div style={{ color: C.sub, fontSize: 22, marginTop: 8 }}>요청 조건</div>
           </div>
         </div>
       </div>
@@ -559,13 +559,13 @@ function CallPlayerCard({ call, vector }: { call?: CallRow; vector: number[] }) 
     <div style={playerCard(C.cyan)}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <div style={{ color: C.cyan, fontSize: 13, fontWeight: 950 }}>REQUEST</div>
-          <div style={{ fontSize: 36, lineHeight: 1, fontWeight: 950, marginTop: 5 }}>{power}</div>
+          <div style={{ color: C.cyan, fontSize: 22, fontWeight: 950 }}>REQUEST</div>
+          <div style={{ fontSize: 56, lineHeight: 1, fontWeight: 950, marginTop: 5 }}>{power}</div>
         </div>
-        <div style={{ width: 78, height: 78, borderRadius: 18, background: 'rgba(34,211,238,.14)', border: `1px solid ${C.cyan}66`, display: 'grid', placeItems: 'center', color: C.cyan, fontSize: 20, fontWeight: 950 }}>CALL</div>
+        <div style={{ width: 78, height: 78, borderRadius: 18, background: 'rgba(34,211,238,.14)', border: `1px solid ${C.cyan}66`, display: 'grid', placeItems: 'center', color: C.cyan, fontSize: 22, fontWeight: 950 }}>CALL</div>
       </div>
-      <div style={{ marginTop: 18, color: C.ink, fontSize: 18, fontWeight: 950 }}>{call?.callcard_id ?? '-'}</div>
-      <div style={{ color: C.sub, fontSize: 14, marginTop: 6 }}>{callSummary(call)}</div>
+      <div style={{ marginTop: 18, color: C.ink, fontSize: 28, fontWeight: 950 }}>{call?.callcard_id ?? '-'}</div>
+      <div style={{ color: C.sub, fontSize: 22, marginTop: 6 }}>{callSummary(call)}</div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 18 }}>
         <Mini label="거리" value={meters(call?.expected_distance)} />
@@ -583,13 +583,13 @@ function DriverPlayerCard({ match }: { match?: RankedDriver }) {
     <div style={playerCard(C.green)}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <div style={{ color: C.green, fontSize: 13, fontWeight: 950 }}>CANDIDATE</div>
-          <div style={{ fontSize: 44, lineHeight: 1, fontWeight: 950, marginTop: 5 }}>{match ? Math.round(match.cosine * 100) : '-'}</div>
+          <div style={{ color: C.green, fontSize: 22, fontWeight: 950 }}>CANDIDATE</div>
+          <div style={{ fontSize: 62, lineHeight: 1, fontWeight: 950, marginTop: 5 }}>{match ? Math.round(match.cosine * 100) : '-'}</div>
         </div>
-        <div style={{ width: 82, height: 82, borderRadius: 18, background: 'rgba(16,185,129,.14)', border: `1px solid ${C.green}66`, display: 'grid', placeItems: 'center', color: C.green, fontSize: 42, fontWeight: 950 }}>{match?.grade ?? '-'}</div>
+        <div style={{ width: 82, height: 82, borderRadius: 18, background: 'rgba(16,185,129,.14)', border: `1px solid ${C.green}66`, display: 'grid', placeItems: 'center', color: C.green, fontSize: 58, fontWeight: 950 }}>{match?.grade ?? '-'}</div>
       </div>
-      <div style={{ marginTop: 18, color: C.ink, fontSize: 18, fontWeight: 950, overflowWrap: 'anywhere' }}>{match?.driver.driver_id ?? '선택 기사 없음'}</div>
-      <div style={{ color: C.sub, fontSize: 14, marginTop: 6 }}>기사 누적 패턴과 현재 콜카드의 22D 유사도</div>
+      <div style={{ marginTop: 18, color: C.ink, fontSize: 28, fontWeight: 950, overflowWrap: 'anywhere' }}>{match?.driver.driver_id ?? '선택 기사 없음'}</div>
+      <div style={{ color: C.sub, fontSize: 22, marginTop: 6 }}>기사 누적 패턴과 현재 콜카드의 22D 유사도</div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 18 }}>
         <Mini label="유사도" value={pct(match?.cosine)} />
         <Mini label="신뢰도" value={pct(match?.driver.reliability)} />
@@ -609,10 +609,10 @@ function DisplayAxisCompare({ callVector, driverVector }: { callVector: number[]
     <div style={{ marginTop: 14, border: `1px solid ${C.border}`, borderRadius: 14, background: C.panel, padding: 16 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'baseline' }}>
         <div>
-          <div style={{ color: C.sub, fontSize: 13, fontWeight: 950, letterSpacing: '.1em' }}>5-AXIS DISPLAY</div>
-          <div style={{ color: C.ink, fontSize: 18, fontWeight: 950, marginTop: 5 }}>시뮬레이터 표시축</div>
+          <div style={{ color: C.sub, fontSize: 22, fontWeight: 950, letterSpacing: '.1em' }}>5-AXIS DISPLAY</div>
+          <div style={{ color: C.ink, fontSize: 28, fontWeight: 950, marginTop: 5 }}>시뮬레이터 표시축</div>
         </div>
-        <div style={{ color: C.yellow, fontSize: 12, fontWeight: 900, textAlign: 'right' }}>계산은 22D<br />표시는 5축</div>
+        <div style={{ color: C.yellow, fontSize: 22, fontWeight: 900, textAlign: 'right' }}>계산은 22D<br />표시는 5축</div>
       </div>
       <div style={{ display: 'grid', gap: 10, marginTop: 14 }}>
         {DISPLAY_AXES.map((axis, index) => {
@@ -623,8 +623,8 @@ function DisplayAxisCompare({ callVector, driverVector }: { callVector: number[]
           return (
             <div key={axis.name} style={{ border: `1px solid ${color}33`, borderRadius: 12, background: `${color}0F`, padding: 10 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
-                <b style={{ color, fontSize: 14 }}>{axis.name}</b>
-                <span style={{ color: fit >= 0.78 ? C.green : fit >= 0.55 ? C.yellow : C.red, fontSize: 13, fontWeight: 950 }}>{Math.round(fit * 100)}%</span>
+                <b style={{ color, fontSize: 22 }}>{axis.name}</b>
+                <span style={{ color: fit >= 0.78 ? C.green : fit >= 0.55 ? C.yellow : C.red, fontSize: 22, fontWeight: 950 }}>{Math.round(fit * 100)}%</span>
               </div>
               <div style={{ display: 'grid', gap: 5 }}>
                 <Track value={call} color={C.cyan} />
@@ -641,7 +641,7 @@ function DisplayAxisCompare({ callVector, driverVector }: { callVector: number[]
 function VectorGroups({ callVector, driverVector }: { callVector: number[]; driverVector: number[] }) {
   return (
     <div style={{ marginTop: 14, border: `1px solid ${C.border}`, borderRadius: 14, background: C.panel, padding: 16 }}>
-      <div style={{ color: C.sub, fontSize: 13, fontWeight: 950, letterSpacing: '.1em' }}>22D FACTOR MATCH</div>
+      <div style={{ color: C.sub, fontSize: 22, fontWeight: 950, letterSpacing: '.1em' }}>22D FACTOR MATCH</div>
       <div style={{ display: 'grid', gap: 10, marginTop: 14 }}>
         {groups.map((group) => {
           const call = groupAverage(callVector, group)
@@ -649,12 +649,12 @@ function VectorGroups({ callVector, driverVector }: { callVector: number[]; driv
           const diff = Math.abs(call - driver)
           return (
             <div key={group} style={{ display: 'grid', gridTemplateColumns: '62px 1fr 42px', gap: 10, alignItems: 'center' }}>
-              <div style={{ color: groupColors[group], fontSize: 14, fontWeight: 950 }}>{group}</div>
+              <div style={{ color: groupColors[group], fontSize: 22, fontWeight: 950 }}>{group}</div>
               <div style={{ display: 'grid', gap: 5 }}>
                 <Track value={call} color={C.cyan} />
                 <Track value={driver} color={C.green} />
               </div>
-              <div style={{ color: diff < 0.22 ? C.green : diff < 0.48 ? C.yellow : C.red, fontSize: 13, textAlign: 'right', fontWeight: 950 }}>
+              <div style={{ color: diff < 0.22 ? C.green : diff < 0.48 ? C.yellow : C.red, fontSize: 22, textAlign: 'right', fontWeight: 950 }}>
                 {diff < 0.22 ? '매우맞음' : diff < 0.48 ? '보통' : '차이'}
               </div>
             </div>
@@ -677,7 +677,7 @@ function BottomDock({
   onSelect: (driverId: string) => void
 }) {
   return (
-    <section style={{ position: 'absolute', left: 350, right: 350, bottom: 18, minHeight: 112, border: `1px solid ${C.border}`, borderRadius: 18, background: 'linear-gradient(90deg, rgba(9,14,26,.96), rgba(9,14,26,.76))', boxShadow: '0 20px 70px rgba(0,0,0,.32)', zIndex: 8, padding: 14 }}>
+    <section style={{ position: 'absolute', left: 386, right: 386, bottom: 18, minHeight: 112, border: `1px solid ${C.border}`, borderRadius: 18, background: 'linear-gradient(90deg, rgba(9,14,26,.96), rgba(9,14,26,.76))', boxShadow: '0 20px 70px rgba(0,0,0,.32)', zIndex: 8, padding: 14 }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
         {ranked.slice(0, 5).map((row, index) => {
           const active = row.driver.driver_id === focusedId
@@ -698,11 +698,11 @@ function BottomDock({
               }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ color: index < 3 ? C.yellow : C.sub, fontSize: 13, fontWeight: 950 }}>#{index + 1}</span>
-                <span style={{ color: active ? C.cyan : C.green, fontSize: 18, fontWeight: 950 }}>{row.grade}</span>
+                <span style={{ color: index < 3 ? C.yellow : C.sub, fontSize: 22, fontWeight: 950 }}>#{index + 1}</span>
+                <span style={{ color: active ? C.cyan : C.green, fontSize: 28, fontWeight: 950 }}>{row.grade}</span>
               </div>
-              <div style={{ marginTop: 8, fontSize: 13, fontFamily: 'monospace', fontWeight: 900, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.driver.driver_id}</div>
-              <div style={{ marginTop: 7, color: C.cyan, fontSize: 20, fontWeight: 950 }}>{pct(row.cosine)}</div>
+              <div style={{ marginTop: 8, fontSize: 22, fontFamily: 'monospace', fontWeight: 900, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.driver.driver_id}</div>
+              <div style={{ marginTop: 7, color: C.cyan, fontSize: 22, fontWeight: 950 }}>{pct(row.cosine)}</div>
             </button>
           )
         })}
@@ -716,9 +716,9 @@ function RadarBars({ values, tone }: { values: number[]; tone: string }) {
     <div style={{ display: 'grid', gap: 9, marginTop: 18 }}>
       {groups.map((group) => (
         <div key={group} style={{ display: 'grid', gridTemplateColumns: '58px 1fr 34px', gap: 9, alignItems: 'center' }}>
-          <span style={{ color: C.sub, fontSize: 13, fontWeight: 850 }}>{group}</span>
+          <span style={{ color: C.sub, fontSize: 22, fontWeight: 850 }}>{group}</span>
           <Track value={groupAverage(values, group)} color={tone} />
-          <span style={{ color: C.muted, fontSize: 12, textAlign: 'right' }}>{Math.round(groupAverage(values, group) * 100)}</span>
+          <span style={{ color: C.muted, fontSize: 22, textAlign: 'right' }}>{Math.round(groupAverage(values, group) * 100)}</span>
         </div>
       ))}
     </div>
@@ -736,8 +736,8 @@ function Track({ value, color }: { value: number; color: string }) {
 function PanelTitle({ kicker, title }: { kicker: string; title: string }) {
   return (
     <div>
-      <div style={{ color: C.muted, fontSize: 13, fontWeight: 950, letterSpacing: '.12em' }}>{kicker}</div>
-      <h2 style={{ margin: '6px 0 0', fontSize: 24, fontWeight: 950 }}>{title}</h2>
+      <div style={{ color: C.muted, fontSize: 22, fontWeight: 950, letterSpacing: '.12em' }}>{kicker}</div>
+      <h2 style={{ margin: '6px 0 0', fontSize: 28, fontWeight: 950 }}>{title}</h2>
     </div>
   )
 }
@@ -745,14 +745,14 @@ function PanelTitle({ kicker, title }: { kicker: string; title: string }) {
 function Mini({ label, value }: { label: string; value: string }) {
   return (
     <div style={{ border: `1px solid ${C.border}`, borderRadius: 10, background: 'rgba(8,12,24,.72)', padding: 10 }}>
-      <div style={{ color: C.muted, fontSize: 12, fontWeight: 850 }}>{label}</div>
-      <div style={{ color: C.ink, fontSize: 16, fontWeight: 950, marginTop: 5 }}>{value}</div>
+      <div style={{ color: C.muted, fontSize: 22, fontWeight: 850 }}>{label}</div>
+      <div style={{ color: C.ink, fontSize: 22, fontWeight: 950, marginTop: 5 }}>{value}</div>
     </div>
   )
 }
 
 function Pill({ children, color }: { children: ReactNode; color: string }) {
-  return <span style={{ color, border: `1px solid ${color}66`, background: `${color}18`, borderRadius: 8, padding: '7px 10px', fontSize: 12, fontWeight: 950 }}>{children}</span>
+  return <span style={{ color, border: `1px solid ${color}66`, background: `${color}18`, borderRadius: 8, padding: '10px 14px', fontSize: 22, fontWeight: 950 }}>{children}</span>
 }
 
 const leftPanel: React.CSSProperties = {
@@ -760,7 +760,7 @@ const leftPanel: React.CSSProperties = {
   left: 18,
   top: 18,
   bottom: 18,
-  width: 306,
+  width: 340,
   zIndex: 7,
   border: `1px solid ${C.border}`,
   borderRadius: 18,
@@ -774,7 +774,7 @@ const rightPanel: React.CSSProperties = {
   right: 18,
   top: 18,
   bottom: 18,
-  width: 306,
+  width: 340,
   zIndex: 7,
   border: `1px solid ${C.border}`,
   borderRadius: 18,
@@ -785,8 +785,8 @@ const rightPanel: React.CSSProperties = {
 
 const stagePanel: React.CSSProperties = {
   position: 'absolute',
-  left: 342,
-  right: 342,
+  left: 378,
+  right: 378,
   top: 18,
   bottom: 148,
   zIndex: 4,
@@ -799,13 +799,13 @@ const stagePanel: React.CSSProperties = {
 
 const selectStyle: React.CSSProperties = {
   width: '100%',
-  height: 42,
+  height: 56,
   borderRadius: 10,
   border: `1px solid ${C.border}`,
   background: '#0B1222',
   color: C.ink,
   padding: '0 10px',
-  fontSize: 14,
+  fontSize: 22,
   marginTop: 14,
 }
 

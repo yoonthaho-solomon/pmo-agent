@@ -391,8 +391,8 @@ export default function SimulatorPage() {
         <section className="panel center-panel">
           <div className="headline">
             {loading ? '기사 벡터를 불러오는 중입니다' : selected ? (
-              <>추천 1순위 <b>{selected.driver.driver_id}</b> · 최종점수 {pct(selected.finalScore)}</>
-            ) : '추천 후보를 기다리는 중입니다'}
+              <>추천 1순위 <b>{selected.driver.driver_id}</b> · 최종 추천점수 {pct(selected.finalScore)}</>
+            ) : '콜카드를 선택하면 Top 10 기사 후보를 계산합니다'}
           </div>
           <div className="legend">
             <span><i style={{ background: C.cyan }} />콜 요구</span>
@@ -427,7 +427,7 @@ export default function SimulatorPage() {
       </section>
 
       <style jsx global>{`
-        html { font-size: clamp(15px, 1.1vw, 20px); }
+        html { font-size: clamp(20px, 1.15vw, 24px); }
         body { background: ${C.body}; }
       `}</style>
       <style jsx>{`
@@ -458,7 +458,7 @@ export default function SimulatorPage() {
         .headline {
           min-height: 1.6em;
           text-align: center;
-          font-size: clamp(1.3rem, 3vw, 1.7rem);
+          font-size: clamp(2.4rem, 4.2vw, 4.8rem);
           line-height: 1.2;
           font-weight: 900;
         }
@@ -471,14 +471,14 @@ export default function SimulatorPage() {
           justify-content: center;
           gap: 1.2rem;
           color: ${C.sub};
-          font-size: clamp(.8rem, 1.4vw, .9rem);
+          font-size: clamp(1rem, 1.4vw, 1rem);
           margin: .75rem 0;
           flex-wrap: wrap;
         }
         .legend i {
           display: inline-block;
-          width: .9rem;
-          height: .9rem;
+          width: 1rem;
+          height: 1rem;
           border-radius: 4px;
           margin-right: .4rem;
           vertical-align: -2px;
@@ -489,7 +489,7 @@ export default function SimulatorPage() {
           border: 1px solid rgba(16, 185, 129, .25);
           border-radius: 12px;
           padding: .85rem 1.1rem;
-          font-size: clamp(.95rem, 1.8vw, 1.1rem);
+          font-size: clamp(1rem, 1.8vw, 1.1rem);
           font-weight: 700;
           text-align: center;
           margin: .6rem 0;
@@ -506,7 +506,7 @@ export default function SimulatorPage() {
           .right-panel { grid-area: right; }
         }
         @media (max-width: 760px) {
-          html { font-size: clamp(15px, 4vw, 18px); }
+          html { font-size: clamp(20px, 4vw, 22px); }
           .sim-shell {
             grid-template-columns: 1fr;
             grid-template-areas: none;
@@ -713,7 +713,7 @@ function AxisSnapshot({ axis }: { axis: number[] }) {
           position: relative;
           z-index: 2;
           color: ${C.sub};
-          font-size: clamp(.74rem, 1.3vw, .86rem);
+          font-size: clamp(1rem, 1.3vw, 1rem);
           font-weight: 850;
           line-height: 1.2;
         }
@@ -767,9 +767,9 @@ function SimulatorReadinessBanner({
             : { tone: C.green, title: '시뮬레이션 가능', body: `${callcards.toLocaleString()}개 콜카드와 ${drivers.toLocaleString()}명 기사 벡터를 기준으로 Top 10을 계산했습니다.` }
 
   return (
-    <div style={{ margin: '0 auto .75rem', maxWidth: 760, border: `1px solid ${state.tone}55`, borderRadius: 12, background: `${state.tone}14`, padding: '.7rem .9rem' }}>
-      <div style={{ color: state.tone, fontSize: '.82rem', fontWeight: 950 }}>{state.title}</div>
-      <div style={{ color: C.sub, fontSize: '.86rem', lineHeight: 1.45, marginTop: 4, overflowWrap: 'anywhere' }}>{state.body}</div>
+    <div style={{ margin: '0 auto .75rem', maxWidth: 760, border: `1px solid ${state.tone}55`, borderRadius: 12, background: `${state.tone}14`, padding: '.7rem 1rem' }}>
+      <div style={{ color: state.tone, fontSize: '1rem', fontWeight: 950 }}>{state.title}</div>
+      <div style={{ color: C.sub, fontSize: '1rem', lineHeight: 1.45, marginTop: 4, overflowWrap: 'anywhere' }}>{state.body}</div>
     </div>
   )
 }
@@ -833,18 +833,18 @@ function SimulatorFlowSummary({
           gap: .24rem;
         }
         .flow-card span {
-          font-size: clamp(.68rem, 1.2vw, .78rem);
+          font-size: clamp(1rem, 1.2vw, 1rem);
           font-weight: 950;
         }
         .flow-card b {
           color: ${C.ink};
-          font-size: clamp(.88rem, 1.6vw, 1.05rem);
+          font-size: clamp(1rem, 1.6vw, 1.05rem);
           font-weight: 950;
           overflow-wrap: anywhere;
         }
         .flow-card small {
           color: ${C.sub};
-          font-size: clamp(.66rem, 1.15vw, .76rem);
+          font-size: clamp(1rem, 1.15vw, 1rem);
           line-height: 1.32;
         }
         @media (max-width: 920px) {
@@ -892,7 +892,7 @@ function DataSourceStrip({ driverCount }: { driverCount: number }) {
         .source-item span {
           display: block;
           color: ${C.muted};
-          font-size: clamp(.66rem, 1.2vw, .74rem);
+          font-size: clamp(1rem, 1.2vw, 1rem);
           font-weight: 850;
           margin-bottom: .18rem;
         }
@@ -901,7 +901,7 @@ function DataSourceStrip({ driverCount }: { driverCount: number }) {
           overflow: hidden;
           text-overflow: ellipsis;
           white-space: nowrap;
-          font-size: clamp(.76rem, 1.35vw, .9rem);
+          font-size: clamp(1rem, 1.35vw, 1rem);
           font-weight: 950;
         }
         @media (max-width: 760px) {
@@ -955,17 +955,17 @@ function DispatchPipeline({ selected }: { selected?: Ranked }) {
           place-items: center;
           color: ${C.body};
           background: ${C.cyan};
-          font-size: .78rem;
+          font-size: 1rem;
           font-weight: 950;
         }
         .pipe-step b {
           color: ${C.ink};
-          font-size: clamp(.8rem, 1.45vw, .95rem);
+          font-size: clamp(1rem, 1.45vw, 1rem);
           font-weight: 950;
         }
         .pipe-step small {
           color: ${C.muted};
-          font-size: clamp(.68rem, 1.2vw, .78rem);
+          font-size: clamp(1rem, 1.2vw, 1rem);
           line-height: 1.25;
         }
         .pipe-step em {
@@ -975,7 +975,7 @@ function DispatchPipeline({ selected }: { selected?: Ranked }) {
           padding: .18rem .45rem;
           color: ${C.sub};
           background: rgba(255,255,255,.05);
-          font-size: .66rem;
+          font-size: 1rem;
           font-style: normal;
           font-weight: 950;
         }
@@ -1051,7 +1051,7 @@ function SpatialFitSummary({ selected }: { selected?: Ranked }) {
         }
         .spatial-summary span {
           color: ${C.sub};
-          font-size: clamp(.68rem, 1.2vw, .78rem);
+          font-size: clamp(1rem, 1.2vw, 1rem);
           font-weight: 850;
         }
         .spatial-summary b {
@@ -1067,7 +1067,7 @@ function SpatialFitSummary({ selected }: { selected?: Ranked }) {
           grid-column: 1 / -1;
           margin: 0;
           color: ${C.sub};
-          font-size: clamp(.76rem, 1.25vw, .86rem);
+          font-size: clamp(1rem, 1.25vw, 1rem);
           line-height: 1.45;
         }
         @media (max-width: 920px) {
@@ -1132,25 +1132,25 @@ function RadiusExpansionPanel({
           background:
             radial-gradient(circle at 16% 50%, rgba(34,211,238,.14), transparent 28%),
             rgba(255,255,255,.025);
-          padding: .9rem;
+          padding: 1rem;
           margin: .75rem 0 .4rem;
         }
         .radius-head {
           display: flex;
           justify-content: space-between;
-          gap: .8rem;
+          gap: 1rem;
           align-items: baseline;
           margin-bottom: .7rem;
           flex-wrap: wrap;
         }
         .radius-head b {
           color: ${C.ink};
-          font-size: clamp(.95rem, 1.7vw, 1.1rem);
+          font-size: clamp(1rem, 1.7vw, 1.1rem);
           font-weight: 950;
         }
         .radius-head span {
           color: ${C.yellow};
-          font-size: clamp(.72rem, 1.25vw, .82rem);
+          font-size: clamp(1rem, 1.25vw, 1rem);
           font-weight: 850;
         }
         .rings {
@@ -1164,7 +1164,7 @@ function RadiusExpansionPanel({
           border-radius: 14px;
           background: rgba(5,8,16,.56);
           color: ${C.ink};
-          padding: .78rem;
+          padding: 1rem;
           text-align: left;
           display: grid;
           gap: .18rem;
@@ -1181,7 +1181,7 @@ function RadiusExpansionPanel({
         }
         .ring span {
           color: ${C.muted};
-          font-size: .72rem;
+          font-size: 1rem;
           font-weight: 950;
         }
         .ring b {
@@ -1195,12 +1195,12 @@ function RadiusExpansionPanel({
           text-overflow: ellipsis;
           white-space: nowrap;
           color: ${C.sub};
-          font-size: clamp(.72rem, 1.25vw, .82rem);
+          font-size: clamp(1rem, 1.25vw, 1rem);
           font-weight: 850;
         }
         .ring em {
           color: ${C.muted};
-          font-size: .68rem;
+          font-size: 1rem;
           font-style: normal;
           font-weight: 800;
         }
@@ -1285,7 +1285,7 @@ function DecisionPanel({
           color: ${C.cyan};
           padding: .7rem;
           font: inherit;
-          font-size: clamp(.78rem, 1.35vw, .9rem);
+          font-size: clamp(1rem, 1.35vw, 1rem);
           font-weight: 950;
           cursor: pointer;
           margin: -.45rem 0 1.2rem;
@@ -1297,7 +1297,7 @@ function DecisionPanel({
           color: #FDBA74;
           padding: .75rem;
           line-height: 1.45;
-          font-size: clamp(.76rem, 1.35vw, .86rem);
+          font-size: clamp(1rem, 1.35vw, 1rem);
           font-weight: 800;
           margin-bottom: .85rem;
         }
@@ -1344,7 +1344,7 @@ function DecisionPanel({
         .meta { min-width: 0; display: grid; gap: .2rem; }
         .meta b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .meta small { color: ${C.muted}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .score { color: ${C.cyan}; font-size: clamp(1.25rem, 2.4vw, 1.75rem); font-weight: 950; }
+        .score { color: ${C.cyan}; font-size: clamp(2rem, 3vw, 3.2rem); font-weight: 950; }
         .score small { color: ${C.muted}; font-size: .55em; }
         .kpi-box {
           border: 1px solid rgba(16,185,129,.2);
@@ -1566,14 +1566,14 @@ function MatchWaterfall({ why }: { why: Why[] }) {
           grid-template-columns: 1fr minmax(120px, 1.4fr) 1fr;
           gap: .7rem;
           align-items: center;
-          font-size: clamp(.8rem, 1.5vw, .95rem);
+          font-size: clamp(1rem, 1.5vw, 1rem);
           font-weight: 700;
         }
         .wf-label { color: ${C.muted}; text-align: right; line-height: 1.25; }
         .wf-label.right { text-align: left; }
         .wf-track {
           position: relative;
-          height: 1.9rem;
+          height: 11rem;
           background: rgba(255,255,255,.035);
           border-radius: 14px;
           overflow: hidden;
@@ -1597,7 +1597,7 @@ function MatchWaterfall({ why }: { why: Why[] }) {
           padding: 0 .6rem;
           color: white;
           font-weight: 950;
-          font-size: clamp(.78rem, 1.4vw, .9rem);
+          font-size: clamp(1rem, 1.4vw, 1rem);
         }
         .wf-bar.pos {
           left: 50%;
@@ -1673,11 +1673,11 @@ function FactorDrilldown({
         }
         h3 { color: ${C.cyan}; font-size: clamp(1.25rem, 2.4vw, 1.5rem); margin: 0; }
         p { color: ${C.sub}; line-height: 1.5; }
-        .items { display: grid; gap: .9rem; margin-top: 1rem; }
+        .items { display: grid; gap: 1rem; margin-top: 1rem; }
         .factor-row {
           display: grid;
           grid-template-columns: minmax(90px, 140px) 1fr minmax(70px, auto);
-          gap: .8rem;
+          gap: 1rem;
           align-items: center;
         }
         .factor-row span { color: ${C.ink}; font-weight: 800; text-align: right; }
@@ -1699,7 +1699,7 @@ function FactorDrilldown({
           border-radius: 12px;
           background: ${C.line};
           color: white;
-          padding: .9rem;
+          padding: 1rem;
           font: inherit;
           font-weight: 900;
           cursor: pointer;
@@ -1718,7 +1718,7 @@ function KpiRow({ label, value, color, delta }: { label: string; value: number; 
       <style jsx>{`
         .kpi-row {
           display: grid;
-          grid-template-columns: 4.8rem 1fr 6.4rem;
+          grid-template-columns: 41rem 1fr 6.4rem;
           gap: .7rem;
           align-items: center;
           margin-top: .7rem;
@@ -1728,7 +1728,7 @@ function KpiRow({ label, value, color, delta }: { label: string; value: number; 
         div { height: 1.6rem; background: rgba(255,255,255,.05); border-radius: 8px; overflow: hidden; }
         i { display: block; height: 100%; border-radius: 8px; transition: width .8s cubic-bezier(.22,1,.36,1); }
         b { text-align: right; font-size: 1.2rem; }
-        em { font-style: normal; font-size: .58em; margin-left: .15rem; }
+        em { font-style: normal; font-size: 1rem; margin-left: .15rem; }
       `}</style>
     </div>
   )
@@ -1747,7 +1747,7 @@ function Metric({ label, value }: { label: string; value: string }) {
           padding: .75rem;
           display: flex;
           justify-content: space-between;
-          gap: .8rem;
+          gap: 1rem;
         }
         span { color: ${C.sub}; font-weight: 800; }
         b { color: ${C.cyan}; }
@@ -1768,7 +1768,7 @@ function PanelTitle({ children, color }: { children: ReactNode; color: string })
           align-items: center;
           gap: .55rem;
           color: ${C.muted};
-          font-size: clamp(.72rem, 1.3vw, .84rem);
+          font-size: clamp(1rem, 1.3vw, 1rem);
           font-weight: 950;
           letter-spacing: .12em;
           text-transform: uppercase;
@@ -1809,11 +1809,11 @@ const locationSummaryCss = `
   .location-card {
     display: grid;
     gap: .65rem;
-    margin: .8rem 0 1rem;
+    margin: 1rem 0 1rem;
     border: 1px solid rgba(34,211,238,.22);
     border-radius: 12px;
     background: rgba(34,211,238,.05);
-    padding: .8rem;
+    padding: 1rem;
   }
   .location-card b {
     color: ${C.cyan};
@@ -1821,7 +1821,7 @@ const locationSummaryCss = `
   }
   .location-card span {
     color: ${C.sub};
-    font-size: clamp(.72rem, 1.2vw, .82rem);
+    font-size: clamp(1rem, 1.2vw, 1rem);
     font-weight: 800;
     line-height: 1.35;
   }
@@ -1847,7 +1847,7 @@ const locationSummaryCss = `
   .location-grid strong,
   .od-key strong {
     color: ${C.ink};
-    font-size: clamp(.72rem, 1.2vw, .82rem);
+    font-size: clamp(1rem, 1.2vw, 1rem);
     line-height: 1.3;
     overflow-wrap: anywhere;
     word-break: break-word;
@@ -1862,7 +1862,7 @@ const locationSummaryCss = `
     background: rgba(245,158,11,.1);
     color: #FDBA74;
     padding: .5rem;
-    font-size: clamp(.72rem, 1.2vw, .82rem);
+    font-size: clamp(1rem, 1.2vw, 1rem);
     font-weight: 850;
     line-height: 1.35;
   }
@@ -1884,7 +1884,7 @@ const panelCss = `
   }
   .route b { color: ${C.cyan}; }
   .rows { display: grid; gap: .75rem; margin: 1rem 0 1.4rem; }
-  .field { display: grid; gap: .35rem; color: ${C.sub}; font-weight: 800; font-size: .86rem; }
+  .field { display: grid; gap: .35rem; color: ${C.sub}; font-weight: 800; font-size: 1rem; }
   .field input, .field select {
     min-height: 2.35rem;
     border: 1px solid ${C.line};
@@ -1898,7 +1898,7 @@ const panelCss = `
   .check { display: flex; align-items: center; gap: .55rem; color: ${C.sub}; font-weight: 800; }
   .factors { display: grid; grid-template-columns: 1fr 1fr; gap: .45rem; }
   .factors span {
-    font-size: clamp(.68rem, 1.2vw, .78rem);
+    font-size: clamp(1rem, 1.2vw, 1rem);
     font-weight: 750;
     padding: .5rem;
     border-radius: 8px;
