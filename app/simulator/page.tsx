@@ -529,7 +529,7 @@ function Topbar({ running, onRun }: { running: boolean; onRun: () => void }) {
 
   return (
     <header className="topbar">
-      <Link href="/dashboard" className="brand">
+      <Link href="/ingest" className="brand">
         <span className="dot" />
         <span>콜카드 <b>↔</b> 기사 매칭 시뮬레이터</span>
       </Link>

@@ -113,7 +113,7 @@ function TopBar() {
         gap: 18,
       }}
     >
-      <Link href="/dashboard" style={{ color: C.text, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 10 }}>
+      <Link href="/ingest" style={{ color: C.text, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 10 }}>
         <span
           style={{
             width: 30,

@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import Link from 'next/link'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
@@ -179,7 +179,7 @@ function Topbar() {
 
   return (
     <header style={{ position: 'sticky', top: 0, zIndex: 80, height: 56, background: '#05070D', borderBottom: `1px solid ${C.border}`, display: 'grid', gridTemplateColumns: '320px 1fr 260px', alignItems: 'center', padding: '0 18px', gap: 18 }}>
-      <Link href="/dashboard" style={{ color: C.ink, textDecoration: 'none', fontSize: 18, fontWeight: 950 }}>
+      <Link href="/ingest" style={{ color: C.ink, textDecoration: 'none', fontSize: 18, fontWeight: 950 }}>
         Happycall PMO <span style={{ color: C.cyan }}>Data Radar</span>
       </Link>
       <nav style={{ display: 'flex', justifyContent: 'center', gap: 8 }}>

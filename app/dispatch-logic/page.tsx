@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import Link from 'next/link'
 
@@ -405,7 +405,7 @@ export default function DispatchLogicPage() {
 function Topbar() {
   return (
     <header className="topbar">
-      <Link href="/dashboard" className="brand">
+      <Link href="/ingest" className="brand">
         Happycall PMO <b>AI Dispatch</b>
       </Link>
       <nav>
