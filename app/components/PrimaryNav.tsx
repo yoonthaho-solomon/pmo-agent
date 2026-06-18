@@ -54,16 +54,16 @@ export function PrimaryNav({
           position: sticky;
           top: 0;
           z-index: 120;
-          min-height: 72px;
+          min-height: 88px;
           display: grid;
-          grid-template-columns: minmax(260px, 1fr) auto minmax(220px, 1fr);
+          grid-template-columns: minmax(320px, 1fr) auto minmax(280px, 1fr);
           align-items: center;
           gap: 18px;
-          padding: 0 clamp(18px, 2.4vw, 34px);
-          border-bottom: 1px solid #22314F;
-          background: rgba(5, 8, 16, .94);
+          padding: 0 clamp(24px, 3vw, 48px);
+          border-bottom: 1px solid rgba(103,232,249,.24);
+          background: linear-gradient(90deg, rgba(4,7,16,.96), rgba(10,16,32,.94), rgba(4,7,16,.96));
           backdrop-filter: blur(18px);
-          box-shadow: 0 16px 50px rgba(0,0,0,.26);
+          box-shadow: 0 22px 70px rgba(0,0,0,.38), inset 0 -1px 0 rgba(255,255,255,.04);
         }
         .brand {
           min-width: 0;
@@ -74,14 +74,14 @@ export function PrimaryNav({
           text-decoration: none;
         }
         .mark {
-          width: 40px;
-          height: 40px;
-          border-radius: 12px;
+          width: 52px;
+          height: 52px;
+          border-radius: 16px;
           display: grid;
           place-items: center;
           color: #06101B;
           background: linear-gradient(135deg, #22D3EE, #8B5CF6);
-          font-size: 15px;
+          font-size: 18px;
           font-weight: 950;
           box-shadow: 0 0 26px rgba(34,211,238,.28);
         }
@@ -113,16 +113,16 @@ export function PrimaryNav({
           justify-self: center;
         }
         nav a {
-          height: 48px;
-          min-width: 118px;
+          height: 58px;
+          min-width: 150px;
           display: grid;
           place-items: center;
           border: 1px solid #22314F;
-          border-radius: 12px;
+          border-radius: 16px;
           color: #AAB7CB;
-          background: rgba(15, 22, 40, .74);
+          background: linear-gradient(180deg, rgba(22,32,58,.82), rgba(10,15,29,.82));
           text-decoration: none;
-          font-size: clamp(15px, 1.1vw, 18px);
+          font-size: clamp(18px, 1.12vw, 22px);
           font-weight: 950;
           letter-spacing: 0;
           transition: transform 160ms ease, border-color 160ms ease, background 160ms ease, color 160ms ease;
@@ -132,7 +132,7 @@ export function PrimaryNav({
           transform: translateY(-1px);
           color: #F5F7FB;
           border-color: var(--tone);
-          background: color-mix(in srgb, var(--tone) 18%, rgba(15, 22, 40, .88));
+          background: linear-gradient(180deg, color-mix(in srgb, var(--tone) 26%, rgba(22,32,58,.9)), rgba(8,13,26,.92));
           box-shadow: 0 0 28px color-mix(in srgb, var(--tone) 28%, transparent);
         }
         .right-slot {
@@ -144,14 +144,14 @@ export function PrimaryNav({
           min-width: 0;
         }
         .right-slot :global(button) {
-          min-height: 48px;
-          padding: 0 24px;
+          min-height: 58px;
+          padding: 0 28px;
           border: 0;
           border-radius: 14px;
           color: #06101B;
           background: linear-gradient(135deg, #67E8F9, #8B5CF6);
           box-shadow: 0 18px 42px rgba(34,211,238,.24);
-          font-size: clamp(15px, 1.1vw, 18px);
+          font-size: clamp(18px, 1.12vw, 22px);
           font-weight: 950;
           cursor: pointer;
         }
@@ -161,8 +161,8 @@ export function PrimaryNav({
         }
         .right-slot :global(a),
         .right-slot :global(span) {
-          min-height: 40px;
-          border-radius: 12px;
+          min-height: 52px;
+          border-radius: 16px;
           font-size: clamp(14px, 1vw, 16px);
           font-weight: 950;
         }
