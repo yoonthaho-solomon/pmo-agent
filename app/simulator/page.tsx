@@ -1,6 +1,6 @@
 'use client'
 
-import Link from 'next/link'
+import { PrimaryNav } from '@/app/components/PrimaryNav'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createClient } from '@supabase/supabase-js'
 import {
@@ -520,99 +520,13 @@ export default function SimulatorPage() {
 }
 
 function Topbar({ running, onRun }: { running: boolean; onRun: () => void }) {
-  const nav = [
-    ['적재현황', '/ingest'],
-    ['벡터리스트', '/vectors'],
-    ['시뮬레이터', '/simulator'],
-    ['배차로직', '/dispatch-logic'],
-  ]
-
   return (
-    <header className="topbar">
-      <Link href="/ingest" className="brand">
-        <span className="dot" />
-        <span>콜카드 <b>↔</b> 기사 매칭 시뮬레이터</span>
-      </Link>
-      <nav>
-        {nav.map(([label, href]) => (
-          <Link key={href} href={href} className={href === '/simulator' ? 'active' : ''}>{label}</Link>
-        ))}
-      </nav>
-      <button type="button" onClick={onRun} disabled={running}>{running ? '계산 중' : '시뮬레이션 실행'}</button>
-      <style jsx>{`
-        .topbar {
-          position: sticky;
-          top: 0;
-          z-index: 80;
-          min-height: 64px;
-          padding: 1rem 1.6rem;
-          display: grid;
-          grid-template-columns: minmax(260px, 1fr) auto auto;
-          gap: 1rem;
-          align-items: center;
-          border-bottom: 1px solid ${C.line};
-          background: rgba(10, 16, 29, .84);
-        }
-        .brand {
-          color: ${C.ink};
-          text-decoration: none;
-          font-size: clamp(1.05rem, 2.2vw, 1.4rem);
-          font-weight: 950;
-          display: flex;
-          align-items: center;
-          gap: .75rem;
-        }
-        .brand b { color: ${C.cyan}; }
-        .dot {
-          width: .85rem;
-          height: .85rem;
-          border-radius: 999px;
-          background: ${C.cyan};
-          box-shadow: 0 0 16px ${C.cyan};
-        }
-        nav {
-          display: flex;
-          gap: .45rem;
-          flex-wrap: wrap;
-          justify-content: center;
-        }
-        nav a {
-          color: ${C.sub};
-          text-decoration: none;
-          border: 1px solid ${C.line};
-          border-radius: 10px;
-          padding: .55rem .7rem;
-          font-size: .82rem;
-          font-weight: 850;
-          background: rgba(15, 23, 42, .7);
-        }
-        nav a.active {
-          color: ${C.cyan};
-          border-color: ${C.cyan};
-          background: rgba(34, 211, 238, .1);
-        }
-        button {
-          border: 0;
-          border-radius: 12px;
-          padding: .75rem 1.1rem;
-          color: white;
-          background: linear-gradient(135deg, ${C.cyan}, ${C.purple});
-          font: inherit;
-          font-weight: 950;
-          cursor: pointer;
-          box-shadow: 0 8px 24px rgba(34, 211, 238, .24);
-        }
-        button:disabled {
-          opacity: .55;
-          cursor: wait;
-        }
-        @media (max-width: 920px) {
-          .topbar { grid-template-columns: 1fr; }
-          nav { justify-content: flex-start; }
-          button { justify-self: start; }
-        }
-      `}</style>
-    </header>
+    <PrimaryNav
+      active="/simulator"
+      title="콜카드 ↔ 기사"
+      subtitle="매칭 시뮬레이터"
+      rightSlot={<button type="button" onClick={onRun} disabled={running}>{running ? '계산 중' : '시뮬레이션 실행'}</button>}
+    />
   )
 }
 

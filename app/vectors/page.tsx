@@ -1,6 +1,6 @@
 'use client'
 
-import Link from 'next/link'
+import { PrimaryNav } from '@/app/components/PrimaryNav'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { createClient } from '@supabase/supabase-js'
 import {
@@ -276,30 +276,18 @@ export default function VectorsPage() {
 }
 
 function Topbar() {
-  const nav = [
-    ['적재현황', '/ingest'],
-    ['벡터리스트', '/vectors'],
-    ['시뮬레이터', '/simulator'],
-    ['배차로직', '/dispatch-logic'],
-  ]
-
   return (
-    <header style={{ position: 'sticky', top: 0, zIndex: 80, height: 56, background: '#05070D', borderBottom: `1px solid ${C.border}`, display: 'grid', gridTemplateColumns: '320px 1fr 260px', alignItems: 'center', padding: '0 18px', gap: 18 }}>
-      <Link href="/ingest" style={{ color: C.ink, textDecoration: 'none', fontSize: 18, fontWeight: 950 }}>
-        Happycall PMO <span style={{ color: C.cyan }}>AI 우선배차</span>
-      </Link>
-      <nav style={{ display: 'flex', justifyContent: 'center', gap: 8 }}>
-        {nav.map(([label, href]) => (
-          <Link key={href} href={href} style={{ color: href === '/vectors' ? C.cyan : C.sub, textDecoration: 'none', border: `1px solid ${href === '/vectors' ? C.cyan : C.border}`, borderRadius: 8, padding: '8px 12px', fontSize: 14, fontWeight: 900, background: href === '/vectors' ? 'rgba(34,211,238,.12)' : 'rgba(15,22,40,.62)' }}>
-            {label}
-          </Link>
-        ))}
-      </nav>
-      <div style={{ justifySelf: 'end', display: 'flex', gap: 8 }}>
-        <Pill color={C.green}>실데이터</Pill>
-        <Pill color={C.cyan}>22D COSINE</Pill>
-      </div>
-    </header>
+    <PrimaryNav
+      active="/vectors"
+      title="Happycall PMO"
+      subtitle="AI 우선배차"
+      rightSlot={(
+        <>
+          <Pill color={C.green}>실데이터</Pill>
+          <Pill color={C.cyan}>22D COSINE</Pill>
+        </>
+      )}
+    />
   )
 }
 

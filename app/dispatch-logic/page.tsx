@@ -1,6 +1,6 @@
 'use client'
 
-import Link from 'next/link'
+import { PrimaryNav } from '@/app/components/PrimaryNav'
 
 const C = {
   bg: '#050810',
@@ -16,13 +16,6 @@ const C = {
   orange: '#FB923C',
   red: '#F43F5E',
 }
-
-const nav = [
-  ['적재현황', '/ingest'],
-  ['벡터리스트', '/vectors'],
-  ['시뮬레이터', '/simulator'],
-  ['배차로직', '/dispatch-logic'],
-]
 
 const pipeline = [
   {
@@ -403,75 +396,7 @@ export default function DispatchLogicPage() {
 }
 
 function Topbar() {
-  return (
-    <header className="topbar">
-      <Link href="/ingest" className="brand">
-        Happycall PMO <b>AI Dispatch</b>
-      </Link>
-      <nav>
-        {nav.map(([label, href]) => (
-          <Link key={href} href={href} className={href === '/dispatch-logic' ? 'active' : ''}>
-            {label}
-          </Link>
-        ))}
-      </nav>
-      <style jsx>{`
-        .topbar {
-          position: sticky;
-          top: 0;
-          z-index: 80;
-          min-height: 64px;
-          display: grid;
-          grid-template-columns: minmax(220px, 1fr) auto;
-          gap: 1rem;
-          align-items: center;
-          padding: 0 clamp(1rem, 3vw, 2rem);
-          border-bottom: 1px solid ${C.line};
-          background: rgba(5,8,16,.88);
-        }
-        .brand {
-          color: ${C.ink};
-          text-decoration: none;
-          font-size: clamp(1.05rem, 2vw, 1.3rem);
-          font-weight: 950;
-        }
-        .brand b {
-          color: ${C.cyan};
-        }
-        nav {
-          display: flex;
-          gap: .45rem;
-          flex-wrap: wrap;
-          justify-content: flex-end;
-        }
-        nav a {
-          color: ${C.sub};
-          text-decoration: none;
-          border: 1px solid ${C.line};
-          border-radius: 10px;
-          padding: .55rem .7rem;
-          font-size: clamp(.78rem, 1.3vw, .9rem);
-          font-weight: 900;
-          background: rgba(15,23,42,.7);
-        }
-        nav a.active {
-          color: ${C.cyan};
-          border-color: ${C.cyan};
-          background: rgba(34,211,238,.1);
-        }
-        @media (max-width: 760px) {
-          .topbar {
-            grid-template-columns: 1fr;
-            padding-top: .8rem;
-            padding-bottom: .8rem;
-          }
-          nav {
-            justify-content: flex-start;
-          }
-        }
-      `}</style>
-    </header>
-  )
+  return <PrimaryNav active="/dispatch-logic" title="Happycall PMO" subtitle="AI Dispatch" />
 }
 
 function Metric({ label, value, color }: { label: string; value: string; color: string }) {
