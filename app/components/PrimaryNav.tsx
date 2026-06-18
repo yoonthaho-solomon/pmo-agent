@@ -54,12 +54,12 @@ export function PrimaryNav({
           position: sticky;
           top: 0;
           z-index: 120;
-          min-height: 88px;
+          min-height: 76px;
           display: grid;
-          grid-template-columns: minmax(320px, 1fr) auto minmax(280px, 1fr);
+          grid-template-columns: minmax(280px, 1fr) auto minmax(240px, 1fr);
           align-items: center;
           gap: 18px;
-          padding: 0 clamp(24px, 3vw, 48px);
+          padding: 0 clamp(18px, 2.4vw, 36px);
           border-bottom: 1px solid rgba(103,232,249,.24);
           background: linear-gradient(90deg, rgba(4,7,16,.96), rgba(10,16,32,.94), rgba(4,7,16,.96));
           backdrop-filter: blur(18px);
@@ -74,14 +74,14 @@ export function PrimaryNav({
           text-decoration: none;
         }
         .mark {
-          width: 52px;
-          height: 52px;
+          width: 44px;
+          height: 44px;
           border-radius: 16px;
           display: grid;
           place-items: center;
           color: #06101B;
           background: linear-gradient(135deg, #22D3EE, #8B5CF6);
-          font-size: 18px;
+          font-size: 16px;
           font-weight: 950;
           box-shadow: 0 0 26px rgba(34,211,238,.28);
         }
@@ -92,7 +92,7 @@ export function PrimaryNav({
         }
         .brand-text b {
           color: #F5F7FB;
-          font-size: clamp(18px, 1.45vw, 24px);
+          font-size: clamp(18px, 1.25vw, 22px);
           line-height: 1.05;
           font-weight: 950;
           white-space: nowrap;
@@ -101,7 +101,7 @@ export function PrimaryNav({
         }
         .brand-text em {
           color: #22D3EE;
-          font-size: clamp(13px, 1vw, 16px);
+          font-size: clamp(13px, .9vw, 15px);
           line-height: 1.15;
           font-style: normal;
           font-weight: 900;
@@ -113,8 +113,8 @@ export function PrimaryNav({
           justify-self: center;
         }
         nav a {
-          height: 58px;
-          min-width: 150px;
+          height: 50px;
+          min-width: 132px;
           display: grid;
           place-items: center;
           border: 1px solid #22314F;
@@ -122,7 +122,7 @@ export function PrimaryNav({
           color: #AAB7CB;
           background: linear-gradient(180deg, rgba(22,32,58,.82), rgba(10,15,29,.82));
           text-decoration: none;
-          font-size: clamp(18px, 1.12vw, 22px);
+          font-size: clamp(16px, 1vw, 19px);
           font-weight: 950;
           letter-spacing: 0;
           transition: transform 160ms ease, border-color 160ms ease, background 160ms ease, color 160ms ease;
@@ -144,14 +144,14 @@ export function PrimaryNav({
           min-width: 0;
         }
         .right-slot :global(button) {
-          min-height: 58px;
-          padding: 0 28px;
+          min-height: 50px;
+          padding: 0 22px;
           border: 0;
           border-radius: 14px;
           color: #06101B;
           background: linear-gradient(135deg, #67E8F9, #8B5CF6);
           box-shadow: 0 18px 42px rgba(34,211,238,.24);
-          font-size: clamp(18px, 1.12vw, 22px);
+          font-size: clamp(16px, 1vw, 19px);
           font-weight: 950;
           cursor: pointer;
         }
@@ -161,9 +161,9 @@ export function PrimaryNav({
         }
         .right-slot :global(a),
         .right-slot :global(span) {
-          min-height: 52px;
+          min-height: 44px;
           border-radius: 16px;
-          font-size: clamp(14px, 1vw, 16px);
+          font-size: clamp(13px, .9vw, 15px);
           font-weight: 950;
         }
         @media (max-width: 1120px) {
