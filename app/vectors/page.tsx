@@ -283,7 +283,7 @@ function Topbar() {
   ]
 
   return (
-    <header style={{ height: 56, background: '#05070D', borderBottom: `1px solid ${C.border}`, display: 'grid', gridTemplateColumns: '320px 1fr 260px', alignItems: 'center', padding: '0 18px', gap: 18 }}>
+    <header style={{ position: 'sticky', top: 0, zIndex: 80, height: 56, background: '#05070D', borderBottom: `1px solid ${C.border}`, display: 'grid', gridTemplateColumns: '320px 1fr 260px', alignItems: 'center', padding: '0 18px', gap: 18 }}>
       <Link href="/dashboard" style={{ color: C.ink, textDecoration: 'none', fontSize: 18, fontWeight: 950 }}>
         Happycall PMO <span style={{ color: C.cyan }}>AI 우선배차</span>
       </Link>

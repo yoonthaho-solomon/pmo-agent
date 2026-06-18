@@ -1,7 +1,6 @@
 ﻿'use client'
 
 import Link from 'next/link'
-import type { ReactNode } from 'react'
 
 const C = {
   bg: '#050810',
@@ -418,6 +417,9 @@ function Topbar() {
       </nav>
       <style jsx>{`
         .topbar {
+          position: sticky;
+          top: 0;
+          z-index: 80;
           min-height: 64px;
           display: grid;
           grid-template-columns: minmax(220px, 1fr) auto;

@@ -100,6 +100,9 @@ function TopBar() {
   return (
     <header
       style={{
+        position: 'sticky',
+        top: 0,
+        zIndex: 80,
         height: 56,
         background: C.top,
         borderBottom: `1px solid ${C.line}`,

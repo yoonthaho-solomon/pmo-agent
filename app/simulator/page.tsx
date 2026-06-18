@@ -501,9 +501,12 @@ function Topbar({ running, onRun }: { running: boolean; onRun: () => void }) {
           <Link key={href} href={href} className={href === '/simulator' ? 'active' : ''}>{label}</Link>
         ))}
       </nav>
-      <button type="button" onClick={onRun} disabled={running}>{running ? '계산 중' : '시뮬레이션 가동'}</button>
+      <button type="button" onClick={onRun} disabled={running}>{running ? '계산 중' : '시뮬레이션 실행'}</button>
       <style jsx>{`
         .topbar {
+          position: sticky;
+          top: 0;
+          z-index: 80;
           min-height: 64px;
           padding: 1rem 1.6rem;
           display: grid;
