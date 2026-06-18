@@ -1,7 +1,7 @@
-'use client'
+﻿'use client'
 
 import { PrimaryNav } from '@/app/components/PrimaryNav'
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
 
 type TableStatus = {
   table: string
@@ -35,28 +35,33 @@ type SystemStatusResponse = {
 }
 
 const C = {
-  bg: '#070A12',
-  ink: '#F5F7FB',
+  bg: '#050810',
+  panel: 'rgba(10, 16, 29, 0.88)',
+  panel2: 'rgba(15, 23, 42, 0.72)',
+  ink: '#F8FAFC',
   sub: '#B8C7DE',
   muted: '#8290A8',
-  panel: 'rgba(9,14,26,.92)',
-  panel2: 'rgba(14,22,39,.76)',
-  border: '#22314F',
+  line: 'rgba(148, 163, 184, 0.22)',
   cyan: '#22D3EE',
   green: '#10B981',
   yellow: '#F59E0B',
   orange: '#FB923C',
   red: '#F43F5E',
   purple: '#8B5CF6',
-}
+} as const
 
 function fmt(n: number | null | undefined) {
-  return n == null ? '-' : n.toLocaleString()
+  return n == null ? '-' : n.toLocaleString('ko-KR')
 }
 
 function rangeText(row?: TableStatus) {
   if (!row?.minDate || !row?.maxDate) return '-'
   return `${row.minDate} ~ ${row.maxDate}`
+}
+
+function shortRange(row?: TableStatus) {
+  if (!row?.minDate || !row?.maxDate) return '-'
+  return `${row.minDate.slice(5)} ~ ${row.maxDate.slice(5)}`
 }
 
 function dayCount(start?: string | null, end?: string | null) {
@@ -68,14 +73,18 @@ function dayCount(start?: string | null, end?: string | null) {
 function tableState(row?: TableStatus) {
   if (!row) return '확인 필요'
   if (row.status === 'error') return '오류'
-  if (row.status === 'empty' || !row.count) return '비어 있음'
-  return '준비됨'
+  if (row.status === 'empty' || !row.count) return '데이터 없음'
+  return '정상'
 }
 
 function tableTone(row?: TableStatus) {
+  if (row?.status === 'error') return C.red
   if (!row || row.status === 'empty' || !row.count) return C.yellow
-  if (row.status === 'error') return C.red
   return C.green
+}
+
+function isReady(row?: TableStatus) {
+  return Boolean(row?.count && row.status !== 'error')
 }
 
 export default function IngestPage() {
@@ -85,13 +94,11 @@ export default function IngestPage() {
 
   useEffect(() => {
     let cancelled = false
-
     async function load() {
       setLoading(true)
       setStatusError(null)
       const controller = new AbortController()
-      const timeout = window.setTimeout(() => controller.abort(), 8000)
-
+      const timeout = window.setTimeout(() => controller.abort(), 9000)
       const nextStatus = await fetch('/api/system-status', { cache: 'no-store', signal: controller.signal })
         .then(async (res) => {
           if (!res.ok) return { error: `상태 API 응답 실패 (${res.status})` } as SystemStatusResponse
@@ -111,9 +118,7 @@ export default function IngestPage() {
     }
 
     load()
-    return () => {
-      cancelled = true
-    }
+    return () => { cancelled = true }
   }, [])
 
   const callTables = useMemo(() => status?.callTables ?? [], [status?.callTables])
@@ -134,8 +139,9 @@ export default function IngestPage() {
     [dateRows],
   )
 
-  const coreReady = Boolean(callcards?.count && driverLogs?.count && driverVectors?.count)
-  const headline = loading ? '확인 중' : coreReady ? '준비됨' : '확인 필요'
+  const readyCount = [callcards, driverLogs, driverVectors, matching].filter(isReady).length
+  const coreReady = Boolean(isReady(callcards) && isReady(driverLogs) && isReady(driverVectors))
+  const headline = loading ? '확인 중' : coreReady ? '데이터 준비됨' : '확인 필요'
   const headlineTone = loading ? C.cyan : coreReady ? C.green : C.yellow
 
   return (
@@ -143,252 +149,276 @@ export default function IngestPage() {
       <PrimaryNav
         active="/ingest"
         title="Happycall PMO"
-        subtitle="Data Radar"
-        rightSlot={(
-          <>
-            <Pill color={C.green}>READ ONLY</Pill>
-            <Pill color={C.cyan}>SUPABASE</Pill>
-          </>
-        )}
+        subtitle="Data Readiness"
+        rightSlot={<><Pill color={C.green}>READ ONLY</Pill><Pill color={C.cyan}>SUPABASE</Pill></>}
       />
 
-      <section className="kpiRail" aria-label="적재 핵심 지표">
-        <Kpi title="호출데이터" value={rangeText(callcards)} meta={`${dayCount(callcards?.minDate, callcards?.maxDate)} · ${fmt(callcards?.count)}건`} color={C.green} />
-        <Kpi title="앱미터데이터" value={rangeText(meterHourly)} meta={`${dayCount(meterHourly?.minDate, meterHourly?.maxDate)} · ${fmt(meterHourly?.count)}건`} color={C.cyan} />
-        <Kpi title="기사 벡터" value={fmt(driverVectors?.count)} meta="driver_mbti 기준" color={C.purple} />
-        <Kpi title="매칭 결과" value={fmt(matching?.count)} meta="Top 10 저장 결과" color={C.orange} />
+      <section className="top-rail" aria-label="데이터 적재 핵심 지표">
+        <RailMetric label="호출데이터" value={shortRange(callcards)} meta={`${dayCount(callcards?.minDate, callcards?.maxDate)} · ${fmt(callcards?.count)}건`} color={C.green} />
+        <RailMetric label="앱미터데이터" value={shortRange(meterHourly)} meta={`${dayCount(meterHourly?.minDate, meterHourly?.maxDate)} · ${fmt(meterHourly?.count)}건`} color={C.cyan} />
+        <RailMetric label="기사 벡터" value={fmt(driverVectors?.count)} meta="driver_mbti 22D" color={C.purple} />
+        <RailMetric label="매칭 결과" value={fmt(matching?.count)} meta="Top 10 저장 결과" color={C.orange} />
       </section>
 
-      <section className="workspace">
-        <div className="backdrop" aria-hidden />
-
-        <section className="heroPanel">
-          <div className="heroCopy">
+      <div className="workspace">
+        <section className="hero-card">
+          <div className="hero-copy">
             <p className="eyebrow">DATA READINESS</p>
-            <h1>AI 우선배차를 시작할 수 있는 데이터인지 확인합니다</h1>
+            <h1>AI 우선배차 검증 데이터가 어디까지 준비됐는지 봅니다</h1>
             <p className="lead">
-              이 화면의 코어는 업로드가 아니라 적재 범위, 기사 벡터 생성, 매칭 결과가 날짜별로 이어졌는지 보는 것입니다.
+              이 화면은 파일 업로드가 아니라 운영 데이터 준비 상태를 보는 관제 화면입니다.
+              호출데이터, 앱미터데이터, 기사 벡터, 매칭 계산이 날짜별로 이어졌는지 확인합니다.
             </p>
           </div>
-          <div className="readinessCard" style={{ borderColor: `${headlineTone}66`, background: `${headlineTone}12` }}>
+          <div className="readiness" style={{ '--tone': headlineTone } as CSSProperties}>
             <span>현재 상태</span>
-            <strong style={{ color: headlineTone }}>{headline}</strong>
-            <em>{statusError ?? status?.message ?? 'Supabase 테이블 상태를 읽고 있습니다.'}</em>
+            <strong>{headline}</strong>
+            <p>{statusError ?? status?.message ?? 'Supabase 테이블 상태를 확인하고 있습니다.'}</p>
+            <div className="ready-ring"><b>{readyCount}</b><em>/4</em></div>
           </div>
         </section>
 
-        <section className="coreGrid">
-          <article className="corePanel mainStatus">
-            <SectionTitle kicker="CORE" title="준비 상태" />
-            <div className="statusStack">
-              <StatusLine label="호출데이터" row={callcards} detail="콜카드 팩터와 수락/미수락 기준 데이터" />
-              <StatusLine label="기사 로그" row={driverLogs} detail="기사별 누적 호출 반응과 운행 성향 기초" />
-              <StatusLine label="기사 벡터" row={driverVectors} detail="driver_mbti 22D 성향 벡터" />
-              <StatusLine label="매칭 결과" row={matching} detail="콜카드별 Top 10 추천 저장 결과" optional />
-            </div>
-          </article>
+        <section className="main-grid">
+          <aside className="left-stack">
+            <SectionTitle label="DATA COVERAGE" title="적재 범위" />
+            <CoverageCard title="호출데이터" row={callcards} color={C.green} description="콜카드 팩터와 수락·미수락 기준" />
+            <CoverageCard title="기사 로그" row={driverLogs} color={C.cyan} description="기사별 호출 반응과 운행 패턴 기초" />
+            <CoverageCard title="앱미터데이터" row={meterHourly} color={C.purple} description="천안 택시 흐름과 시장 기준 보조 데이터" />
+          </aside>
 
-          <article className="corePanel timelinePanel">
-            <SectionTitle kicker="DATE COVERAGE" title="최근 날짜별 적재 연결" />
+          <section className="center-stage">
+            <SectionTitle label="DATE TIMELINE" title="날짜별 연결 상태" />
             <CoverageTimeline rows={dateRows} />
-          </article>
+          </section>
 
-          <article className="corePanel sidePanel">
-            <SectionTitle kicker="AUTOMATION" title="자동 적재 방식" />
-            <CommandBlock title="호출데이터" command="npm run call:watch" color={C.green} />
-            <CommandBlock title="앱미터데이터" command="npm run meter:watch" color={C.cyan} />
-            <div className="ruleBox">
-              <strong>보여줄 것</strong>
-              <p>몇일부터 몇일까지 준비됐는지, 벡터와 매칭 계산이 이어졌는지.</p>
-            </div>
-            <div className="ruleBox warning">
-              <strong>보이지 않을 것</strong>
-              <p>긴 JSON, 내부 로그 반복, 확정되지 않은 배차 가정.</p>
-            </div>
-          </article>
+          <aside className="right-stack">
+            <SectionTitle label="AUTOMATION" title="자동 적재 파이프라인" />
+            <CommandCard title="호출데이터 자동 적재" command="npm run call:watch" color={C.green} />
+            <CommandCard title="앱미터 자동 적재" command="npm run meter:watch" color={C.cyan} />
+            <NoticeCard title="중요" body="Vercel 화면이 폴더를 직접 감시하는 것이 아닙니다. PC 또는 서버에서 watch 프로세스가 실행되어야 새 파일이 Supabase로 들어갑니다." color={C.orange} />
+            <NoticeCard title="운영 기준" body="앱미터는 기사 MBTI의 주 원천이 아니라 지역별 택시 흐름과 시장 기준을 보는 보조 데이터입니다." color={C.purple} />
+          </aside>
         </section>
 
-        <section className="supportGrid">
-          <SupportCard title="앱미터 보조 기준" color={C.cyan} rows={[
+        <section className="bottom-grid">
+          <SupportPanel title="앱미터 보조 기준" color={C.cyan} rows={[
             ['시간대 로그', rangeText(meterHourly), fmt(meterHourly?.count)],
             ['기사별 로그', rangeText(meterDrivers), fmt(meterDrivers?.count)],
             ['일별 요약', rangeText(meterDaily), fmt(meterDaily?.count)],
           ]} />
-          <SupportCard title="누락 확인" color={missingRows.length ? C.yellow : C.green} rows={[
+          <SupportPanel title="누락 확인" color={missingRows.length ? C.yellow : C.green} rows={[
             ['최근 14일 누락', `${missingRows.length}일`, missingRows.length ? '확인 필요' : '정상'],
             ['호출-기사 연결', tableState(driverLogs), rangeText(driverLogs)],
             ['매칭 계산', tableState(matching), rangeText(matching)],
           ]} />
         </section>
-      </section>
+      </div>
 
       <style jsx>{`
         .page {
           min-height: 100vh;
-          background: ${C.bg};
           color: ${C.ink};
-          font-family: Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+          background:
+            linear-gradient(90deg, rgba(34, 211, 238, 0.045) 1px, transparent 1px),
+            linear-gradient(180deg, rgba(34, 211, 238, 0.035) 1px, transparent 1px),
+            radial-gradient(circle at 18% 12%, rgba(34, 211, 238, 0.14), transparent 30rem),
+            radial-gradient(circle at 82% 14%, rgba(139, 92, 246, 0.12), transparent 28rem),
+            ${C.bg};
+          background-size: 72px 72px, 72px 72px, auto, auto, auto;
+          font-family: Pretendard, "Apple SD Gothic Neo", "Malgun Gothic", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         }
-        .kpiRail {
+
+        .top-rail {
           display: grid;
           grid-template-columns: repeat(4, minmax(0, 1fr));
-          border-bottom: 1px solid ${C.border};
-          background: #080B13;
+          border-bottom: 1px solid ${C.line};
+          background: rgba(5, 8, 16, 0.88);
         }
+
         .workspace {
-          position: relative;
-          min-height: calc(100vh - 162px);
-          overflow: hidden;
-          padding: clamp(20px, 2.2vw, 34px);
-        }
-        .backdrop {
-          position: absolute;
-          inset: 0;
-          background:
-            radial-gradient(circle at 28% 18%, rgba(34,211,238,.15), transparent 28%),
-            radial-gradient(circle at 72% 22%, rgba(139,92,246,.14), transparent 30%),
-            linear-gradient(135deg, #111827, #070A12 64%);
-        }
-        .backdrop::after {
-          content: '';
-          position: absolute;
-          inset: 0;
-          opacity: .28;
-          background-image:
-            linear-gradient(rgba(255,255,255,.07) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(255,255,255,.055) 1px, transparent 1px);
-          background-size: 58px 58px;
-        }
-        .heroPanel,
-        .coreGrid,
-        .supportGrid {
-          position: relative;
-          z-index: 1;
-        }
-        .heroPanel {
+          width: 100%;
+          max-width: 1760px;
+          margin: 0 auto;
+          padding: 28px;
           display: grid;
-          grid-template-columns: minmax(0, 1fr) minmax(320px, 460px);
           gap: 22px;
+        }
+
+        .hero-card,
+        .left-stack,
+        .center-stage,
+        .right-stack,
+        .support-panel {
+          border: 1px solid ${C.line};
+          border-radius: 8px;
+          background: linear-gradient(180deg, rgba(15, 23, 42, 0.78), rgba(5, 8, 16, 0.86));
+          box-shadow: 0 28px 90px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+        }
+
+        .hero-card {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) 360px;
+          gap: 24px;
+          padding: 34px;
           align-items: stretch;
-          margin-bottom: 22px;
         }
-        .heroCopy,
-        .readinessCard,
-        .corePanel,
-        .supportCard {
-          border: 1px solid ${C.border};
-          border-radius: 22px;
-          background: ${C.panel};
-          box-shadow: 0 24px 76px rgba(0,0,0,.32);
+
+        .hero-copy {
+          display: grid;
+          align-content: center;
+          gap: 14px;
         }
-        .heroCopy {
-          padding: clamp(24px, 3vw, 40px);
-        }
+
         .eyebrow {
           margin: 0;
           color: ${C.cyan};
           font-size: 20px;
-          font-weight: 950;
-          letter-spacing: .08em;
+          line-height: 1.2;
+          font-weight: 900;
         }
+
         h1 {
-          margin: 10px 0 0;
-          max-width: 940px;
-          font-size: clamp(42px, 4.6vw, 76px);
-          line-height: 1.02;
-          font-weight: 950;
+          max-width: 980px;
+          margin: 0;
+          font-size: 58px;
+          line-height: 1.06;
           letter-spacing: 0;
         }
+
         .lead {
-          max-width: 900px;
+          max-width: 940px;
+          margin: 0;
           color: ${C.sub};
-          font-size: clamp(22px, 1.6vw, 28px);
-          line-height: 1.45;
-          margin: 20px 0 0;
-          font-weight: 750;
+          font-size: 22px;
+          line-height: 1.55;
+          font-weight: 650;
         }
-        .readinessCard {
-          padding: 26px;
+
+        .readiness {
+          position: relative;
+          min-height: 250px;
           display: grid;
           align-content: center;
-          gap: 12px;
+          gap: 10px;
+          padding: 26px;
+          border: 1px solid color-mix(in srgb, var(--tone) 48%, transparent);
+          border-radius: 8px;
+          background: linear-gradient(135deg, color-mix(in srgb, var(--tone) 13%, transparent), rgba(15, 23, 42, 0.64));
+          overflow: hidden;
         }
-        .readinessCard span {
-          color: ${C.muted};
-          font-size: 20px;
-          font-weight: 950;
-        }
-        .readinessCard strong {
-          font-size: clamp(48px, 5vw, 82px);
-          line-height: .95;
-          font-weight: 950;
-        }
-        .readinessCard em {
+
+        .readiness span {
           color: ${C.sub};
-          font-size: 21px;
-          line-height: 1.4;
-          font-style: normal;
-          font-weight: 700;
+          font-size: 20px;
+          font-weight: 900;
         }
-        .coreGrid {
+
+        .readiness strong {
+          color: var(--tone);
+          font-size: 54px;
+          line-height: 1;
+        }
+
+        .readiness p {
+          max-width: 270px;
+          margin: 0;
+          color: ${C.sub};
+          font-size: 19px;
+          line-height: 1.45;
+          font-weight: 650;
+        }
+
+        .ready-ring {
+          position: absolute;
+          right: 24px;
+          bottom: 24px;
+          width: 94px;
+          height: 94px;
           display: grid;
-          grid-template-columns: minmax(340px, .95fr) minmax(520px, 1.7fr) minmax(320px, .9fr);
+          place-items: center;
+          border: 1px solid color-mix(in srgb, var(--tone) 52%, transparent);
+          border-radius: 50%;
+          background: rgba(5, 8, 16, 0.54);
+        }
+
+        .ready-ring b {
+          color: var(--tone);
+          font-size: 38px;
+          line-height: 1;
+        }
+
+        .ready-ring em {
+          margin-top: -24px;
+          color: ${C.sub};
+          font-size: 18px;
+          font-style: normal;
+          font-weight: 800;
+        }
+
+        .main-grid {
+          display: grid;
+          grid-template-columns: 330px minmax(0, 1fr) 340px;
           gap: 22px;
+          align-items: start;
         }
-        .corePanel {
-          min-height: 520px;
-          padding: clamp(20px, 2vw, 28px);
+
+        .left-stack,
+        .right-stack,
+        .center-stage {
+          min-width: 0;
+          padding: 24px;
         }
-        .statusStack {
+
+        .left-stack,
+        .right-stack {
           display: grid;
           gap: 16px;
-          margin-top: 22px;
+          align-content: start;
         }
-        .supportGrid {
+
+        .center-stage {
+          min-height: 620px;
+        }
+
+        .bottom-grid {
           display: grid;
           grid-template-columns: repeat(2, minmax(0, 1fr));
           gap: 22px;
-          margin-top: 22px;
         }
-        .ruleBox {
-          margin-top: 18px;
-          border: 1px solid rgba(16,185,129,.4);
-          border-radius: 18px;
-          padding: 18px;
-          background: rgba(16,185,129,.1);
-        }
-        .ruleBox.warning {
-          border-color: rgba(245,158,11,.45);
-          background: rgba(245,158,11,.1);
-        }
-        .ruleBox strong {
-          color: ${C.ink};
-          font-size: 22px;
-          font-weight: 950;
-        }
-        .ruleBox p {
-          color: ${C.sub};
-          font-size: 20px;
-          line-height: 1.45;
-          margin: 10px 0 0;
-        }
-        @media (max-width: 1440px) {
-          .coreGrid {
-            grid-template-columns: 1fr 1.35fr;
+
+        @media (max-width: 1320px) {
+          .main-grid {
+            grid-template-columns: minmax(280px, 0.8fr) minmax(0, 1.2fr);
           }
-          .sidePanel {
+
+          .right-stack {
             grid-column: 1 / -1;
-            min-height: auto;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
           }
         }
-        @media (max-width: 1100px) {
-          .kpiRail,
-          .heroPanel,
-          .coreGrid,
-          .supportGrid {
+
+        @media (max-width: 980px) {
+          .top-rail,
+          .hero-card,
+          .main-grid,
+          .bottom-grid,
+          .right-stack {
             grid-template-columns: 1fr;
           }
-          .corePanel {
+
+          .workspace {
+            padding: 18px;
+          }
+
+          h1 {
+            font-size: 40px;
+          }
+
+          .lead {
+            font-size: 20px;
+          }
+
+          .center-stage {
             min-height: auto;
           }
         }
@@ -397,39 +427,42 @@ export default function IngestPage() {
   )
 }
 
-function Kpi({ title, value, meta, color }: { title: string; value: string; meta: string; color: string }) {
+function RailMetric({ label, value, meta, color }: { label: string; value: string; meta: string; color: string }) {
   return (
-    <article className="kpi">
-      <div>{title}</div>
+    <article className="rail-metric">
+      <span>{label}</span>
       <strong style={{ color }}>{value}</strong>
-      <span>{meta}</span>
+      <p>{meta}</p>
       <style jsx>{`
-        .kpi {
-          min-height: 92px;
-          padding: 16px 22px;
-          border-right: 1px solid ${C.border};
+        .rail-metric {
+          min-height: 106px;
           display: grid;
           align-content: center;
-          gap: 6px;
+          gap: 5px;
+          padding: 18px 24px;
+          border-right: 1px solid ${C.line};
         }
-        .kpi div {
+
+        span {
           color: ${C.muted};
-          font-size: 20px;
-          font-weight: 950;
+          font-size: 18px;
+          font-weight: 900;
         }
-        .kpi strong {
+
+        strong {
           min-width: 0;
-          font-size: clamp(25px, 2vw, 36px);
-          line-height: 1.05;
-          font-weight: 950;
+          font-size: 30px;
+          line-height: 1.1;
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
         }
-        .kpi span {
+
+        p {
+          margin: 0;
           color: ${C.sub};
-          font-size: 20px;
-          font-weight: 750;
+          font-size: 18px;
+          line-height: 1.25;
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
@@ -439,100 +472,118 @@ function Kpi({ title, value, meta, color }: { title: string; value: string; meta
   )
 }
 
-function SectionTitle({ kicker, title }: { kicker: string; title: string }) {
+function SectionTitle({ label, title }: { label: string; title: string }) {
   return (
-    <div className="sectionTitle">
-      <span>{kicker}</span>
+    <div className="section-title">
+      <span>{label}</span>
       <h2>{title}</h2>
       <style jsx>{`
-        .sectionTitle span {
-          color: ${C.muted};
-          font-size: 20px;
-          font-weight: 950;
-          letter-spacing: .08em;
+        .section-title {
+          display: grid;
+          gap: 7px;
+          margin-bottom: 16px;
         }
-        .sectionTitle h2 {
-          margin: 8px 0 0;
+
+        span {
+          color: ${C.muted};
+          font-size: 18px;
+          font-weight: 900;
+        }
+
+        h2 {
+          margin: 0;
           color: ${C.ink};
-          font-size: clamp(30px, 2.4vw, 44px);
-          line-height: 1.05;
-          font-weight: 950;
+          font-size: 30px;
+          line-height: 1.15;
         }
       `}</style>
     </div>
   )
 }
 
-function StatusLine({ label, row, detail, optional = false }: { label: string; row?: TableStatus; detail: string; optional?: boolean }) {
-  const tone = tableTone(row)
+function CoverageCard({ title, row, color, description }: { title: string; row?: TableStatus; color: string; description: string }) {
+  const tone = tableTone(row) || color
   return (
-    <div className="statusLine" style={{ borderColor: `${tone}66`, background: `${tone}10` }}>
-      <div className="stateDot" style={{ background: tone }} />
-      <div>
-        <div className="statusHead">
-          <strong>{label}</strong>
-          <span style={{ color: tone }}>{optional ? `보조 · ${tableState(row)}` : tableState(row)}</span>
-        </div>
-        <p>{rangeText(row)}</p>
-        <em>{dayCount(row?.minDate, row?.maxDate)} · {fmt(row?.count)}건 · {row?.error ?? detail}</em>
+    <article className="coverage" style={{ '--tone': tone } as CSSProperties}>
+      <div className="coverage-head">
+        <h3>{title}</h3>
+        <span>{tableState(row)}</span>
       </div>
+      <strong>{rangeText(row)}</strong>
+      <p>{dayCount(row?.minDate, row?.maxDate)} · {fmt(row?.count)}건</p>
+      <em>{row?.error ?? description}</em>
       <style jsx>{`
-        .statusLine {
+        .coverage {
           display: grid;
-          grid-template-columns: 16px 1fr;
-          gap: 16px;
-          border: 1px solid;
-          border-radius: 18px;
+          gap: 10px;
           padding: 18px;
+          border: 1px solid color-mix(in srgb, var(--tone) 44%, transparent);
+          border-radius: 8px;
+          background: linear-gradient(135deg, color-mix(in srgb, var(--tone) 10%, transparent), rgba(15, 23, 42, 0.5));
         }
-        .stateDot {
-          width: 16px;
-          height: 16px;
-          border-radius: 999px;
-          margin-top: 7px;
-          box-shadow: 0 0 20px currentColor;
-        }
-        .statusHead {
+
+        .coverage-head {
           display: flex;
-          justify-content: space-between;
-          gap: 16px;
           align-items: center;
+          justify-content: space-between;
+          gap: 12px;
         }
-        strong {
+
+        h3 {
+          margin: 0;
           color: ${C.ink};
-          font-size: 24px;
-          font-weight: 950;
+          font-size: 23px;
+          line-height: 1.18;
         }
+
         span {
-          font-size: 20px;
-          font-weight: 950;
+          color: var(--tone);
+          font-size: 18px;
+          font-weight: 900;
           white-space: nowrap;
         }
-        p {
+
+        strong {
           color: ${C.ink};
-          font-size: 24px;
-          line-height: 1.25;
-          margin: 12px 0 0;
-          font-weight: 950;
+          font-size: 22px;
+          line-height: 1.22;
           word-break: keep-all;
         }
+
+        p,
         em {
-          display: block;
+          margin: 0;
           color: ${C.sub};
-          font-size: 20px;
-          line-height: 1.4;
-          margin-top: 10px;
+          font-size: 19px;
+          line-height: 1.42;
           font-style: normal;
-          font-weight: 700;
+          font-weight: 650;
         }
       `}</style>
-    </div>
+    </article>
   )
 }
 
 function CoverageTimeline({ rows }: { rows: DateRow[] }) {
   if (!rows.length) {
-    return <div className="emptyTimeline">날짜별 적재 현황을 표시할 데이터가 없습니다.</div>
+    return (
+      <div className="empty-timeline">
+        날짜별 적재 현황을 표시할 데이터가 없습니다. Supabase 연결 또는 날짜별 조회 API를 확인해야 합니다.
+        <style jsx>{`
+          .empty-timeline {
+            margin-top: 18px;
+            padding: 24px;
+            border: 1px solid rgba(245, 158, 11, 0.42);
+            border-radius: 8px;
+            color: ${C.yellow};
+            background: rgba(245, 158, 11, 0.1);
+            font-size: 21px;
+            line-height: 1.5;
+            font-weight: 750;
+          }
+        `}</style>
+      </div>
+    )
   }
 
   return (
@@ -542,10 +593,10 @@ function CoverageTimeline({ rows }: { rows: DateRow[] }) {
         const tone = ok ? C.green : C.yellow
         const max = Math.max(row.callcards ?? 0, row.driverLogs ?? 0, row.matches ?? 0, 1)
         return (
-          <article key={row.date} className="dayCard" style={{ borderColor: `${tone}66`, background: `${tone}10` }}>
-            <div className="dayTop">
+          <article key={row.date} className="date-card" style={{ '--tone': tone } as CSSProperties}>
+            <div className="date-head">
               <strong>{row.date.slice(5)}</strong>
-              <span style={{ color: tone }}>{ok ? '정상' : '확인'}</span>
+              <span>{ok ? '정상' : '확인'}</span>
             </div>
             <MiniBar label="콜" value={row.callcards} max={max} color={C.green} />
             <MiniBar label="로그" value={row.driverLogs} max={max} color={C.cyan} />
@@ -556,43 +607,38 @@ function CoverageTimeline({ rows }: { rows: DateRow[] }) {
       <style jsx>{`
         .timeline {
           display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(156px, 1fr));
+          grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
           gap: 14px;
-          margin-top: 24px;
         }
-        .dayCard {
-          min-height: 178px;
-          border: 1px solid;
-          border-radius: 18px;
-          padding: 16px;
+
+        .date-card {
+          min-height: 170px;
           display: grid;
           align-content: space-between;
-          gap: 10px;
+          gap: 12px;
+          padding: 16px;
+          border: 1px solid color-mix(in srgb, var(--tone) 44%, transparent);
+          border-radius: 8px;
+          background: linear-gradient(145deg, color-mix(in srgb, var(--tone) 9%, transparent), rgba(15, 23, 42, 0.58));
         }
-        .dayTop {
+
+        .date-head {
           display: flex;
           justify-content: space-between;
           align-items: center;
-          gap: 10px;
+          gap: 12px;
         }
-        .dayTop strong {
+
+        .date-head strong {
           color: ${C.ink};
           font-size: 24px;
-          font-weight: 950;
+          line-height: 1;
         }
-        .dayTop span {
-          font-size: 20px;
-          font-weight: 950;
-        }
-        .emptyTimeline {
-          margin-top: 24px;
-          border: 1px solid rgba(245,158,11,.45);
-          border-radius: 18px;
-          background: rgba(245,158,11,.1);
-          padding: 24px;
-          color: ${C.yellow};
-          font-size: 24px;
-          font-weight: 950;
+
+        .date-head span {
+          color: var(--tone);
+          font-size: 18px;
+          font-weight: 900;
         }
       `}</style>
     </div>
@@ -602,36 +648,40 @@ function CoverageTimeline({ rows }: { rows: DateRow[] }) {
 function MiniBar({ label, value, max, color }: { label: string; value: number | null; max: number; color: string }) {
   const width = value == null ? 0 : Math.max(4, Math.min(100, Math.round((value / max) * 100)))
   return (
-    <div className="miniBar">
-      <div className="barMeta">
+    <div className="mini-bar">
+      <div className="mini-meta">
         <span>{label}</span>
         <strong>{fmt(value)}</strong>
       </div>
       <div className="track"><i style={{ width: `${width}%`, background: color }} /></div>
       <style jsx>{`
-        .miniBar {
+        .mini-bar {
           display: grid;
           gap: 7px;
         }
-        .barMeta {
+
+        .mini-meta {
           display: flex;
           justify-content: space-between;
-          gap: 8px;
+          gap: 10px;
           color: ${C.sub};
-          font-size: 20px;
-          font-weight: 850;
+          font-size: 18px;
+          font-weight: 750;
         }
-        .barMeta strong {
+
+        .mini-meta strong {
           color: ${C.ink};
-          font-size: 20px;
-          font-weight: 950;
+          font-size: 18px;
+          font-weight: 900;
         }
+
         .track {
-          height: 10px;
+          height: 9px;
           border-radius: 999px;
-          background: rgba(130,144,168,.22);
+          background: rgba(130, 144, 168, 0.2);
           overflow: hidden;
         }
+
         .track i {
           display: block;
           height: 100%;
@@ -642,43 +692,79 @@ function MiniBar({ label, value, max, color }: { label: string; value: number | 
   )
 }
 
-function CommandBlock({ title, command, color }: { title: string; command: string; color: string }) {
+function CommandCard({ title, command, color }: { title: string; command: string; color: string }) {
   return (
-    <div className="command" style={{ borderColor: `${color}66`, background: `${color}10` }}>
-      <span style={{ color }}>{title}</span>
+    <article className="command" style={{ '--tone': color } as CSSProperties}>
+      <span>{title}</span>
       <code>{command}</code>
       <style jsx>{`
         .command {
-          margin-top: 18px;
-          border: 1px solid;
-          border-radius: 18px;
+          display: grid;
+          gap: 10px;
           padding: 18px;
+          border: 1px solid color-mix(in srgb, var(--tone) 44%, transparent);
+          border-radius: 8px;
+          background: color-mix(in srgb, var(--tone) 9%, transparent);
         }
+
         span {
-          display: block;
-          font-size: 22px;
-          font-weight: 950;
+          color: var(--tone);
+          font-size: 20px;
+          font-weight: 900;
         }
+
         code {
-          display: block;
+          min-width: 0;
           color: ${C.ink};
-          font-size: 22px;
-          font-weight: 950;
-          margin-top: 12px;
+          font-size: 21px;
+          line-height: 1.25;
+          font-weight: 900;
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
         }
       `}</style>
-    </div>
+    </article>
   )
 }
 
-function SupportCard({ title, color, rows }: { title: string; color: string; rows: [string, string, string][] }) {
+function NoticeCard({ title, body, color }: { title: string; body: string; color: string }) {
   return (
-    <article className="supportCard">
+    <article className="notice" style={{ '--tone': color } as CSSProperties}>
+      <h3>{title}</h3>
+      <p>{body}</p>
+      <style jsx>{`
+        .notice {
+          padding: 18px;
+          border: 1px solid color-mix(in srgb, var(--tone) 42%, transparent);
+          border-radius: 8px;
+          background: color-mix(in srgb, var(--tone) 9%, transparent);
+        }
+
+        h3 {
+          margin: 0;
+          color: var(--tone);
+          font-size: 22px;
+          line-height: 1.2;
+        }
+
+        p {
+          margin: 10px 0 0;
+          color: ${C.sub};
+          font-size: 20px;
+          line-height: 1.45;
+          font-weight: 650;
+        }
+      `}</style>
+    </article>
+  )
+}
+
+function SupportPanel({ title, color, rows }: { title: string; color: string; rows: [string, string, string][] }) {
+  return (
+    <article className="support-panel">
       <h3 style={{ color }}>{title}</h3>
-      <div className="supportRows">
+      <div className="support-rows">
         {rows.map(([label, value, count]) => (
           <div key={label}>
             <span>{label}</span>
@@ -688,49 +774,54 @@ function SupportCard({ title, color, rows }: { title: string; color: string; row
         ))}
       </div>
       <style jsx>{`
-        .supportCard {
-          padding: 22px;
+        .support-panel {
+          padding: 24px;
         }
+
         h3 {
-          margin: 0;
-          font-size: 30px;
-          line-height: 1.1;
-          font-weight: 950;
+          margin: 0 0 18px;
+          font-size: 28px;
+          line-height: 1.15;
         }
-        .supportRows {
+
+        .support-rows {
           display: grid;
           grid-template-columns: repeat(3, minmax(0, 1fr));
           gap: 14px;
-          margin-top: 18px;
         }
-        .supportRows div {
-          border: 1px solid ${C.border};
-          border-radius: 16px;
-          background: ${C.panel2};
-          padding: 16px;
+
+        .support-rows div {
           min-width: 0;
+          padding: 18px;
+          border: 1px solid ${C.line};
+          border-radius: 8px;
+          background: ${C.panel2};
         }
+
         span,
         em {
           display: block;
           color: ${C.sub};
-          font-size: 20px;
+          font-size: 18px;
+          line-height: 1.35;
           font-style: normal;
-          font-weight: 800;
+          font-weight: 700;
         }
+
         strong {
           display: block;
+          min-width: 0;
+          margin: 9px 0;
           color: ${C.ink};
-          font-size: 24px;
-          line-height: 1.2;
-          font-weight: 950;
-          margin: 10px 0;
+          font-size: 22px;
+          line-height: 1.25;
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
         }
-        @media (max-width: 900px) {
-          .supportRows {
+
+        @media (max-width: 860px) {
+          .support-rows {
             grid-template-columns: 1fr;
           }
         }
@@ -741,7 +832,7 @@ function SupportCard({ title, color, rows }: { title: string; color: string; row
 
 function Pill({ children, color }: { children: ReactNode; color: string }) {
   return (
-    <span style={{ color, border: `1px solid ${color}66`, background: `${color}18`, borderRadius: 12, padding: '10px 14px', fontSize: 16, fontWeight: 950 }}>
+    <span style={{ color, border: `1px solid ${color}66`, background: `${color}18`, borderRadius: 8, padding: '10px 14px', fontSize: 16, fontWeight: 900 }}>
       {children}
     </span>
   )
