@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createClient } from '@supabase/supabase-js'
 import {
   VECTOR_DIMENSIONS,
@@ -43,6 +43,15 @@ type SimulatorCallcardRow = CallcardLocationRow & {
   callcard_id: string
   asp_id: number | null
   call_date: string | null
+  hour_slot?: number | null
+  weekday?: number | null
+  expected_distance?: number | null
+  expected_fare?: number | null
+  is_paid?: boolean | null
+  eta_distance?: number | null
+  is_surge?: boolean | null
+  product_type?: string | null
+  call_fee?: number | null
 }
 
 type Why = {
@@ -104,6 +113,15 @@ const CALLCARD_LOCATION_COLS = [
   'dest_lng',
   's_hexagon',
   'd_hexagon',
+  'hour_slot',
+  'weekday',
+  'expected_distance',
+  'expected_fare',
+  'is_paid',
+  'eta_distance',
+  'is_surge',
+  'product_type',
+  'call_fee',
 ].join(',')
 const weekdays = ['월', '화', '수', '목', '금', '토', '일']
 
@@ -179,6 +197,23 @@ export default function SimulatorPage() {
   const [driverLoadError, setDriverLoadError] = useState<string | null>(null)
   const [callcardLoadError, setCallcardLoadError] = useState<string | null>(null)
 
+  const applyCallcardInput = useCallback((callcard: SimulatorCallcardRow | null) => {
+    if (!callcard) return
+
+    if (Number.isFinite(callcard.hour_slot)) setHour(Number(callcard.hour_slot))
+    if (Number.isFinite(callcard.weekday)) setWeekday(Number(callcard.weekday))
+    if (Number.isFinite(callcard.expected_distance)) setDistance(Number(callcard.expected_distance))
+    if (Number.isFinite(callcard.expected_fare)) setFare(Number(callcard.expected_fare))
+    if (Number.isFinite(callcard.eta_distance)) setEta(Number(callcard.eta_distance))
+    if (typeof callcard.is_paid === 'boolean') setPaid(callcard.is_paid)
+    if (typeof callcard.is_surge === 'boolean') setSurge(callcard.is_surge)
+  }, [])
+
+  const selectCallcard = useCallback((callcardId: string) => {
+    setSelectedCallcardId(callcardId)
+    applyCallcardInput(callcards.find((row) => row.callcard_id === callcardId) ?? null)
+  }, [applyCallcardInput, callcards])
+
   useEffect(() => {
     let cancelled = false
     async function load() {
@@ -218,9 +253,11 @@ export default function SimulatorPage() {
       if (!cancelled) {
         const rows = (data ?? []) as unknown as SimulatorCallcardRow[]
         setCallcards(rows)
-        setSelectedCallcardId((current) => (
-          rows.some((row) => row.callcard_id === current) ? current : rows[0]?.callcard_id ?? ''
-        ))
+        setSelectedCallcardId((current) => {
+          const nextId = rows.some((row) => row.callcard_id === current) ? current : rows[0]?.callcard_id ?? ''
+          applyCallcardInput(rows.find((row) => row.callcard_id === nextId) ?? null)
+          return nextId
+        })
         setCallcardLoadError(error?.message ?? null)
         setCallcardsLoading(false)
       }
@@ -229,7 +266,7 @@ export default function SimulatorPage() {
     return () => {
       cancelled = true
     }
-  }, [aspId])
+  }, [aspId, applyCallcardInput])
 
   const callInput = useMemo(() => ({
     hour_slot: hour,
@@ -344,7 +381,7 @@ export default function SimulatorPage() {
           callBundle={callBundle}
           callcards={callcards}
           selectedCallcardId={selectedCallcardId}
-          setSelectedCallcardId={setSelectedCallcardId}
+          setSelectedCallcardId={selectCallcard}
           selectedCallcard={selectedCallcard}
           adaptedLocation={adaptedLocation}
           callcardsLoading={callcardsLoading}
@@ -1966,4 +2003,3 @@ const panelCss = `
     box-shadow: 0 0 10px rgba(139,92,246,.38);
   }
 `
-
