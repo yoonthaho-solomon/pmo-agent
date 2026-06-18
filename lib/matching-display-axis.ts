@@ -6,6 +6,7 @@ export type DisplayAxisKey =
   | 'weekday_fit'
   | 'distance_fit'
   | 'revenue_product_fit'
+
 export type DisplayAxisDefinition = {
   key: DisplayAxisKey
   name: string
@@ -69,6 +70,7 @@ export const DISPLAY_AXES: readonly DisplayAxisDefinition[] = [
     indexes: indexesFor(['score_low_fare', 'score_mid_fare', 'score_high_fare', 'score_paid', 'score_free', 'score_surge', 'score_normal']),
   },
 ] as const
+
 export function normalizeDisplayAxisValue(value: number | null | undefined): number | null {
   if (value == null) return null
   if (!Number.isFinite(value)) return null
@@ -87,7 +89,7 @@ export function isDisplayVectorLengthValid(vector: readonly unknown[]): boolean 
 
 export function vectorToDisplayAxisBundle(vector: readonly (number | null | undefined)[]): DisplayAxisBundle {
   const sub = DISPLAY_AXES.map((axis) =>
-    axis.indexes.map((index) => normalizeDisplayAxisValue(vector[index]))
+    axis.indexes.map((index) => normalizeDisplayAxisValue(vector[index])),
   )
   return {
     axis: sub.map((values) => averagePresent(values)),

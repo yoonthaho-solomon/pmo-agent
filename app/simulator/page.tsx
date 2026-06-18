@@ -1,10 +1,9 @@
 'use client'
 
 import { PrimaryNav } from '@/app/components/PrimaryNav'
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createClient } from '@supabase/supabase-js'
 import {
-  VECTOR_DIMENSIONS,
   callToVector,
   cosineSimilarity,
   driverToVector,
@@ -12,6 +11,7 @@ import {
 } from '@/lib/matching-vector'
 import {
   DISPLAY_AXES,
+  getDisplayAxisFactors,
   vectorToDisplayAxisBundle,
 } from '@/lib/matching-display-axis'
 import {
@@ -27,7 +27,7 @@ import {
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'https://example.supabase.co',
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? 'preview-build-key'
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? 'preview-build-key',
 )
 
 type DriverRow = DriverVectorRow & {
@@ -82,20 +82,18 @@ type Ranked = {
 
 const C = {
   body: '#050810',
-  card: '#0A101D',
-  ink: '#E2E8F0',
-  sub: '#94A3B8',
-  muted: '#64748B',
-  line: '#1E293B',
+  panel: '#0A101D',
+  ink: '#F8FAFC',
+  sub: '#AAB7CB',
+  muted: '#70809A',
+  line: '#24324C',
   cyan: '#22D3EE',
   purple: '#8B5CF6',
   green: '#10B981',
-  red: '#F43F5E',
   orange: '#FB923C',
   yellow: '#F59E0B',
+  red: '#F43F5E',
 }
-
-const BASELINE_ACCEPTANCE = 29
 
 const aspOptions = [
   { value: 137000000000, label: '인천 137' },
@@ -123,8 +121,8 @@ const CALLCARD_LOCATION_COLS = [
   'product_type',
   'call_fee',
 ].join(',')
-const weekdays = ['월', '화', '수', '목', '금', '토', '일']
 
+const weekdays = ['월', '화', '수', '목', '금', '토', '일']
 
 function pct(n: number | null | undefined) {
   return n == null ? '-' : `${Math.round(n)}%`
@@ -139,7 +137,6 @@ function pseudoDistance(driverId: string, index: number) {
   return 0.7 + ((seed + index * 17) % 82) / 10
 }
 
-
 function axisGap(callAxis: number[], driverAxis: number[], index: number) {
   return Math.abs((callAxis[index] ?? 0) - (driverAxis[index] ?? 0))
 }
@@ -149,9 +146,9 @@ function makeLead(row: Pick<Ranked, 'axis' | 'similarityScore' | 'simEtaMin' | '
     .map((axis, index) => ({ axis: axis.name, diff: axisGap(callAxis, row.axis, index) }))
     .sort((a, b) => a.diff - b.diff)[0]
   const spatialReason = row.spatial.spatialScore == null
-    ? ' 기사 선호 H3 데이터가 부족하여 성향 유사도를 중심으로 추천했습니다.'
-    : ` 출발지 적합도 ${pct(row.spatial.originScore)}, 목적지 적합도 ${pct(row.spatial.destinationScore)}로 공간 적합도 ${pct(row.spatial.spatialScore)}입니다.`
-  return `${bestAxis.axis}이 가장 잘 맞고, 픽업 ETA ${row.simEtaMin}분 조건에서 성향 유사도 ${Math.round(row.similarityScore)}점입니다.${spatialReason}`
+    ? '기사 선호 H3 데이터가 부족해 성향 유사도를 중심으로 추천했습니다.'
+    : `출발지 ${pct(row.spatial.originScore)}, 목적지 ${pct(row.spatial.destinationScore)}로 공간 적합도 ${pct(row.spatial.spatialScore)}입니다.`
+  return `${bestAxis.axis}이 가장 가깝고, 22D 성향 유사도는 ${Math.round(row.similarityScore)}점입니다. ETA ${row.simEtaMin}분은 실제 위치가 아닌 시뮬레이션 값입니다. ${spatialReason}`
 }
 
 function makeWhy(driverAxis: number[], callAxis: number[], acceptance: number, etaMin: number): Why[] {
@@ -167,7 +164,7 @@ function makeWhy(driverAxis: number[], callAxis: number[], acceptance: number, e
   return [
     { type: 'up', label: `${matches[0].label} 일치`, value: Math.round(matches[0].score / 3) },
     { type: 'up', label: `예상 수락률 ${Math.round(acceptance)}%`, value: Math.round(acceptance / 4) },
-    { type: etaMin <= 7 ? 'up' : 'down', label: `픽업 ETA ${etaMin}분`, value: etaMin <= 7 ? 18 : 16 },
+    { type: etaMin <= 7 ? 'up' : 'down', label: `ETA ${etaMin}분`, value: etaMin <= 7 ? 18 : 16 },
     { type: 'down', label: `${gaps[0].label} 차이`, value: Math.round(gaps[0].gap / 3) },
   ]
 }
@@ -176,6 +173,40 @@ function confidence(reliability: number, dataDays: number | null | undefined): R
   if (reliability >= 0.7 && Number(dataDays ?? 0) >= 30) return 'HIGH'
   if (reliability >= 0.45 && Number(dataDays ?? 0) >= 10) return 'MEDIUM'
   return 'LOW'
+}
+
+function formatKm(meter: number) {
+  return meter >= 1000 ? `${(meter / 1000).toFixed(1)}km` : `${Math.round(meter)}m`
+}
+
+function formatFare(value: number) {
+  return `${Math.round(value).toLocaleString()}원`
+}
+
+function sourceLabel(source: AdaptCallcardLocationResult['diagnostics']['pickupH3Source']) {
+  if (source === 'STORED') return '저장 데이터'
+  if (source === 'COORDINATE') return '좌표 계산'
+  return '정보 없음'
+}
+
+function formatCoord(lat: number | null | undefined, lng: number | null | undefined) {
+  if (lat == null || lng == null) return '정보 없음'
+  return `${lat.toFixed(5)}, ${lng.toFixed(5)}`
+}
+
+function h3DistanceLabel(distance: number | null) {
+  if (distance == null) return '데이터 없음'
+  if (distance === 0) return '동일 H3'
+  if (distance >= 1 && distance <= 3) return `${distance}-ring`
+  return '3-ring 밖'
+}
+
+function grade(score: number | null | undefined) {
+  const value = Number(score ?? 0)
+  if (value >= 85) return 'S'
+  if (value >= 72) return 'A'
+  if (value >= 60) return 'B'
+  return 'C'
 }
 
 export default function SimulatorPage() {
@@ -196,10 +227,11 @@ export default function SimulatorPage() {
   const [callcardsLoading, setCallcardsLoading] = useState(false)
   const [driverLoadError, setDriverLoadError] = useState<string | null>(null)
   const [callcardLoadError, setCallcardLoadError] = useState<string | null>(null)
+  const [showTop10, setShowTop10] = useState(false)
+  const [selectedAxis, setSelectedAxis] = useState<number | null>(null)
 
   const applyCallcardInput = useCallback((callcard: SimulatorCallcardRow | null) => {
     if (!callcard) return
-
     if (Number.isFinite(callcard.hour_slot)) setHour(Number(callcard.hour_slot))
     if (Number.isFinite(callcard.weekday)) setWeekday(Number(callcard.weekday))
     if (Number.isFinite(callcard.expected_distance)) setDistance(Number(callcard.expected_distance))
@@ -216,7 +248,7 @@ export default function SimulatorPage() {
 
   useEffect(() => {
     let cancelled = false
-    async function load() {
+    async function loadDrivers() {
       setLoading(true)
       setDriverLoadError(null)
       const { data, error } = await supabase
@@ -232,7 +264,7 @@ export default function SimulatorPage() {
         setLoading(false)
       }
     }
-    load()
+    loadDrivers()
     return () => {
       cancelled = true
     }
@@ -281,10 +313,9 @@ export default function SimulatorPage() {
   const callVector = useMemo(() => callToVector(callInput), [callInput])
   const callBundle = useMemo(() => vectorToDisplayAxisBundle(callVector), [callVector])
   const selectedCallcard = callcards.find((row) => row.callcard_id === selectedCallcardId) ?? callcards[0] ?? null
-  const adaptedLocation = useMemo(() => {
-    if (!selectedCallcard) return null
-    return adaptCallcardLocation(selectedCallcard)
-  }, [selectedCallcard])
+  const adaptedLocation = useMemo(() => (
+    selectedCallcard ? adaptCallcardLocation(selectedCallcard) : null
+  ), [selectedCallcard])
 
   const ranked = useMemo<Ranked[]>(() => {
     return drivers
@@ -348,58 +379,111 @@ export default function SimulatorPage() {
   }, [ranked, selectedDriverId])
 
   const selected = ranked.find((row) => row.driver.driver_id === selectedDriverId) ?? ranked[0]
+  const visibleRanked = showTop10 ? ranked : ranked.slice(0, 4)
+  const statusLabel = loading || callcardsLoading ? '조회 중' : driverLoadError || callcardLoadError ? '오류' : '정상'
 
   async function runSimulation() {
     setRunning(true)
-    await new Promise((resolve) => setTimeout(resolve, 650))
+    await new Promise((resolve) => setTimeout(resolve, 520))
     setSelectedDriverId(ranked[0]?.driver.driver_id ?? '')
     setRunning(false)
   }
 
   return (
     <main className="sim-page">
-      <Topbar running={running} onRun={runSimulation} />
+      <PrimaryNav
+        active="/simulator"
+        title="Happycall PMO"
+        subtitle="콜카드 ↔ 기사 매칭 시뮬레이터"
+        rightSlot={<button type="button" onClick={runSimulation} disabled={running}>{running ? '재정렬 중' : '시뮬레이션 실행'}</button>}
+      />
 
-      <section className="sim-shell">
-        <CallcardPanel
-          aspId={aspId}
-          setAspId={setAspId}
-          hour={hour}
-          setHour={setHour}
-          weekday={weekday}
-          setWeekday={setWeekday}
-          distance={distance}
-          setDistance={setDistance}
-          fare={fare}
-          setFare={setFare}
-          paid={paid}
-          setPaid={setPaid}
-          surge={surge}
-          setSurge={setSurge}
-          eta={eta}
-          setEta={setEta}
-          callBundle={callBundle}
-          callcards={callcards}
-          selectedCallcardId={selectedCallcardId}
-          setSelectedCallcardId={selectCallcard}
-          selectedCallcard={selectedCallcard}
-          adaptedLocation={adaptedLocation}
-          callcardsLoading={callcardsLoading}
-          running={running}
-        />
+      <section className="kpi-row" aria-label="시뮬레이터 상태">
+        <Kpi label="조회 상태" value={statusLabel} tone={statusLabel === '정상' ? C.green : C.yellow} />
+        <Kpi label="실제 콜카드" value={`${callcards.length.toLocaleString()}건`} tone={C.cyan} />
+        <Kpi label="후보 기사" value={`${drivers.length.toLocaleString()}명`} tone={C.green} />
+        <Kpi label="최고 추천점수" value={selected ? `${Math.round(selected.finalScore)}점` : '-'} tone={C.purple} />
+        <Kpi label="정렬 기준" value="최종점수" tone={C.orange} />
+      </section>
 
-        <section className="panel center-panel">
-          <div className="headline">
-            {loading ? '기사 벡터를 불러오는 중입니다' : selected ? (
-              <>추천 1순위 <b>{selected.driver.driver_id}</b> · 최종 추천점수 {pct(selected.finalScore)}</>
-            ) : '콜카드를 선택하면 Top 10 기사 후보를 계산합니다'}
+      <section className="sim-grid">
+        <aside className="panel call-panel">
+          <SectionEyebrow>CALLCARD INPUT</SectionEyebrow>
+          <h1>콜 조건을 바꾸면 기사 후보군이 다시 정렬됩니다</h1>
+          <p className="intro">실제 콜카드를 선택하거나 조건을 조정해 22D 성향 유사도와 H3 공간 적합도를 함께 확인합니다.</p>
+
+          <label className="field wide">
+            <span>지역</span>
+            <select value={aspId} onChange={(event) => setAspId(Number(event.target.value))}>
+              {aspOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </select>
+          </label>
+
+          <label className="field wide">
+            <span>실제 콜카드</span>
+            <select
+              value={selectedCallcardId}
+              onChange={(event) => selectCallcard(event.target.value)}
+              disabled={callcardsLoading || callcards.length === 0}
+            >
+              {callcards.length === 0 ? (
+                <option value="">{callcardsLoading ? '불러오는 중' : '콜카드 없음'}</option>
+              ) : callcards.map((callcard) => (
+                <option key={callcard.callcard_id} value={callcard.callcard_id}>
+                  {callcard.call_date ?? '-'} / {callcard.callcard_id}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <CallcardSummary
+            callcard={selectedCallcard}
+            adaptedLocation={adaptedLocation}
+            distance={distance}
+            fare={fare}
+            paid={paid}
+            surge={surge}
+            eta={eta}
+            hour={hour}
+            weekday={weekday}
+          />
+
+          <div className="input-grid">
+            <NumberField label="시간" value={hour} min={0} max={23} onChange={setHour} suffix="시" />
+            <label className="field">
+              <span>요일</span>
+              <select value={weekday} onChange={(event) => setWeekday(Number(event.target.value))}>
+                {weekdays.map((day, index) => <option key={day} value={index}>{day}</option>)}
+              </select>
+            </label>
+            <NumberField label="예상거리" value={distance} onChange={setDistance} suffix="m" />
+            <NumberField label="예상요금" value={fare} onChange={setFare} suffix="원" />
+            <NumberField label="픽업 ETA" value={eta} onChange={setEta} suffix="초" />
           </div>
-          <div className="legend">
-            <span><i style={{ background: C.cyan }} />콜 요구</span>
-            <span><i style={{ background: C.orange }} />기사 성향</span>
-            <span className="hint">축 클릭 시 22팩터 드릴다운</span>
+
+          <div className="toggle-row">
+            <label><input type="checkbox" checked={paid} onChange={(event) => setPaid(event.target.checked)} /> 유료콜</label>
+            <label><input type="checkbox" checked={surge} onChange={(event) => setSurge(event.target.checked)} /> 탄력/프리미엄</label>
           </div>
-          <SimulatorReadinessBanner
+
+          <AxisBars title="콜카드 5축 표시" axis={callBundle.axis} tone={C.cyan} />
+        </aside>
+
+        <section className="panel stage-panel">
+          <div className="stage-head">
+            <div>
+              <SectionEyebrow>MATCHING FIELD</SectionEyebrow>
+              <h2>{selected ? `1순위 ${selected.driver.driver_id}` : '콜카드 입력 대기'}</h2>
+              <p>중앙의 콜카드를 기준으로 후보 기사가 최종점수 순으로 배치됩니다. 선이 굵을수록 매칭 우선도가 높습니다.</p>
+            </div>
+            <div className="score-hero">
+              <span>BEST</span>
+              <b>{selected ? Math.round(selected.finalScore) : '-'}</b>
+              <em>최종점수</em>
+            </div>
+          </div>
+
+          <ReadinessCard
             drivers={drivers.length}
             callcards={callcards.length}
             ranked={ranked.length}
@@ -408,336 +492,233 @@ export default function SimulatorPage() {
             driverError={driverLoadError}
             callcardError={callcardLoadError}
           />
-          <SimulatorFlowSummary selected={selected} selectedCallcard={selectedCallcard} />
-          <DataSourceStrip driverCount={drivers.length} />
-          <MatchRadar callAxis={callBundle.axis} driverAxis={selected?.axis ?? []} callSub={callBundle.sub} driverSub={selected?.sub ?? []} />
-          <div className="lead">{selected ? selected.lead : '콜 조건과 기사 성향을 비교할 준비가 됐습니다.'}</div>
-          <SpatialFitSummary selected={selected} />
-          <DispatchPipeline selected={selected} />
-          <RadiusExpansionPanel ranked={ranked} selectedId={selectedDriverId} onSelect={setSelectedDriverId} />
-          <MatchWaterfall why={selected?.why ?? []} />
+
+          <MatchField
+            ranked={ranked}
+            selectedId={selectedDriverId}
+            onSelect={setSelectedDriverId}
+            callcardId={selectedCallcard?.callcard_id ?? ''}
+          />
+
+          <div className="score-split">
+            <ScoreTile label="성향 유사도" value={pct(selected?.similarityScore)} desc="콜카드 22D와 기사 22D 코사인 유사도" tone={C.purple} />
+            <ScoreTile label="공간 적합도" value={pct(selected?.spatial.spatialScore)} desc="출발·도착 H3와 기사 선호 H3 비교" tone={C.green} />
+            <ScoreTile label="예상 수락률" value={pct(selected?.acceptanceProbability)} desc="실제 운영 검증 전 시뮬레이션 비교값" tone={C.yellow} />
+            <ScoreTile label="픽업거리/ETA" value={selected ? `${selected.simDistanceKm.toFixed(1)}km · ${selected.simEtaMin}분` : '-'} desc="기사 위치가 없어 데모용 가상 위치 사용" tone={C.orange} />
+          </div>
+
+          <p className="lead">{selected?.lead ?? '콜카드와 기사 벡터를 불러오면 추천 근거가 표시됩니다.'}</p>
+
+          <div className="lower-grid">
+            <RadarCard
+              callAxis={callBundle.axis}
+              driverAxis={selected?.axis ?? []}
+              selectedAxis={selectedAxis}
+              setSelectedAxis={setSelectedAxis}
+            />
+            <WaterfallCard why={selected?.why ?? []} />
+          </div>
         </section>
 
-        <DecisionPanel
-          ranked={ranked}
-          selectedId={selectedDriverId}
-          setSelectedId={setSelectedDriverId}
-          selected={selected}
-        />
+        <aside className="panel driver-panel">
+          <SectionEyebrow>RECOMMENDATION</SectionEyebrow>
+          <h2>최종 추천 랭킹</h2>
+          <p className="intro">Top 4는 우선발송 후보, Top 10은 검증용 전체 후보입니다.</p>
+
+          <div className="rank-list">
+            {ranked.length === 0 ? (
+              <div className="empty">추천 후보가 없습니다. 콜카드와 기사 벡터 조회 상태를 확인하세요.</div>
+            ) : visibleRanked.map((row, index) => (
+              <button
+                key={row.driver.driver_id}
+                type="button"
+                className={row.driver.driver_id === selectedDriverId ? 'rank active' : 'rank'}
+                onClick={() => setSelectedDriverId(row.driver.driver_id)}
+              >
+                <span className="rank-no">#{index + 1}</span>
+                <span className="rank-main">
+                  <b>{row.driver.driver_id}</b>
+                  <em>성향 {pct(row.similarityScore)} · 공간 {pct(row.spatial.spatialScore)}</em>
+                </span>
+                <strong>{Math.round(row.finalScore)}</strong>
+              </button>
+            ))}
+          </div>
+
+          {ranked.length > 4 && (
+            <button type="button" className="show-all" onClick={() => setShowTop10((value) => !value)}>
+              {showTop10 ? 'Top 4만 보기' : `Top 10 전체 보기 (${ranked.length}명)`}
+            </button>
+          )}
+
+          <DriverCard selected={selected} />
+          <RadiusCard ranked={ranked} selectedId={selectedDriverId} onSelect={setSelectedDriverId} />
+        </aside>
       </section>
 
+      {selectedAxis != null && (
+        <FactorDrawer
+          axisIndex={selectedAxis}
+          callVector={callVector}
+          driverVector={selected?.vector ?? []}
+          onClose={() => setSelectedAxis(null)}
+        />
+      )}
+
       <style jsx global>{`
-        html { font-size: clamp(20px, 1.15vw, 24px); }
-        body { background: ${C.body}; }
-      `}</style>
-      <style jsx>{`
-        .sim-page {
-          min-height: 100vh;
+        body {
           background: ${C.body};
-          color: ${C.ink};
-          font-family: Pretendard, "Apple SD Gothic Neo", "Malgun Gothic", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        }
-        .sim-shell {
-          display: grid;
-          grid-template-columns: minmax(220px, 300px) 1fr minmax(260px, 360px);
-          gap: 1.2rem;
-          padding: 1.2rem 1.6rem;
-          align-items: stretch;
-        }
-        .panel {
-          background: ${C.card};
-          border: 1px solid ${C.line};
-          border-radius: 20px;
-          padding: 1.3rem;
-          min-width: 0;
-        }
-        .center-panel {
-          border-color: rgba(34, 211, 238, .3);
-          box-shadow: inset 0 0 40px rgba(34, 211, 238, .03);
-        }
-        .headline {
-          min-height: 1.6em;
-          text-align: center;
-          font-size: clamp(2.4rem, 4.2vw, 4.8rem);
-          line-height: 1.2;
-          font-weight: 900;
-        }
-        .headline b {
-          color: ${C.cyan};
-          text-shadow: 0 0 15px rgba(34, 211, 238, .5);
-        }
-        .legend {
-          display: flex;
-          justify-content: center;
-          gap: 1.2rem;
-          color: ${C.sub};
-          font-size: clamp(1rem, 1.4vw, 1rem);
-          margin: .75rem 0;
-          flex-wrap: wrap;
-        }
-        .legend i {
-          display: inline-block;
-          width: 1rem;
-          height: 1rem;
-          border-radius: 4px;
-          margin-right: .4rem;
-          vertical-align: -2px;
-        }
-        .hint { color: ${C.purple}; }
-        .lead {
-          background: rgba(16, 185, 129, .08);
-          border: 1px solid rgba(16, 185, 129, .25);
-          border-radius: 12px;
-          padding: .85rem 1.1rem;
-          font-size: clamp(1rem, 1.8vw, 1.1rem);
-          font-weight: 700;
-          text-align: center;
-          margin: .6rem 0;
-        }
-        @media (max-width: 1100px) {
-          .sim-shell {
-            grid-template-columns: 1fr 1fr;
-            grid-template-areas:
-              "left center"
-              "right center";
-          }
-          .left-panel { grid-area: left; }
-          .center-panel { grid-area: center; }
-          .right-panel { grid-area: right; }
-        }
-        @media (max-width: 760px) {
-          html { font-size: clamp(20px, 4vw, 22px); }
-          .sim-shell {
-            grid-template-columns: 1fr;
-            grid-template-areas: none;
-            padding: 1rem;
-          }
-          .center-panel { order: -1; }
         }
       `}</style>
+      <style jsx>{pageCss}</style>
     </main>
   )
 }
 
-function Topbar({ running, onRun }: { running: boolean; onRun: () => void }) {
+function Kpi({ label, value, tone }: { label: string; value: string; tone: string }) {
   return (
-    <PrimaryNav
-      active="/simulator"
-      title="콜카드 ↔ 기사"
-      subtitle="매칭 시뮬레이터"
-      rightSlot={<button type="button" onClick={onRun} disabled={running}>{running ? '계산 중' : '시뮬레이션 실행'}</button>}
-    />
-  )
-}
-
-function CallcardPanel(props: {
-  aspId: number
-  setAspId: (v: number) => void
-  hour: number
-  setHour: (v: number) => void
-  weekday: number
-  setWeekday: (v: number) => void
-  distance: number
-  setDistance: (v: number) => void
-  fare: number
-  setFare: (v: number) => void
-  paid: boolean
-  setPaid: (v: boolean) => void
-  surge: boolean
-  setSurge: (v: boolean) => void
-  eta: number
-  setEta: (v: number) => void
-  callBundle: { axis: number[]; sub: number[][] }
-  callcards: SimulatorCallcardRow[]
-  selectedCallcardId: string
-  setSelectedCallcardId: (v: string) => void
-  selectedCallcard: SimulatorCallcardRow | null
-  adaptedLocation: AdaptCallcardLocationResult | null
-  callcardsLoading: boolean
-  running: boolean
-}) {
-  const tags = DISPLAY_AXES.flatMap((axis) => axis.indexes.map((index) => VECTOR_DIMENSIONS[index].label))
-  return (
-    <aside className="panel left-panel">
-      <PanelTitle color={C.cyan}>입력된 콜카드</PanelTitle>
-      <div className="route"><span>출발 H3 준비</span><b>→</b><span>도착 H3 준비</span></div>
-      <label className="field">실제 콜카드
-        <select
-          value={props.selectedCallcardId}
-          onChange={(event) => props.setSelectedCallcardId(event.target.value)}
-          disabled={props.callcardsLoading || props.callcards.length === 0}
-        >
-          {props.callcards.length === 0 ? (
-            <option value="">{props.callcardsLoading ? '불러오는 중' : '콜카드 없음'}</option>
-          ) : props.callcards.map((callcard) => (
-            <option key={callcard.callcard_id} value={callcard.callcard_id}>
-              {callcard.call_date ?? '-'} / {callcard.callcard_id}
-            </option>
-          ))}
-        </select>
-      </label>
-      <CallcardLocationSummary callcard={props.selectedCallcard} adaptedLocation={props.adaptedLocation} />
-      <AxisSnapshot axis={props.callBundle.axis} />
-      <div className="rows">
-        <Select label="지역" value={props.aspId} onChange={props.setAspId} options={aspOptions} />
-        <Two>
-          <NumberInput label="시간" value={props.hour} min={0} max={23} onChange={props.setHour} />
-          <label className="field">요일
-            <select value={props.weekday} onChange={(event) => props.setWeekday(Number(event.target.value))}>
-              {weekdays.map((day, index) => <option key={day} value={index}>{day}</option>)}
-            </select>
-          </label>
-        </Two>
-        <NumberInput label="예상거리 m" value={props.distance} onChange={props.setDistance} />
-        <NumberInput label="예상요금 원" value={props.fare} onChange={props.setFare} />
-        <NumberInput label="픽업 ETA 초" value={props.eta} onChange={props.setEta} />
-        <label className="check"><input type="checkbox" checked={props.paid} onChange={(event) => props.setPaid(event.target.checked)} /> 유료콜</label>
-        <label className="check"><input type="checkbox" checked={props.surge} onChange={(event) => props.setSurge(event.target.checked)} /> 탄력/프리미엄</label>
-      </div>
-
-      <PanelTitle color={C.purple}>22 벡터 팩터</PanelTitle>
-      <div className="factors">
-        {tags.map((tag, index) => <span key={`${tag}-${index}`} className={props.running ? 'active' : ''}>{tag}</span>)}
-      </div>
-      <style jsx>{panelCss}</style>
-    </aside>
-  )
-}
-
-function locationSourceLabel(source: AdaptCallcardLocationResult['diagnostics']['pickupH3Source']) {
-  if (source === 'STORED') return '저장 데이터'
-  if (source === 'COORDINATE') return '좌표 계산'
-  return '정보 없음'
-}
-
-function formatCoordinate(lat: number | null | undefined, lng: number | null | undefined) {
-  if (lat == null || lng == null) return '정보 없음'
-  return `${lat.toFixed(5)}, ${lng.toFixed(5)}`
-}
-
-function formatH3(value: string | null | undefined) {
-  return value ?? '정보 없음'
-}
-
-function CallcardLocationSummary({
-  callcard,
-  adaptedLocation,
-}: {
-  callcard: SimulatorCallcardRow | null
-  adaptedLocation: AdaptCallcardLocationResult | null
-}) {
-  if (!callcard || !adaptedLocation) {
-    return (
-      <div className="location-card">
-        <b>위치 정보</b>
-        <span>실제 콜카드를 선택하면 출발·도착 H3가 표시됩니다.</span>
-        <style jsx>{locationSummaryCss}</style>
-      </div>
-    )
-  }
-
-  const { route, diagnostics } = adaptedLocation
-  const hasMismatch = diagnostics.pickupH3Mismatch || diagnostics.destinationH3Mismatch
-
-  return (
-    <div className="location-card">
-      <div className="location-head">
-        <b>콜카드 위치</b>
-        <span>{callcard.call_date ?? '-'} / {callcard.callcard_id}</span>
-      </div>
-      <div className="location-grid">
-        <div>
-          <span>출발 좌표</span>
-          <strong>{formatCoordinate(route.pickup.lat, route.pickup.lng)}</strong>
-        </div>
-        <div>
-          <span>도착 좌표</span>
-          <strong>{formatCoordinate(route.destination.lat, route.destination.lng)}</strong>
-        </div>
-        <div>
-          <span>출발 H3</span>
-          <strong>{formatH3(route.pickup.h3Res7)}</strong>
-        </div>
-        <div>
-          <span>도착 H3</span>
-          <strong>{formatH3(route.destination.h3Res7)}</strong>
-        </div>
-      </div>
-      <div className="od-key">
-        <span>OD 경로 키</span>
-        <strong>{route.originDestinationKey ?? '정보 없음'}</strong>
-      </div>
-      <div className="diag">
-        <span>H3 출처: 출발 {locationSourceLabel(diagnostics.pickupH3Source)} · 도착 {locationSourceLabel(diagnostics.destinationH3Source)}</span>
-        <span>좌표 검증: 출발 {diagnostics.pickupCoordinateValid ? '정상' : '정보 없음'} · 도착 {diagnostics.destinationCoordinateValid ? '정상' : '정보 없음'}</span>
-      </div>
-      {hasMismatch && (
-        <div className="mismatch">주의: 저장 H3와 좌표 기반 H3가 일치하지 않습니다.</div>
-      )}
-      <style jsx>{locationSummaryCss}</style>
-    </div>
-  )
-}
-
-function AxisSnapshot({ axis }: { axis: number[] }) {
-  return (
-    <div className="axis-snapshot">
-      {DISPLAY_AXES.map((item, index) => (
-        <div key={item.name} className="axis-card">
-          <span>{item.name}</span>
-          <b>{Math.round(axis[index] ?? 0)}</b>
-          <i style={{ width: `${axis[index] ?? 0}%` }} />
-        </div>
-      ))}
+    <div className="kpi">
+      <span>{label}</span>
+      <b style={{ color: tone }}>{value}</b>
       <style jsx>{`
-        .axis-snapshot {
+        .kpi {
+          min-width: 0;
+          border-right: 1px solid ${C.line};
+          padding: 18px 22px;
           display: grid;
-          grid-template-columns: 1fr;
-          gap: .5rem;
-          margin: .85rem 0 1rem;
+          gap: 4px;
         }
-        .axis-card {
-          position: relative;
-          min-height: 3.2rem;
-          overflow: hidden;
-          border: 1px solid rgba(34,211,238,.18);
-          border-radius: 12px;
-          background: rgba(34,211,238,.045);
-          padding: .7rem .75rem;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: .7rem;
+        .kpi span {
+          color: ${C.muted};
+          font-size: 20px;
+          font-weight: 900;
         }
-        .axis-card span {
-          position: relative;
-          z-index: 2;
-          color: ${C.sub};
-          font-size: clamp(1rem, 1.3vw, 1rem);
-          font-weight: 850;
-          line-height: 1.2;
-        }
-        .axis-card b {
-          position: relative;
-          z-index: 2;
-          color: ${C.cyan};
-          font-size: clamp(1.05rem, 2vw, 1.35rem);
+        .kpi b {
+          font-size: clamp(28px, 2.4vw, 44px);
+          line-height: 1;
           font-weight: 950;
-        }
-        .axis-card i {
-          position: absolute;
-          inset: auto auto 0 0;
-          height: 3px;
-          background: linear-gradient(90deg, ${C.cyan}, ${C.purple});
-          box-shadow: 0 0 16px rgba(34,211,238,.35);
-          transition: width .55s ease;
+          white-space: nowrap;
         }
       `}</style>
     </div>
   )
 }
 
-function SimulatorReadinessBanner({
+function SectionEyebrow({ children }: { children: string }) {
+  return <div className="eyebrow">{children}</div>
+}
+
+function NumberField({
+  label,
+  value,
+  onChange,
+  min,
+  max,
+  suffix,
+}: {
+  label: string
+  value: number
+  onChange: (value: number) => void
+  min?: number
+  max?: number
+  suffix?: string
+}) {
+  return (
+    <label className="field">
+      <span>{label}</span>
+      <div className="number-wrap">
+        <input
+          type="number"
+          value={value}
+          min={min}
+          max={max}
+          onChange={(event) => onChange(Number(event.target.value))}
+        />
+        {suffix && <em>{suffix}</em>}
+      </div>
+    </label>
+  )
+}
+
+function CallcardSummary({
+  callcard,
+  adaptedLocation,
+  distance,
+  fare,
+  paid,
+  surge,
+  eta,
+  hour,
+  weekday,
+}: {
+  callcard: SimulatorCallcardRow | null
+  adaptedLocation: AdaptCallcardLocationResult | null
+  distance: number
+  fare: number
+  paid: boolean
+  surge: boolean
+  eta: number
+  hour: number
+  weekday: number
+}) {
+  const route = adaptedLocation?.route
+  const diagnostics = adaptedLocation?.diagnostics
+  const mismatch = diagnostics?.pickupH3Mismatch || diagnostics?.destinationH3Mismatch
+  return (
+    <div className="call-card">
+      <div className="call-top">
+        <span>{callcard?.call_date ?? '조건 입력'}</span>
+        <b>{callcard?.callcard_id ?? '수동 시뮬레이션'}</b>
+      </div>
+      <div className="call-facts">
+        <Fact label="시간" value={`${hour}시 ${weekdays[weekday] ?? '-'}`} />
+        <Fact label="거리" value={formatKm(distance)} />
+        <Fact label="요금" value={formatFare(fare)} />
+        <Fact label="콜유형" value={`${paid ? '유료콜' : '무료콜'}${surge ? ' · 탄력' : ''}`} />
+        <Fact label="출발 좌표" value={formatCoord(route?.pickup.lat, route?.pickup.lng)} />
+        <Fact label="도착 좌표" value={formatCoord(route?.destination.lat, route?.destination.lng)} />
+        <Fact label="출발 H3" value={route?.pickup.h3Res7 ?? '정보 없음'} mono />
+        <Fact label="도착 H3" value={route?.destination.h3Res7 ?? '정보 없음'} mono />
+      </div>
+      <div className="od">
+        <span>OD 경로 키</span>
+        <b>{route?.originDestinationKey ?? '정보 없음'}</b>
+      </div>
+      <p className="diag">
+        H3 출처: 출발 {sourceLabel(diagnostics?.pickupH3Source ?? 'NONE')} · 도착 {sourceLabel(diagnostics?.destinationH3Source ?? 'NONE')}
+        <br />
+        좌표 검증: 출발 {diagnostics?.pickupCoordinateValid ? '정상' : '정보 없음'} · 도착 {diagnostics?.destinationCoordinateValid ? '정상' : '정보 없음'} · 입력 ETA {eta}초
+      </p>
+      {mismatch && <div className="warn">주의: 저장 H3와 좌표 기반 H3가 일치하지 않습니다.</div>}
+    </div>
+  )
+}
+
+function Fact({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div className={mono ? 'fact mono' : 'fact'}>
+      <span>{label}</span>
+      <b>{value}</b>
+    </div>
+  )
+}
+
+function AxisBars({ title, axis, tone }: { title: string; axis: number[]; tone: string }) {
+  return (
+    <div className="axis-box">
+      <h3>{title}</h3>
+      {DISPLAY_AXES.map((item, index) => (
+        <div key={item.key} className="axis-row">
+          <span>{item.name}</span>
+          <i><em style={{ width: `${axis[index] ?? 0}%`, background: tone }} /></i>
+          <b>{Math.round(axis[index] ?? 0)}</b>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function ReadinessCard({
   drivers,
   callcards,
   ranked,
@@ -755,981 +736,186 @@ function SimulatorReadinessBanner({
   callcardError: string | null
 }) {
   const state = driverLoading || callcardLoading
-    ? { tone: C.yellow, title: '실데이터 조회 중', body: 'callcard_mbti와 driver_mbti를 불러오는 중입니다.' }
+    ? { tone: C.yellow, title: '데이터 조회 중', body: 'callcard_mbti와 driver_mbti를 읽고 있습니다.' }
     : driverError || callcardError
-      ? { tone: C.red, title: '실데이터 조회 실패', body: driverError ?? callcardError ?? '알 수 없는 조회 오류입니다.' }
-      : callcards === 0
-        ? { tone: C.red, title: '콜카드 없음', body: '선택한 지역에서 시뮬레이션할 콜카드를 찾지 못했습니다.' }
-        : drivers === 0
-          ? { tone: C.red, title: '기사 벡터 없음', body: '선택한 지역에서 driver_mbti 기사 벡터를 찾지 못했습니다.' }
-          : ranked === 0
-            ? { tone: C.yellow, title: '추천 후보 없음', body: '콜카드와 기사 데이터는 있지만 현재 조건으로 추천 후보가 만들어지지 않았습니다.' }
-            : { tone: C.green, title: '시뮬레이션 가능', body: `${callcards.toLocaleString()}개 콜카드와 ${drivers.toLocaleString()}명 기사 벡터를 기준으로 Top 10을 계산했습니다.` }
-
+      ? { tone: C.red, title: '데이터 조회 오류', body: driverError ?? callcardError ?? '알 수 없는 조회 오류입니다.' }
+      : callcards === 0 || drivers === 0
+        ? { tone: C.red, title: '추천 준비 부족', body: `콜카드 ${callcards.toLocaleString()}건 · 기사 ${drivers.toLocaleString()}명입니다.` }
+        : { tone: C.green, title: '시뮬레이션 가능', body: `${callcards.toLocaleString()}개 콜카드와 ${drivers.toLocaleString()}명 기사 벡터로 ${ranked.toLocaleString()}명 Top 후보를 계산했습니다.` }
   return (
-    <div style={{ margin: '0 auto .75rem', maxWidth: 760, border: `1px solid ${state.tone}55`, borderRadius: 12, background: `${state.tone}14`, padding: '.7rem 1rem' }}>
-      <div style={{ color: state.tone, fontSize: '1rem', fontWeight: 950 }}>{state.title}</div>
-      <div style={{ color: C.sub, fontSize: '1rem', lineHeight: 1.45, marginTop: 4, overflowWrap: 'anywhere' }}>{state.body}</div>
+    <div className="ready" style={{ borderColor: `${state.tone}66`, background: `${state.tone}14` }}>
+      <b style={{ color: state.tone }}>{state.title}</b>
+      <span>{state.body}</span>
     </div>
   )
 }
 
-function SimulatorFlowSummary({
-  selected,
-  selectedCallcard,
-}: {
-  selected?: Ranked
-  selectedCallcard: SimulatorCallcardRow | null
-}) {
-  const items = [
-    {
-      title: '1. 실제 콜카드',
-      value: selectedCallcard?.callcard_id ?? '-',
-      body: '출발·도착 좌표와 H3를 읽어 콜카드 조건을 만듭니다.',
-      tone: C.cyan,
-    },
-    {
-      title: '2. 기사 성향 매칭',
-      value: selected ? `${Math.round(selected.similarityScore)}%` : '-',
-      body: '콜카드 22D와 기사 운행패턴 22D를 코사인 유사도로 비교합니다.',
-      tone: C.purple,
-    },
-    {
-      title: '3. 공간 적합도',
-      value: selected?.spatial.spatialScore == null ? '-' : `${Math.round(selected.spatial.spatialScore)}%`,
-      body: '콜 H3와 기사 선호 출발·도착 H3를 비교해 보조 점수로 사용합니다.',
-      tone: C.green,
-    },
-    {
-      title: '4. 우선발송 후보',
-      value: selected?.driver.driver_id ?? '-',
-      body: '최종점수 순으로 먼저 보내고, 미수락 시 기존 순차/반경 확장으로 넘기는 실험입니다.',
-      tone: C.orange,
-    },
-  ]
-
-  return (
-    <div className="flow-summary">
-      {items.map((item) => (
-        <div key={item.title} className="flow-card" style={{ borderColor: `${item.tone}55`, background: `${item.tone}10` }}>
-          <span style={{ color: item.tone }}>{item.title}</span>
-          <b>{item.value}</b>
-          <small>{item.body}</small>
-        </div>
-      ))}
-      <style jsx>{`
-        .flow-summary {
-          display: grid;
-          grid-template-columns: repeat(4, minmax(0, 1fr));
-          gap: .55rem;
-          margin: .75rem 0 1rem;
-        }
-        .flow-card {
-          min-width: 0;
-          border: 1px solid;
-          border-radius: 12px;
-          padding: .65rem;
-          display: grid;
-          gap: .24rem;
-        }
-        .flow-card span {
-          font-size: clamp(1rem, 1.2vw, 1rem);
-          font-weight: 950;
-        }
-        .flow-card b {
-          color: ${C.ink};
-          font-size: clamp(1rem, 1.6vw, 1.05rem);
-          font-weight: 950;
-          overflow-wrap: anywhere;
-        }
-        .flow-card small {
-          color: ${C.sub};
-          font-size: clamp(1rem, 1.15vw, 1rem);
-          line-height: 1.32;
-        }
-        @media (max-width: 920px) {
-          .flow-summary { grid-template-columns: 1fr 1fr; }
-        }
-        @media (max-width: 560px) {
-          .flow-summary { grid-template-columns: 1fr; }
-        }
-      `}</style>
-    </div>
-  )
-}
-
-function DataSourceStrip({ driverCount }: { driverCount: number }) {
-  const items = [
-    { label: '계산', value: '22D 코사인', tone: C.cyan },
-    { label: '기사군', value: `driver_mbti ${driverCount.toLocaleString()}명`, tone: C.green },
-    { label: '레이더', value: '5축 표시용', tone: C.purple },
-    { label: '위치/H3', value: '콜 H3 연결', tone: C.yellow },
-  ]
-
-  return (
-    <div className="source-strip">
-      {items.map((item) => (
-        <div key={item.label} className="source-item">
-          <span>{item.label}</span>
-          <b style={{ color: item.tone }}>{item.value}</b>
-        </div>
-      ))}
-      <style jsx>{`
-        .source-strip {
-          display: grid;
-          grid-template-columns: repeat(4, minmax(0, 1fr));
-          gap: .55rem;
-          margin: .75rem 0 1rem;
-        }
-        .source-item {
-          min-width: 0;
-          border: 1px solid ${C.line};
-          border-radius: 12px;
-          background: rgba(255,255,255,.025);
-          padding: .55rem .65rem;
-          text-align: center;
-        }
-        .source-item span {
-          display: block;
-          color: ${C.muted};
-          font-size: clamp(1rem, 1.2vw, 1rem);
-          font-weight: 850;
-          margin-bottom: .18rem;
-        }
-        .source-item b {
-          display: block;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-          font-size: clamp(1rem, 1.35vw, 1rem);
-          font-weight: 950;
-        }
-        @media (max-width: 760px) {
-          .source-strip { grid-template-columns: 1fr 1fr; }
-        }
-      `}</style>
-    </div>
-  )
-}
-
-function DispatchPipeline({ selected }: { selected?: Ranked }) {
-  const steps = [
-    { title: '후보 생성', desc: '현재는 ASP 기사군 기준', state: '실데이터' },
-    { title: '상태 필터', desc: '온라인·공차·위치 최신성 필요', state: '미연결' },
-    { title: '22D 랭킹', desc: selected ? `${selected.driver.driver_id} 우선` : '후보 대기', state: '실계산' },
-    { title: '콜카드 발송', desc: '실배차 API 계약 단계', state: '준비' },
-  ]
-
-  return (
-    <div className="pipeline">
-      {steps.map((step, index) => (
-        <div key={step.title} className="pipe-step">
-          <span>{index + 1}</span>
-          <b>{step.title}</b>
-          <small>{step.desc}</small>
-          <em data-state={step.state}>{step.state}</em>
-        </div>
-      ))}
-      <style jsx>{`
-        .pipeline {
-          display: grid;
-          grid-template-columns: repeat(4, minmax(0, 1fr));
-          gap: .6rem;
-          margin: .75rem 0 .4rem;
-        }
-        .pipe-step {
-          position: relative;
-          min-width: 0;
-          border: 1px solid ${C.line};
-          border-radius: 14px;
-          background: rgba(15,23,42,.58);
-          padding: .75rem;
-          display: grid;
-          gap: .24rem;
-        }
-        .pipe-step span {
-          width: 1.5rem;
-          height: 1.5rem;
-          border-radius: 999px;
-          display: grid;
-          place-items: center;
-          color: ${C.body};
-          background: ${C.cyan};
-          font-size: 1rem;
-          font-weight: 950;
-        }
-        .pipe-step b {
-          color: ${C.ink};
-          font-size: clamp(1rem, 1.45vw, 1rem);
-          font-weight: 950;
-        }
-        .pipe-step small {
-          color: ${C.muted};
-          font-size: clamp(1rem, 1.2vw, 1rem);
-          line-height: 1.25;
-        }
-        .pipe-step em {
-          justify-self: start;
-          margin-top: .15rem;
-          border-radius: 999px;
-          padding: .18rem .45rem;
-          color: ${C.sub};
-          background: rgba(255,255,255,.05);
-          font-size: 1rem;
-          font-style: normal;
-          font-weight: 950;
-        }
-        .pipe-step em[data-state="실데이터"],
-        .pipe-step em[data-state="실계산"] {
-          color: ${C.green};
-          background: rgba(16,185,129,.12);
-        }
-        .pipe-step em[data-state="미연결"] {
-          color: ${C.yellow};
-          background: rgba(245,158,11,.12);
-        }
-        @media (max-width: 760px) {
-          .pipeline { grid-template-columns: 1fr 1fr; }
-        }
-      `}</style>
-    </div>
-  )
-}
-
-function spatialDistanceLabel(distance: number | null) {
-  if (distance == null) return '데이터 없음'
-  if (distance === 0) return '동일 H3'
-  if (distance >= 1 && distance <= 3) return `${distance}-ring`
-  return '3-ring 밖'
-}
-
-function SpatialFitSummary({ selected }: { selected?: Ranked }) {
-  if (!selected) return null
-
-  return (
-    <div className="spatial-summary">
-      <div>
-        <span>최종 추천점수</span>
-        <b>{pct(selected.finalScore)}</b>
-      </div>
-      <div>
-        <span>성향 유사도</span>
-        <b>{pct(selected.similarityScore)}</b>
-      </div>
-      <div>
-        <span>공간 적합도</span>
-        <b>{pct(selected.spatial.spatialScore)}</b>
-      </div>
-      <div>
-        <span>출발지 적합도</span>
-        <b>{pct(selected.spatial.originScore)}</b>
-        <small>{spatialDistanceLabel(selected.spatial.originBestDistance)}</small>
-      </div>
-      <div>
-        <span>목적지 적합도</span>
-        <b>{pct(selected.spatial.destinationScore)}</b>
-        <small>{spatialDistanceLabel(selected.spatial.destinationBestDistance)}</small>
-      </div>
-      <p>
-        공간 적합도는 실제 콜카드 H3와 기사 선호 H3를 비교한 값입니다. 픽업거리와 ETA는 기사 실시간 위치가 없어 시뮬레이션 값입니다.
-      </p>
-      <style jsx>{`
-        .spatial-summary {
-          display: grid;
-          grid-template-columns: repeat(5, minmax(0, 1fr));
-          gap: .55rem;
-          margin: .75rem 0;
-        }
-        .spatial-summary div {
-          min-width: 0;
-          border: 1px solid rgba(34,211,238,.18);
-          border-radius: 12px;
-          background: rgba(34,211,238,.055);
-          padding: .65rem;
-          display: grid;
-          gap: .15rem;
-        }
-        .spatial-summary span {
-          color: ${C.sub};
-          font-size: clamp(1rem, 1.2vw, 1rem);
-          font-weight: 850;
-        }
-        .spatial-summary b {
-          color: ${C.cyan};
-          font-size: clamp(1.05rem, 2vw, 1.35rem);
-          font-weight: 950;
-        }
-        .spatial-summary small {
-          color: ${C.muted};
-          font-weight: 800;
-        }
-        .spatial-summary p {
-          grid-column: 1 / -1;
-          margin: 0;
-          color: ${C.sub};
-          font-size: clamp(1rem, 1.25vw, 1rem);
-          line-height: 1.45;
-        }
-        @media (max-width: 920px) {
-          .spatial-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-        }
-        @media (max-width: 520px) {
-          .spatial-summary { grid-template-columns: 1fr; }
-        }
-      `}</style>
-    </div>
-  )
-}
-
-function RadiusExpansionPanel({
+function MatchField({
   ranked,
   selectedId,
   onSelect,
+  callcardId,
 }: {
   ranked: Ranked[]
   selectedId: string
   onSelect: (id: string) => void
+  callcardId: string
 }) {
-  const tiers = [
-    { label: '1차', radius: 2.5, note: '근거리 우선 발송' },
-    { label: '2차', radius: 5, note: '미수락 시 확장' },
-    { label: '3차', radius: 8, note: '순차 배차 전 마지막 후보군' },
-  ].map((tier) => ({
-    ...tier,
-    candidates: ranked.filter((row) => row.simDistanceKm <= tier.radius),
-  }))
+  const nodes = ranked.slice(0, 10).map((row, index) => {
+    const angle = -90 + index * 36
+    const radius = index < 4 ? 39 : 47
+    const x = 50 + radius * Math.cos(angle * Math.PI / 180)
+    const y = 50 + radius * Math.sin(angle * Math.PI / 180)
+    return { row, index, x, y }
+  })
 
   return (
-    <div className="radius-panel">
-      <div className="radius-head">
-        <b>반경 확장 시나리오</b>
-        <span>실시간 위치 연결 전까지 거리/ETA는 시뮬레이션 값</span>
-      </div>
-      <div className="rings">
-        {tiers.map((tier) => {
-          const best = tier.candidates[0]
-          const isSelected = best?.driver.driver_id === selectedId
+    <div className="match-field">
+      <svg className="links" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+        {nodes.map(({ row, index, x, y }) => {
+          const active = row.driver.driver_id === selectedId
+          const width = active ? 1.4 : Math.max(0.25, row.finalScore / 90)
           return (
-            <button
-              key={tier.label}
-              type="button"
-              className={isSelected ? 'ring active' : 'ring'}
-              onClick={() => best && onSelect(best.driver.driver_id)}
-              disabled={!best}
-            >
-              <span>{tier.label}</span>
-              <b>{tier.radius.toFixed(1)}km</b>
-              <small>{tier.candidates.length}명 · {best ? `${best.driver.driver_id} / 최종 ${Math.round(best.finalScore)}%` : '후보 없음'}</small>
-              <em>{tier.note}</em>
-            </button>
+            <line
+              key={row.driver.driver_id}
+              x1="50"
+              y1="50"
+              x2={x}
+              y2={y}
+              stroke={active ? C.cyan : index < 4 ? C.green : '#64748B'}
+              strokeWidth={width}
+              opacity={active ? 0.9 : 0.38}
+              vectorEffect="non-scaling-stroke"
+            />
           )
         })}
+      </svg>
+      <div className="call-node">
+        <span>CALLCARD</span>
+        <b>22D</b>
+        <em>{callcardId ? callcardId.slice(0, 14) : '조건 입력'}</em>
       </div>
-      <style jsx>{`
-        .radius-panel {
-          border: 1px solid rgba(34,211,238,.18);
-          border-radius: 16px;
-          background:
-            radial-gradient(circle at 16% 50%, rgba(34,211,238,.14), transparent 28%),
-            rgba(255,255,255,.025);
-          padding: 1rem;
-          margin: .75rem 0 .4rem;
-        }
-        .radius-head {
-          display: flex;
-          justify-content: space-between;
-          gap: 1rem;
-          align-items: baseline;
-          margin-bottom: .7rem;
-          flex-wrap: wrap;
-        }
-        .radius-head b {
-          color: ${C.ink};
-          font-size: clamp(1rem, 1.7vw, 1.1rem);
-          font-weight: 950;
-        }
-        .radius-head span {
-          color: ${C.yellow};
-          font-size: clamp(1rem, 1.25vw, 1rem);
-          font-weight: 850;
-        }
-        .rings {
-          display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
-          gap: .65rem;
-        }
-        .ring {
-          min-width: 0;
-          border: 1px solid ${C.line};
-          border-radius: 14px;
-          background: rgba(5,8,16,.56);
-          color: ${C.ink};
-          padding: 1rem;
-          text-align: left;
-          display: grid;
-          gap: .18rem;
-          cursor: pointer;
-        }
-        .ring:disabled {
-          cursor: not-allowed;
-          opacity: .45;
-        }
-        .ring.active {
-          border-color: ${C.cyan};
-          box-shadow: 0 0 0 1px ${C.cyan}, 0 0 22px rgba(34,211,238,.18);
-          background: rgba(34,211,238,.09);
-        }
-        .ring span {
-          color: ${C.muted};
-          font-size: 1rem;
-          font-weight: 950;
-        }
-        .ring b {
-          color: ${C.cyan};
-          font-size: clamp(1.15rem, 2vw, 1.45rem);
-          font-weight: 950;
-        }
-        .ring small {
-          min-width: 0;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-          color: ${C.sub};
-          font-size: clamp(1rem, 1.25vw, 1rem);
-          font-weight: 850;
-        }
-        .ring em {
-          color: ${C.muted};
-          font-size: 1rem;
-          font-style: normal;
-          font-weight: 800;
-        }
-        @media (max-width: 760px) {
-          .rings { grid-template-columns: 1fr; }
-        }
-      `}</style>
+      {nodes.map(({ row, index, x, y }) => (
+        <button
+          key={row.driver.driver_id}
+          type="button"
+          className={row.driver.driver_id === selectedId ? 'driver-node active' : 'driver-node'}
+          style={{ left: `${x}%`, top: `${y}%` }}
+          onClick={() => onSelect(row.driver.driver_id)}
+        >
+          <span>{grade(row.finalScore)}</span>
+          <b>{Math.round(row.finalScore)}</b>
+          <em>#{index + 1}</em>
+        </button>
+      ))}
     </div>
   )
 }
 
-function DecisionPanel({
-  ranked,
-  selectedId,
-  setSelectedId,
-  selected,
-}: {
-  ranked: Ranked[]
-  selectedId: string
-  setSelectedId: (id: string) => void
-  selected?: Ranked
-}) {
-  const [showAll, setShowAll] = useState(false)
-  const delta = Math.round((selected?.acceptanceProbability ?? 0) - BASELINE_ACCEPTANCE)
-  const visible = showAll ? ranked : ranked.slice(0, 4)
+function ScoreTile({ label, value, desc, tone }: { label: string; value: string; desc: string; tone: string }) {
   return (
-    <aside className="panel right-panel">
-      <PanelTitle color={C.orange}>{showAll ? '최종 추천 랭킹 Top 10' : '최종 추천 랭킹 Top 4'}</PanelTitle>
-      <div className="data-note">
-        최종 추천점수는 성향 유사도 75%와 공간 적합도 25% 기준입니다. 예상 수락률, 픽업거리, ETA는 실제 운영 검증 전 시뮬레이션 비교값입니다.
-      </div>
-      <div className="rank-list">
-        {ranked.length === 0 ? (
-          <div className="empty-rank">
-            <b>추천 후보 없음</b>
-            <span>선택한 ASP에 기사 벡터가 없거나 아직 로딩 중입니다.</span>
-          </div>
-        ) : visible.map((row, index) => (
-          <button
-            key={row.driver.driver_id}
-            className={row.driver.driver_id === selectedId ? 'driver active' : 'driver'}
-            onClick={() => setSelectedId(row.driver.driver_id)}
-          >
-            <span className="badge">{index + 1}</span>
-            <span className="meta">
-              <b>{row.driver.driver_id}</b>
-              <small>성향 {pct(row.similarityScore)} · 공간 {pct(row.spatial.spatialScore)} · 거리 {row.simDistanceKm.toFixed(1)}km 시뮬레이션 · ETA {row.simEtaMin}분 시뮬레이션</small>
-            </span>
-            <span className="score">{Math.round(row.finalScore)}<small>%</small></span>
-          </button>
-        ))}
-      </div>
-      {ranked.length > 4 && (
-        <button type="button" className="toggle-rank" onClick={() => setShowAll(!showAll)}>
-          {showAll ? 'Top 4만 보기' : `Top 10 전체 보기 (${ranked.length}명)`}
-        </button>
-      )}
-
-      <PanelTitle color={C.green}>예상 수락률 KPI · 시뮬레이션 비교값</PanelTitle>
-      <div className="kpi-box">
-        <KpiRow label="기존 순번 추정" value={BASELINE_ACCEPTANCE} color={C.muted} />
-        <KpiRow label="우선 배차 추정" value={Math.round(selected?.acceptanceProbability ?? 0)} color={C.green} delta={delta} />
-      </div>
-
-      <PanelTitle color={C.cyan}>점수 분리</PanelTitle>
-      <div className="split">
-        <Metric label="최종 추천점수" value={pct(selected?.finalScore)} />
-        <Metric label="성향 유사도" value={pct(selected?.similarityScore)} />
-        <Metric label="공간 적합도" value={pct(selected?.spatial.spatialScore)} />
-        <Metric label="출발지 적합도" value={pct(selected?.spatial.originScore)} />
-        <Metric label="목적지 적합도" value={pct(selected?.spatial.destinationScore)} />
-        <Metric label="예상 수락률 · 시뮬레이션" value={pct(selected?.acceptanceProbability)} />
-        <Metric label="완료 가능성 · 추정" value={pct(selected?.completionProbability)} />
-      </div>
-      <style jsx>{`
-        .rank-list { display: grid; gap: .75rem; margin-bottom: 1.2rem; }
-        .toggle-rank {
-          width: 100%;
-          border: 1px solid rgba(34,211,238,.32);
-          border-radius: 12px;
-          background: rgba(34,211,238,.08);
-          color: ${C.cyan};
-          padding: .7rem;
-          font: inherit;
-          font-size: clamp(1rem, 1.35vw, 1rem);
-          font-weight: 950;
-          cursor: pointer;
-          margin: -.45rem 0 1.2rem;
-        }
-        .data-note {
-          border: 1px solid rgba(245,158,11,.24);
-          border-radius: 12px;
-          background: rgba(245,158,11,.08);
-          color: #FDBA74;
-          padding: .75rem;
-          line-height: 1.45;
-          font-size: clamp(1rem, 1.35vw, 1rem);
-          font-weight: 800;
-          margin-bottom: .85rem;
-        }
-        .empty-rank {
-          border: 1px dashed ${C.line};
-          border-radius: 14px;
-          padding: 1rem;
-          display: grid;
-          gap: .35rem;
-          color: ${C.sub};
-          background: rgba(255,255,255,.025);
-        }
-        .empty-rank b { color: ${C.ink}; }
-        .driver {
-          width: 100%;
-          border: 1px solid ${C.line};
-          border-radius: 14px;
-          background: rgba(255,255,255,.025);
-          color: ${C.ink};
-          padding: .85rem;
-          display: grid;
-          grid-template-columns: 2.6rem 1fr auto;
-          align-items: center;
-          gap: .75rem;
-          text-align: left;
-          cursor: pointer;
-          opacity: .75;
-        }
-        .driver.active {
-          opacity: 1;
-          border-color: ${C.orange};
-          background: rgba(251,146,60,.08);
-          box-shadow: 0 0 0 1px ${C.orange};
-        }
-        .badge {
-          width: 2.6rem;
-          height: 2.6rem;
-          border-radius: 12px;
-          display: grid;
-          place-items: center;
-          font-weight: 950;
-          background: linear-gradient(135deg, ${C.orange}, #EA580C);
-        }
-        .meta { min-width: 0; display: grid; gap: .2rem; }
-        .meta b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .meta small { color: ${C.muted}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .score { color: ${C.cyan}; font-size: clamp(2rem, 3vw, 3.2rem); font-weight: 950; }
-        .score small { color: ${C.muted}; font-size: .55em; }
-        .kpi-box {
-          border: 1px solid rgba(16,185,129,.2);
-          border-radius: 16px;
-          background: rgba(16,185,129,.05);
-          padding: 1rem;
-          margin-bottom: 1.2rem;
-        }
-        .split { display: grid; gap: .7rem; }
-      `}</style>
-    </aside>
+    <div className="score-tile" style={{ borderColor: `${tone}55`, background: `${tone}10` }}>
+      <span style={{ color: tone }}>{label}</span>
+      <b>{value}</b>
+      <p>{desc}</p>
+    </div>
   )
 }
 
-function MatchRadar({
+function RadarCard({
   callAxis,
   driverAxis,
-  callSub,
-  driverSub,
+  selectedAxis,
+  setSelectedAxis,
 }: {
   callAxis: number[]
   driverAxis: number[]
-  callSub: number[][]
-  driverSub: number[][]
+  selectedAxis: number | null
+  setSelectedAxis: (index: number | null) => void
 }) {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null)
-  const wrapRef = useRef<HTMLDivElement | null>(null)
-  const [selectedAxis, setSelectedAxis] = useState<number | null>(null)
-  const hitRef = useRef<{ x: number; y: number; i: number }[]>([])
-
-  useEffect(() => {
-    const canvas = canvasRef.current
-    const wrap = wrapRef.current
-    if (!canvas || !wrap) return
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-    const context = ctx
-
-    let raf = 0
-    let start = performance.now()
-    const dpr = window.devicePixelRatio || 1
-
-    function sizeCanvas() {
-      if (!canvas || !wrap) return
-      const side = Math.max(Math.min(wrap.clientWidth, wrap.clientHeight, 600), 220)
-      canvas.style.width = `${side}px`
-      canvas.style.height = `${side}px`
-      canvas.width = side * dpr
-      canvas.height = side * dpr
-      context.setTransform(dpr, 0, 0, dpr, 0, 0)
-    }
-
-    function point(cx: number, cy: number, r: number, i: number, value: number) {
-      const angle = -Math.PI / 2 + i * 2 * Math.PI / DISPLAY_AXES.length
-      return [cx + r * (value / 100) * Math.cos(angle), cy + r * (value / 100) * Math.sin(angle)]
-    }
-
-    function drawPoly(cx: number, cy: number, r: number, vals: number[], stroke: string, fill: string, progress = 1) {
-      const next = vals.map((value) => value * progress)
-      context.beginPath()
-      for (let i = 0; i <= DISPLAY_AXES.length; i++) {
-        const [x, y] = point(cx, cy, r, i % DISPLAY_AXES.length, next[i % DISPLAY_AXES.length] ?? 0)
-        if (i === 0) context.moveTo(x, y)
-        else context.lineTo(x, y)
-      }
-      context.closePath()
-      context.fillStyle = fill
-      context.fill()
-      context.shadowBlur = 15
-      context.shadowColor = stroke
-      context.strokeStyle = stroke
-      context.lineWidth = 3
-      context.stroke()
-      context.shadowBlur = 0
-      next.forEach((value, i) => {
-        const [x, y] = point(cx, cy, r, i, value)
-        context.beginPath()
-        context.arc(x, y, 4, 0, Math.PI * 2)
-        context.fillStyle = '#fff'
-        context.fill()
-        context.strokeStyle = stroke
-        context.lineWidth = 2
-        context.stroke()
-      })
-    }
-
-    function draw(now: number) {
-      if (!canvas) return
-      sizeCanvas()
-      const w = Number.parseFloat(canvas.style.width)
-      const h = Number.parseFloat(canvas.style.height)
-      context.clearRect(0, 0, w, h)
-      const cx = w / 2
-      const cy = h / 2
-      const labelFont = Math.max(11, Math.min(w * 0.032, 17))
-      const r = Math.min(w, h) / 2 - Math.max(48, w * 0.1)
-      hitRef.current = []
-
-      for (let g = 1; g <= 4; g++) {
-        context.beginPath()
-        for (let i = 0; i <= DISPLAY_AXES.length; i++) {
-          const [x, y] = point(cx, cy, r, i % DISPLAY_AXES.length, g * 25)
-          if (i === 0) context.moveTo(x, y)
-          else context.lineTo(x, y)
-        }
-        context.strokeStyle = 'rgba(255,255,255,.08)'
-        context.lineWidth = 1
-        context.stroke()
-      }
-
-      context.font = `800 ${labelFont}px Pretendard, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif`
-      context.textAlign = 'center'
-      context.textBaseline = 'middle'
-      DISPLAY_AXES.forEach((axis, i) => {
-        const [x, y] = point(cx, cy, r, i, 100)
-        context.beginPath()
-        context.moveTo(cx, cy)
-        context.lineTo(x, y)
-        context.strokeStyle = 'rgba(255,255,255,.1)'
-        context.stroke()
-        const [lx, ly] = point(cx, cy, r + labelFont * 1.7, i, 100)
-        context.fillStyle = selectedAxis === i ? C.cyan : '#94A3B8'
-        context.fillText(axis.name, lx, ly)
-        hitRef.current.push({ x: lx, y: ly, i })
-      })
-
-      drawPoly(cx, cy, r, callAxis, C.cyan, 'rgba(34,211,238,.16)')
-      const p = Math.min((now - start) / 620, 1)
-      const eased = 1 - Math.pow(1 - p, 3)
-      context.globalCompositeOperation = 'screen'
-      drawPoly(cx, cy, r, driverAxis, C.orange, 'rgba(251,146,60,.28)', eased)
-      context.globalCompositeOperation = 'source-over'
-      if (p < 1) raf = requestAnimationFrame(draw)
-    }
-
-    start = performance.now()
-    raf = requestAnimationFrame(draw)
-    window.addEventListener('resize', sizeCanvas)
-    return () => {
-      cancelAnimationFrame(raf)
-      window.removeEventListener('resize', sizeCanvas)
-    }
-  }, [callAxis, driverAxis, selectedAxis])
-
-  function onCanvasClick(event: React.MouseEvent<HTMLCanvasElement>) {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const rect = canvas.getBoundingClientRect()
-    const mx = event.clientX - rect.left
-    const my = event.clientY - rect.top
-    const hit = hitRef.current
-      .map((item) => ({ ...item, d: (item.x - mx) ** 2 + (item.y - my) ** 2 }))
-      .sort((a, b) => a.d - b.d)[0]
-    if (hit && hit.d < 55 * 55) setSelectedAxis(hit.i)
-  }
-
   return (
-    <>
-      <div className="radar-wrap" ref={wrapRef}>
-        <canvas ref={canvasRef} onClick={onCanvasClick} />
+    <div className="sub-card">
+      <div className="card-head">
+        <b>5축 레이더</b>
+        <span>계산은 22D · 표시는 5축</span>
       </div>
-      {selectedAxis != null && (
-        <FactorDrilldown
-          axisIndex={selectedAxis}
-          callValues={callSub[selectedAxis] ?? []}
-          driverValues={driverSub[selectedAxis] ?? []}
-          onClose={() => setSelectedAxis(null)}
-        />
-      )}
-      <style jsx>{`
-        .radar-wrap {
-          min-height: clamp(260px, 42vh, 480px);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        canvas {
-          width: 100%;
-          height: 100%;
-          max-width: 600px;
-          cursor: pointer;
-        }
-        @media (max-width: 760px) {
-          .radar-wrap { min-height: clamp(280px, 70vw, 380px); }
-        }
-      `}</style>
-    </>
+      <svg className="radar" viewBox="0 0 320 320" role="img" aria-label="콜카드와 기사 5축 레이더 비교">
+        {[25, 50, 75, 100].map((value) => (
+          <polygon key={value} points={polygonPoints(Array(5).fill(value), 145)} fill="none" stroke="rgba(255,255,255,.10)" strokeWidth="1" />
+        ))}
+        {DISPLAY_AXES.map((axis, index) => {
+          const [x, y] = radarPoint(160, 160, 145, index, 108)
+          const [lineX, lineY] = radarPoint(160, 160, 145, index, 100)
+          return (
+            <g key={axis.key} onClick={() => setSelectedAxis(index)} className="axis-label">
+              <line x1="160" y1="160" x2={lineX} y2={lineY} stroke="rgba(255,255,255,.10)" />
+              <text x={x} y={y} textAnchor="middle" dominantBaseline="middle" fill={selectedAxis === index ? C.cyan : C.sub}>{axis.name}</text>
+            </g>
+          )
+        })}
+        <polygon points={polygonPoints(callAxis, 145)} fill="rgba(34,211,238,.16)" stroke={C.cyan} strokeWidth="4" />
+        <polygon points={polygonPoints(driverAxis, 145)} fill="rgba(251,146,60,.24)" stroke={C.orange} strokeWidth="4" />
+      </svg>
+      <div className="radar-legend"><span><i className="call" />콜카드</span><span><i className="driver" />기사</span><span>축 클릭: 22팩터 드릴다운</span></div>
+    </div>
   )
 }
 
-function MatchWaterfall({ why }: { why: Why[] }) {
+function radarPoint(cx: number, cy: number, r: number, i: number, value: number) {
+  const angle = -Math.PI / 2 + i * 2 * Math.PI / DISPLAY_AXES.length
+  return [cx + r * (value / 100) * Math.cos(angle), cy + r * (value / 100) * Math.sin(angle)]
+}
+
+function polygonPoints(values: number[], r: number) {
+  return values.map((value, index) => radarPoint(160, 160, r, index, value).join(',')).join(' ')
+}
+
+function WaterfallCard({ why }: { why: Why[] }) {
   return (
-    <div className="waterfall">
-      {why.map((item, index) => {
-        const width = Math.min(item.value * 1.5, 48)
-        return (
-          <div key={`${item.label}-${index}`} className="wf-row">
-            <div className="wf-label">{item.type === 'down' ? item.label : ''}</div>
-            <div className="wf-track">
-              <div className="wf-center" />
-              <div className={item.type === 'up' ? 'wf-bar pos' : 'wf-bar neg'} style={{ width: `${width}%` }}>
-                {item.type === 'up' ? '+' : '-'}{item.value}
-              </div>
-            </div>
-            <div className="wf-label right">{item.type === 'up' ? item.label : ''}</div>
+    <div className="sub-card">
+      <div className="card-head">
+        <b>추천 근거</b>
+        <span>왜 이 기사가 올라왔는지</span>
+      </div>
+      <div className="waterfall">
+        {why.map((item) => (
+          <div key={item.label} className="why-row">
+            <span>{item.label}</span>
+            <i><em className={item.type} style={{ width: `${Math.min(item.value * 2, 100)}%` }} /></i>
+            <b>{item.type === 'up' ? '+' : '-'}{item.value}</b>
           </div>
-        )
-      })}
-      <style jsx>{`
-        .waterfall {
-          margin-top: .75rem;
-          padding-top: 1rem;
-          border-top: 1px solid ${C.line};
-          display: grid;
-          gap: .6rem;
-        }
-        .wf-row {
-          display: grid;
-          grid-template-columns: 1fr minmax(120px, 1.4fr) 1fr;
-          gap: .7rem;
-          align-items: center;
-          font-size: clamp(1rem, 1.5vw, 1rem);
-          font-weight: 700;
-        }
-        .wf-label { color: ${C.muted}; text-align: right; line-height: 1.25; }
-        .wf-label.right { text-align: left; }
-        .wf-track {
-          position: relative;
-          height: 11rem;
-          background: rgba(255,255,255,.035);
-          border-radius: 14px;
-          overflow: hidden;
-        }
-        .wf-center {
-          position: absolute;
-          left: 50%;
-          top: 0;
-          bottom: 0;
-          width: 2px;
-          background: rgba(255,255,255,.2);
-          transform: translateX(-50%);
-          z-index: 2;
-        }
-        .wf-bar {
-          position: absolute;
-          top: 0;
-          bottom: 0;
-          display: flex;
-          align-items: center;
-          padding: 0 .6rem;
-          color: white;
-          font-weight: 950;
-          font-size: clamp(1rem, 1.4vw, 1rem);
-        }
-        .wf-bar.pos {
-          left: 50%;
-          justify-content: flex-end;
-          background: linear-gradient(90deg, transparent, ${C.green});
-          border-right: 2px solid ${C.green};
-        }
-        .wf-bar.neg {
-          right: 50%;
-          justify-content: flex-start;
-          background: linear-gradient(270deg, transparent, ${C.red});
-          border-left: 2px solid ${C.red};
-        }
-      `}</style>
-    </div>
-  )
-}
-
-function FactorDrilldown({
-  axisIndex,
-  callValues,
-  driverValues,
-  onClose,
-}: {
-  axisIndex: number
-  callValues: number[]
-  driverValues: number[]
-  onClose: () => void
-}) {
-  const axis = DISPLAY_AXES[axisIndex]
-  return (
-    <div className="modal-bg" onClick={(event) => {
-      if (event.currentTarget === event.target) onClose()
-    }}>
-      <div className="modal">
-        <h3>{axis.name}</h3>
-        <p>이 축을 구성하는 원본 팩터입니다. 위쪽은 콜카드, 아래쪽은 선택 기사입니다.</p>
-        <div className="items">
-          {axis.indexes.map((dimensionIndex, index) => (
-            <div key={dimensionIndex} className="factor-row">
-              <span>{VECTOR_DIMENSIONS[dimensionIndex].label}</span>
-              <div className="bar">
-                <i className="call" style={{ width: `${callValues[index] ?? 0}%` }} />
-                <i className="driver" style={{ width: `${driverValues[index] ?? 0}%` }} />
-              </div>
-              <b>{Math.round(callValues[index] ?? 0)} / {Math.round(driverValues[index] ?? 0)}</b>
-            </div>
-          ))}
-        </div>
-        <button type="button" onClick={onClose}>닫기</button>
+        ))}
       </div>
-      <style jsx>{`
-        .modal-bg {
-          position: fixed;
-          inset: 0;
-          z-index: 80;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: 1rem;
-          background: rgba(5,8,16,.86);
-          backdrop-filter: blur(8px);
-        }
-        .modal {
-          width: min(620px, 100%);
-          max-height: 88vh;
-          overflow: auto;
-          border: 1px solid ${C.line};
-          border-radius: 20px;
-          background: ${C.card};
-          padding: 1.5rem;
-          box-shadow: 0 20px 50px rgba(0,0,0,.5);
-        }
-        h3 { color: ${C.cyan}; font-size: clamp(1.25rem, 2.4vw, 1.5rem); margin: 0; }
-        p { color: ${C.sub}; line-height: 1.5; }
-        .items { display: grid; gap: 1rem; margin-top: 1rem; }
-        .factor-row {
-          display: grid;
-          grid-template-columns: minmax(90px, 140px) 1fr minmax(70px, auto);
-          gap: 1rem;
-          align-items: center;
-        }
-        .factor-row span { color: ${C.ink}; font-weight: 800; text-align: right; }
-        .factor-row b { color: ${C.sub}; text-align: right; }
-        .bar {
-          height: 1.55rem;
-          border-radius: 8px;
-          background: rgba(255,255,255,.05);
-          position: relative;
-          overflow: hidden;
-        }
-        .bar i { position: absolute; left: 0; height: 50%; }
-        .bar .call { top: 0; background: ${C.cyan}; }
-        .bar .driver { bottom: 0; background: ${C.orange}; }
-        button {
-          width: 100%;
-          margin-top: 1.4rem;
-          border: 0;
-          border-radius: 12px;
-          background: ${C.line};
-          color: white;
-          padding: 1rem;
-          font: inherit;
-          font-weight: 900;
-          cursor: pointer;
-        }
-      `}</style>
     </div>
   )
 }
 
-function KpiRow({ label, value, color, delta }: { label: string; value: number; color: string; delta?: number }) {
+function DriverCard({ selected }: { selected?: Ranked }) {
+  if (!selected) {
+    return <div className="driver-card empty">선택된 기사가 없습니다.</div>
+  }
   return (
-    <div className="kpi-row">
-      <span>{label}</span>
-      <div><i style={{ width: `${value}%`, background: color }} /></div>
-      <b>{value}% {delta != null && <em style={{ color: delta >= 0 ? C.green : C.red }}>{delta >= 0 ? `↑${delta}%p` : `↓${Math.abs(delta)}%p`}</em>}</b>
-      <style jsx>{`
-        .kpi-row {
-          display: grid;
-          grid-template-columns: 41rem 1fr 6.4rem;
-          gap: .7rem;
-          align-items: center;
-          margin-top: .7rem;
-        }
-        .kpi-row:first-child { margin-top: 0; }
-        span { color: ${C.sub}; font-weight: 850; }
-        div { height: 1.6rem; background: rgba(255,255,255,.05); border-radius: 8px; overflow: hidden; }
-        i { display: block; height: 100%; border-radius: 8px; transition: width .8s cubic-bezier(.22,1,.36,1); }
-        b { text-align: right; font-size: 1.2rem; }
-        em { font-style: normal; font-size: 1rem; margin-left: .15rem; }
-      `}</style>
+    <div className="driver-card">
+      <div className="driver-hero">
+        <div>
+          <span>CANDIDATE</span>
+          <b>{selected.driver.driver_id}</b>
+        </div>
+        <strong>{grade(selected.finalScore)}</strong>
+      </div>
+      <div className="metric-grid">
+        <Metric label="최종점수" value={`${Math.round(selected.finalScore)}점`} />
+        <Metric label="성향 유사도" value={pct(selected.similarityScore)} />
+        <Metric label="공간 적합도" value={pct(selected.spatial.spatialScore)} />
+        <Metric label="신뢰도" value={pct(selected.reliability * 100)} />
+        <Metric label="출발지 적합도" value={`${pct(selected.spatial.originScore)} · ${h3DistanceLabel(selected.spatial.originBestDistance)}`} />
+        <Metric label="목적지 적합도" value={`${pct(selected.spatial.destinationScore)} · ${h3DistanceLabel(selected.spatial.destinationBestDistance)}`} />
+        <Metric label="예상 픽업거리" value={`${selected.simDistanceKm.toFixed(1)}km · 시뮬레이션`} />
+        <Metric label="예상 ETA" value={`${selected.simEtaMin}분 · 시뮬레이션`} />
+        <Metric label="데이터 기간" value={`${selected.driver.data_days ?? 0}일`} />
+        <Metric label="판정 신뢰" value={selected.confidence} />
+      </div>
+      <AxisBars title="기사 5축 표시" axis={selected.axis} tone={C.green} />
     </div>
   )
 }
@@ -1739,181 +925,885 @@ function Metric({ label, value }: { label: string; value: string }) {
     <div className="metric">
       <span>{label}</span>
       <b>{value}</b>
-      <style jsx>{`
-        .metric {
-          border: 1px solid ${C.line};
-          border-radius: 12px;
-          background: rgba(255,255,255,.025);
-          padding: .75rem;
-          display: flex;
-          justify-content: space-between;
-          gap: 1rem;
-        }
-        span { color: ${C.sub}; font-weight: 800; }
-        b { color: ${C.cyan}; }
-      `}</style>
     </div>
   )
 }
 
-function PanelTitle({ children, color }: { children: ReactNode; color: string }) {
+function RadiusCard({
+  ranked,
+  selectedId,
+  onSelect,
+}: {
+  ranked: Ranked[]
+  selectedId: string
+  onSelect: (id: string) => void
+}) {
+  const tiers = [
+    { label: '1차 반경', radius: 2.5 },
+    { label: '2차 반경', radius: 5 },
+    { label: '3차 반경', radius: 8 },
+  ].map((tier) => ({
+    ...tier,
+    candidates: ranked.filter((row) => row.simDistanceKm <= tier.radius),
+  }))
+
   return (
-    <div className="panel-title">
-      <span style={{ background: color }} />
-      {children}
-      <style jsx>{`
-        .panel-title {
-          margin: 0 0 1rem;
-          display: flex;
-          align-items: center;
-          gap: .55rem;
-          color: ${C.muted};
-          font-size: clamp(1rem, 1.3vw, 1rem);
-          font-weight: 950;
-          letter-spacing: .12em;
-          text-transform: uppercase;
-        }
-        span {
-          width: 4px;
-          height: 1rem;
-          border-radius: 99px;
-        }
-      `}</style>
+    <div className="radius-card">
+      <div className="card-head">
+        <b>반경 확장</b>
+        <span>거리/ETA는 시뮬레이션</span>
+      </div>
+      {tiers.map((tier) => {
+        const best = tier.candidates[0]
+        return (
+          <button
+            key={tier.label}
+            type="button"
+            className={best?.driver.driver_id === selectedId ? 'tier active' : 'tier'}
+            disabled={!best}
+            onClick={() => best && onSelect(best.driver.driver_id)}
+          >
+            <span>{tier.label}</span>
+            <b>{tier.radius.toFixed(1)}km</b>
+            <em>{tier.candidates.length}명 · {best ? `${best.driver.driver_id} ${Math.round(best.finalScore)}점` : '후보 없음'}</em>
+          </button>
+        )
+      })}
     </div>
   )
 }
 
-function NumberInput({ label, value, onChange, min, max }: { label: string; value: number; onChange: (value: number) => void; min?: number; max?: number }) {
+function FactorDrawer({
+  axisIndex,
+  callVector,
+  driverVector,
+  onClose,
+}: {
+  axisIndex: number
+  callVector: number[]
+  driverVector: number[]
+  onClose: () => void
+}) {
+  const axis = DISPLAY_AXES[axisIndex]
+  const callFactors = getDisplayAxisFactors(callVector, axisIndex)
+  const driverFactors = getDisplayAxisFactors(driverVector, axisIndex)
   return (
-    <label className="field">{label}
-      <input type="number" min={min} max={max} value={value} onChange={(event) => onChange(Number(event.target.value))} />
-    </label>
+    <div className="drawer-backdrop" onClick={onClose}>
+      <section className="drawer" onClick={(event) => event.stopPropagation()}>
+        <button type="button" onClick={onClose}>닫기</button>
+        <SectionEyebrow>22D FACTOR DRILLDOWN</SectionEyebrow>
+        <h2>{axis?.name ?? '팩터'} 세부 계산</h2>
+        <p>콜카드 원본 벡터와 선택 기사 벡터를 같은 팩터 순서로 비교합니다.</p>
+        <div className="factor-table">
+          {callFactors.map((factor, index) => {
+            const driver = driverFactors[index]
+            const callScore = factor.score ?? 0
+            const driverScore = driver?.score ?? 0
+            return (
+              <div key={factor.key} className="factor-row">
+                <div>
+                  <b>{factor.label}</b>
+                  <span>{factor.group}</span>
+                </div>
+                <CompareBar label="콜" value={callScore} tone={C.cyan} />
+                <CompareBar label="기사" value={driverScore} tone={C.orange} />
+              </div>
+            )
+          })}
+        </div>
+      </section>
+    </div>
   )
 }
 
-function Select({ label, value, onChange, options }: { label: string; value: number; onChange: (value: number) => void; options: { value: number; label: string }[] }) {
+function CompareBar({ label, value, tone }: { label: string; value: number; tone: string }) {
   return (
-    <label className="field">{label}
-      <select value={value} onChange={(event) => onChange(Number(event.target.value))}>
-        {options.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-      </select>
-    </label>
+    <div className="compare">
+      <span>{label}</span>
+      <i><em style={{ width: `${value}%`, background: tone }} /></i>
+      <b>{Math.round(value)}</b>
+    </div>
   )
 }
 
-function Two({ children }: { children: ReactNode }) {
-  return <div className="two">{children}</div>
-}
-
-const locationSummaryCss = `
-  .location-card {
-    display: grid;
-    gap: .65rem;
-    margin: 1rem 0 1rem;
-    border: 1px solid rgba(34,211,238,.22);
-    border-radius: 12px;
-    background: rgba(34,211,238,.05);
-    padding: 1rem;
+const pageCss = `
+  .sim-page {
+    min-height: 100vh;
+    color: ${C.ink};
+    background:
+      radial-gradient(circle at 50% 0%, rgba(34,211,238,.14), transparent 28%),
+      linear-gradient(180deg, #050810 0%, #070B15 100%);
+    font-family: Pretendard, "Apple SD Gothic Neo", "Malgun Gothic", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 20px;
   }
-  .location-card b {
+  .kpi-row {
+    position: sticky;
+    top: 76px;
+    z-index: 80;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    border-bottom: 1px solid ${C.line};
+    background: rgba(5,8,16,.92);
+    backdrop-filter: blur(16px);
+  }
+  .sim-grid {
+    display: grid;
+    grid-template-columns: minmax(330px, 0.9fr) minmax(560px, 1.8fr) minmax(360px, 1fr);
+    gap: 20px;
+    padding: 20px;
+    align-items: start;
+  }
+  .panel {
+    min-width: 0;
+    border: 1px solid ${C.line};
+    border-radius: 28px;
+    background: linear-gradient(180deg, rgba(14,22,39,.96), rgba(7,12,24,.96));
+    box-shadow: 0 26px 80px rgba(0,0,0,.32), inset 0 1px 0 rgba(255,255,255,.05);
+    padding: 22px;
+  }
+  .call-panel,
+  .driver-panel {
+    position: sticky;
+    top: 178px;
+    max-height: calc(100vh - 198px);
+    overflow: auto;
+  }
+  .eyebrow {
     color: ${C.cyan};
+    font-size: 20px;
+    line-height: 1;
+    font-weight: 950;
+    letter-spacing: 0;
+    margin-bottom: 12px;
+  }
+  h1, h2, h3, p {
+    margin: 0;
+  }
+  h1 {
+    font-size: clamp(34px, 2.7vw, 54px);
+    line-height: 1.08;
     font-weight: 950;
   }
-  .location-card span {
+  h2 {
+    font-size: clamp(32px, 2.4vw, 50px);
+    line-height: 1.06;
+    font-weight: 950;
+  }
+  .intro,
+  .stage-head p {
     color: ${C.sub};
-    font-size: clamp(1rem, 1.2vw, 1rem);
-    font-weight: 800;
-    line-height: 1.35;
+    font-size: 21px;
+    line-height: 1.45;
+    margin-top: 12px;
   }
-  .location-head {
+  .field {
     display: grid;
-    gap: .2rem;
-  }
-  .location-grid {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: .45rem;
-  }
-  .location-grid div,
-  .od-key {
+    gap: 8px;
     min-width: 0;
-    display: grid;
-    gap: .15rem;
-    border: 1px solid rgba(255,255,255,.06);
-    border-radius: 8px;
-    background: rgba(15,23,42,.58);
-    padding: .5rem;
   }
-  .location-grid strong,
-  .od-key strong {
+  .field.wide {
+    margin-top: 18px;
+  }
+  .field span,
+  .call-top span,
+  .fact span,
+  .od span,
+  .metric span {
+    color: ${C.muted};
+    font-size: 20px;
+    font-weight: 900;
+  }
+  select,
+  input[type="number"] {
+    width: 100%;
+    min-width: 0;
+    min-height: 56px;
+    border: 1px solid ${C.line};
+    border-radius: 16px;
     color: ${C.ink};
-    font-size: clamp(1rem, 1.2vw, 1rem);
-    line-height: 1.3;
+    background: #08101F;
+    padding: 0 16px;
+    font-size: 20px;
+    font-weight: 850;
+  }
+  .number-wrap {
+    position: relative;
+  }
+  .number-wrap em {
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: ${C.muted};
+    font-size: 20px;
+    font-style: normal;
+    font-weight: 900;
+  }
+  .input-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin-top: 18px;
+  }
+  .toggle-row {
+    display: grid;
+    gap: 10px;
+    margin: 18px 0;
+  }
+  .toggle-row label {
+    min-height: 52px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border: 1px solid ${C.line};
+    border-radius: 16px;
+    background: rgba(255,255,255,.03);
+    padding: 0 16px;
+    font-size: 21px;
+    font-weight: 900;
+  }
+  .call-card,
+  .driver-card,
+  .radius-card,
+  .axis-box,
+  .sub-card {
+    border: 1px solid rgba(34,211,238,.20);
+    border-radius: 22px;
+    background: rgba(34,211,238,.045);
+    padding: 18px;
+    margin-top: 18px;
+  }
+  .call-top {
+    display: grid;
+    gap: 4px;
+  }
+  .call-top b {
+    color: ${C.ink};
+    font-size: 25px;
+    font-weight: 950;
     overflow-wrap: anywhere;
-    word-break: break-word;
+  }
+  .call-facts,
+  .metric-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-top: 16px;
+  }
+  .fact,
+  .metric {
+    min-width: 0;
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: 16px;
+    background: rgba(4,8,18,.55);
+    padding: 14px;
+    display: grid;
+    gap: 6px;
+  }
+  .fact b,
+  .metric b {
+    color: ${C.ink};
+    font-size: 21px;
+    font-weight: 950;
+    overflow-wrap: anywhere;
+  }
+  .mono b {
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  }
+  .od {
+    margin-top: 12px;
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: 16px;
+    background: rgba(4,8,18,.55);
+    padding: 14px;
+    display: grid;
+    gap: 6px;
+  }
+  .od b {
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: 20px;
+    overflow-wrap: anywhere;
   }
   .diag {
-    display: grid;
-    gap: .2rem;
+    margin-top: 12px;
+    color: ${C.sub};
+    font-size: 20px;
+    line-height: 1.45;
   }
-  .mismatch {
-    border: 1px solid rgba(245,158,11,.35);
-    border-radius: 8px;
-    background: rgba(245,158,11,.1);
-    color: #FDBA74;
-    padding: .5rem;
-    font-size: clamp(1rem, 1.2vw, 1rem);
-    font-weight: 850;
+  .warn {
+    margin-top: 12px;
+    border: 1px solid ${C.yellow};
+    border-radius: 14px;
+    color: ${C.yellow};
+    background: rgba(245,158,11,.08);
+    padding: 12px;
+    font-size: 20px;
+    font-weight: 900;
+  }
+  .axis-box h3 {
+    font-size: 24px;
+    margin-bottom: 12px;
+  }
+  .axis-row,
+  .compare {
+    display: grid;
+    grid-template-columns: minmax(120px, 1fr) minmax(120px, 1.4fr) 42px;
+    gap: 10px;
+    align-items: center;
+    margin-top: 10px;
+  }
+  .axis-row span,
+  .compare span {
+    color: ${C.sub};
+    font-size: 20px;
+    font-weight: 900;
+  }
+  .axis-row i,
+  .compare i {
+    height: 14px;
+    border-radius: 999px;
+    background: #1B2740;
+    overflow: hidden;
+  }
+  .axis-row em,
+  .compare em {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+  }
+  .axis-row b,
+  .compare b {
+    font-size: 20px;
+    text-align: right;
+  }
+  .stage-head {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 22px;
+    align-items: start;
+  }
+  .score-hero {
+    min-width: 150px;
+    border: 1px solid rgba(139,92,246,.42);
+    border-radius: 24px;
+    background: rgba(139,92,246,.12);
+    padding: 18px;
+    text-align: center;
+  }
+  .score-hero span,
+  .score-hero em {
+    display: block;
+    color: ${C.sub};
+    font-size: 20px;
+    font-style: normal;
+    font-weight: 950;
+  }
+  .score-hero b {
+    display: block;
+    color: ${C.cyan};
+    font-size: clamp(54px, 5vw, 88px);
+    line-height: .95;
+    font-weight: 950;
+  }
+  .ready {
+    margin-top: 18px;
+    border: 1px solid;
+    border-radius: 18px;
+    padding: 16px 18px;
+    display: grid;
+    gap: 5px;
+  }
+  .ready b {
+    font-size: 22px;
+  }
+  .ready span {
+    color: ${C.sub};
+    font-size: 20px;
+    line-height: 1.4;
+  }
+  .match-field {
+    position: relative;
+    height: clamp(440px, 48vh, 640px);
+    margin-top: 20px;
+    border: 1px solid rgba(34,211,238,.22);
+    border-radius: 30px;
+    overflow: hidden;
+    background:
+      linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px),
+      radial-gradient(circle at center, rgba(34,211,238,.18), transparent 28%),
+      rgba(4,8,18,.58);
+    background-size: 42px 42px, 42px 42px, auto, auto;
+  }
+  .links {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+  .call-node {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 190px;
+    height: 160px;
+    transform: translate(-50%, -50%);
+    border: 2px solid ${C.cyan};
+    border-radius: 28px;
+    background: rgba(34,211,238,.18);
+    display: grid;
+    place-items: center;
+    align-content: center;
+    box-shadow: 0 0 70px rgba(34,211,238,.25);
+  }
+  .call-node span,
+  .call-node em {
+    color: #9DEFFF;
+    font-size: 20px;
+    font-style: normal;
+    font-weight: 950;
+  }
+  .call-node b {
+    color: ${C.ink};
+    font-size: 58px;
+    line-height: 1;
+    font-weight: 950;
+  }
+  .driver-node {
+    position: absolute;
+    width: 84px;
+    height: 84px;
+    transform: translate(-50%, -50%);
+    border: 2px solid ${C.line};
+    border-radius: 22px;
+    color: ${C.ink};
+    background: rgba(12,18,35,.88);
+    display: grid;
+    place-items: center;
+    align-content: center;
+    cursor: pointer;
+  }
+  .driver-node.active {
+    border-color: ${C.cyan};
+    background: rgba(34,211,238,.18);
+    box-shadow: 0 0 32px rgba(34,211,238,.3);
+  }
+  .driver-node span {
+    color: ${C.green};
+    font-size: 26px;
+    font-weight: 950;
+  }
+  .driver-node b {
+    font-size: 22px;
+    line-height: 1;
+  }
+  .driver-node em {
+    color: ${C.muted};
+    font-size: 18px;
+    font-style: normal;
+    font-weight: 900;
+  }
+  .score-split,
+  .lower-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 14px;
+    margin-top: 18px;
+  }
+  .score-tile {
+    min-width: 0;
+    border: 1px solid;
+    border-radius: 20px;
+    padding: 16px;
+  }
+  .score-tile span {
+    font-size: 20px;
+    font-weight: 950;
+  }
+  .score-tile b {
+    display: block;
+    margin-top: 8px;
+    color: ${C.ink};
+    font-size: 34px;
+    font-weight: 950;
+  }
+  .score-tile p {
+    margin-top: 6px;
+    color: ${C.sub};
+    font-size: 20px;
     line-height: 1.35;
   }
-`
-
-const panelCss = `
-  .route {
-    background: rgba(34,211,238,.08);
-    border: 1px solid rgba(34,211,238,.25);
-    border-radius: 12px;
-    padding: 1rem;
-    text-align: center;
-    font-size: clamp(1rem, 2vw, 1.15rem);
-    font-weight: 900;
+  .lead {
+    margin-top: 18px;
+    border: 1px solid rgba(16,185,129,.32);
+    border-radius: 20px;
+    background: rgba(16,185,129,.09);
+    color: #BDF7D7;
+    padding: 18px;
+    font-size: 22px;
+    line-height: 1.45;
+    font-weight: 850;
+  }
+  .lower-grid {
+    grid-template-columns: minmax(360px, 1.1fr) minmax(300px, .9fr);
+  }
+  .card-head {
     display: flex;
-    justify-content: center;
-    gap: .6rem;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 14px;
+    margin-bottom: 14px;
+  }
+  .card-head b {
+    font-size: 25px;
+  }
+  .card-head span {
+    color: ${C.yellow};
+    font-size: 20px;
+    font-weight: 900;
+  }
+  .radar {
+    width: 100%;
+    min-height: 360px;
+  }
+  .axis-label {
+    cursor: pointer;
+  }
+  .axis-label text {
+    font-size: 18px;
+    font-weight: 900;
+  }
+  .radar-legend {
+    display: flex;
+    gap: 14px;
     flex-wrap: wrap;
+    color: ${C.sub};
+    font-size: 20px;
+    font-weight: 900;
   }
-  .route b { color: ${C.cyan}; }
-  .rows { display: grid; gap: .75rem; margin: 1rem 0 1.4rem; }
-  .field { display: grid; gap: .35rem; color: ${C.sub}; font-weight: 800; font-size: 1rem; }
-  .field input, .field select {
-    min-height: 2.35rem;
+  .radar-legend i {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border-radius: 5px;
+    margin-right: 6px;
+    vertical-align: -2px;
+  }
+  .radar-legend .call {
+    background: ${C.cyan};
+  }
+  .radar-legend .driver {
+    background: ${C.orange};
+  }
+  .waterfall {
+    display: grid;
+    gap: 14px;
+  }
+  .why-row {
+    display: grid;
+    grid-template-columns: minmax(130px, 1fr) minmax(150px, 1.2fr) 54px;
+    gap: 12px;
+    align-items: center;
+  }
+  .why-row span {
+    color: ${C.sub};
+    font-size: 20px;
+    font-weight: 900;
+  }
+  .why-row i {
+    height: 20px;
+    border-radius: 999px;
+    background: #1B2740;
+    overflow: hidden;
+  }
+  .why-row em {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+  }
+  .why-row em.up {
+    background: ${C.green};
+  }
+  .why-row em.down {
+    background: ${C.red};
+  }
+  .why-row b {
+    text-align: right;
+    font-size: 21px;
+  }
+  .rank-list {
+    display: grid;
+    gap: 12px;
+    margin-top: 18px;
+  }
+  .rank {
+    width: 100%;
+    min-width: 0;
     border: 1px solid ${C.line};
-    border-radius: 10px;
-    background: rgba(15,23,42,.9);
+    border-radius: 18px;
     color: ${C.ink};
-    padding: 0 .65rem;
-    font: inherit;
+    background: rgba(255,255,255,.025);
+    padding: 14px;
+    display: grid;
+    grid-template-columns: 62px 1fr auto;
+    gap: 12px;
+    align-items: center;
+    text-align: left;
+    cursor: pointer;
   }
-  .two { display: grid; grid-template-columns: 1fr 1fr; gap: .65rem; }
-  .check { display: flex; align-items: center; gap: .55rem; color: ${C.sub}; font-weight: 800; }
-  .factors { display: grid; grid-template-columns: 1fr 1fr; gap: .45rem; }
-  .factors span {
-    font-size: clamp(1rem, 1.2vw, 1rem);
-    font-weight: 750;
-    padding: .5rem;
-    border-radius: 8px;
-    text-align: center;
-    background: rgba(139,92,246,.1);
-    border: 1px solid rgba(139,92,246,.22);
-    color: #C4B5FD;
-    opacity: .42;
-    transition: all .25s ease;
+  .rank.active {
+    border-color: ${C.orange};
+    background: rgba(251,146,60,.10);
+    box-shadow: 0 0 0 1px ${C.orange};
   }
-  .factors span.active {
-    opacity: 1;
-    background: rgba(139,92,246,.28);
-    border-color: ${C.purple};
-    color: white;
-    box-shadow: 0 0 10px rgba(139,92,246,.38);
+  .rank-no {
+    width: 58px;
+    height: 58px;
+    border-radius: 18px;
+    display: grid;
+    place-items: center;
+    background: linear-gradient(135deg, ${C.orange}, #C2410C);
+    font-size: 22px;
+    font-weight: 950;
+  }
+  .rank-main {
+    min-width: 0;
+    display: grid;
+    gap: 4px;
+  }
+  .rank-main b {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 22px;
+  }
+  .rank-main em {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: ${C.muted};
+    font-size: 20px;
+    font-style: normal;
+    font-weight: 850;
+  }
+  .rank strong {
+    color: ${C.cyan};
+    font-size: 40px;
+  }
+  .show-all {
+    width: 100%;
+    min-height: 58px;
+    margin-top: 14px;
+    border: 1px solid rgba(34,211,238,.36);
+    border-radius: 18px;
+    color: ${C.cyan};
+    background: rgba(34,211,238,.08);
+    font-size: 21px;
+    font-weight: 950;
+    cursor: pointer;
+  }
+  .driver-hero {
+    display: flex;
+    justify-content: space-between;
+    gap: 14px;
+    align-items: center;
+  }
+  .driver-hero span {
+    color: ${C.green};
+    font-size: 20px;
+    font-weight: 950;
+  }
+  .driver-hero b {
+    display: block;
+    margin-top: 5px;
+    font-size: 26px;
+    overflow-wrap: anywhere;
+  }
+  .driver-hero strong {
+    width: 82px;
+    height: 82px;
+    display: grid;
+    place-items: center;
+    border-radius: 24px;
+    color: ${C.green};
+    background: rgba(16,185,129,.15);
+    border: 1px solid rgba(16,185,129,.4);
+    font-size: 46px;
+  }
+  .tier {
+    width: 100%;
+    min-height: 78px;
+    border: 1px solid ${C.line};
+    border-radius: 18px;
+    color: ${C.ink};
+    background: rgba(255,255,255,.025);
+    padding: 14px;
+    margin-top: 10px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 4px 12px;
+    text-align: left;
+    cursor: pointer;
+  }
+  .tier.active {
+    border-color: ${C.cyan};
+    background: rgba(34,211,238,.08);
+  }
+  .tier:disabled {
+    cursor: not-allowed;
+    opacity: .5;
+  }
+  .tier span {
+    color: ${C.sub};
+    font-size: 20px;
+    font-weight: 950;
+  }
+  .tier b {
+    color: ${C.cyan};
+    font-size: 24px;
+  }
+  .tier em {
+    grid-column: 1 / -1;
+    color: ${C.muted};
+    font-size: 20px;
+    font-style: normal;
+    font-weight: 850;
+    overflow-wrap: anywhere;
+  }
+  .empty {
+    border: 1px dashed ${C.line};
+    border-radius: 18px;
+    padding: 18px;
+    color: ${C.sub};
+    font-size: 21px;
+    line-height: 1.4;
+  }
+  .drawer-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    display: grid;
+    place-items: center;
+    background: rgba(0,0,0,.68);
+    padding: 24px;
+  }
+  .drawer {
+    width: min(920px, 100%);
+    max-height: 88vh;
+    overflow: auto;
+    border: 1px solid rgba(34,211,238,.35);
+    border-radius: 28px;
+    background: #08101F;
+    padding: 24px;
+    box-shadow: 0 30px 100px rgba(0,0,0,.55);
+  }
+  .drawer > button {
+    float: right;
+    min-height: 50px;
+    border: 1px solid ${C.line};
+    border-radius: 16px;
+    color: ${C.ink};
+    background: rgba(255,255,255,.05);
+    padding: 0 18px;
+    font-size: 20px;
+    font-weight: 950;
+    cursor: pointer;
+  }
+  .drawer h2 {
+    margin-top: 10px;
+  }
+  .drawer p {
+    margin-top: 10px;
+    color: ${C.sub};
+    font-size: 21px;
+  }
+  .factor-table {
+    display: grid;
+    gap: 12px;
+    margin-top: 20px;
+  }
+  .factor-row {
+    border: 1px solid ${C.line};
+    border-radius: 18px;
+    background: rgba(255,255,255,.025);
+    padding: 14px;
+    display: grid;
+    grid-template-columns: 180px 1fr 1fr;
+    gap: 14px;
+    align-items: center;
+  }
+  .factor-row b {
+    display: block;
+    font-size: 22px;
+  }
+  .factor-row span {
+    color: ${C.muted};
+    font-size: 20px;
+    font-weight: 850;
+  }
+  @media (max-width: 1320px) {
+    .sim-grid {
+      grid-template-columns: minmax(320px, .95fr) minmax(520px, 1.5fr);
+    }
+    .driver-panel {
+      grid-column: 1 / -1;
+      position: static;
+      max-height: none;
+    }
+  }
+  @media (max-width: 980px) {
+    .kpi-row {
+      position: static;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .sim-grid {
+      grid-template-columns: 1fr;
+    }
+    .call-panel {
+      position: static;
+      max-height: none;
+    }
+    .stage-head,
+    .lower-grid,
+    .score-split {
+      grid-template-columns: 1fr;
+    }
+    .match-field {
+      height: 520px;
+    }
+    .factor-row {
+      grid-template-columns: 1fr;
+    }
+  }
+  @media (max-width: 640px) {
+    .sim-page {
+      font-size: 20px;
+    }
+    .sim-grid {
+      padding: 14px;
+    }
+    .panel {
+      padding: 18px;
+      border-radius: 22px;
+    }
+    .input-grid,
+    .call-facts,
+    .metric-grid {
+      grid-template-columns: 1fr;
+    }
+    .kpi-row {
+      grid-template-columns: 1fr;
+    }
+    .match-field {
+      height: 460px;
+    }
+    .call-node {
+      width: 150px;
+      height: 132px;
+    }
+    .driver-node {
+      width: 72px;
+      height: 72px;
+    }
   }
 `
