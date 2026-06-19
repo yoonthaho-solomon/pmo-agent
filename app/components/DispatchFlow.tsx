@@ -1,15 +1,15 @@
 'use client'
 
 const steps = [
-  { key: 'request', label: '승객 호출', sub: '콜 발생', icon: '☎' },
-  { key: 'callcard', label: '콜카드 생성', sub: '지역·시간·요금·거리', icon: '▣' },
-  { key: 'search', label: '후보 기사 탐색', sub: '기존 배차 범위', icon: '◎' },
-  { key: 'similarity', label: '유사도 계산', sub: '22D + H3', icon: '◇' },
-  { key: 'rank', label: '우선발송 정렬', sub: 'Top N 선정', icon: '◆' },
-  { key: 'send', label: '콜카드 발송', sub: '1순위 먼저', icon: '➜' },
-  { key: 'accept', label: '기사 수락', sub: '응답 대기', icon: '✓' },
-  { key: 'dispatch', label: '배차 완료', sub: '승객 픽업', icon: '▰' },
-  { key: 'complete', label: '운행 완료', sub: '결과 적재', icon: '●' },
+  { key: 'request', label: '승객 호출', sub: '콜 발생', icon: '01' },
+  { key: 'callcard', label: '콜카드 생성', sub: '조건 추출', icon: '02' },
+  { key: 'search', label: '후보 탐색', sub: '기존 범위', icon: '03' },
+  { key: 'similarity', label: '유사도 계산', sub: '22D + H3', icon: '04' },
+  { key: 'rank', label: '우선순위', sub: '먼저 보낼 순서', icon: '05' },
+  { key: 'send', label: '콜카드 발송', sub: '1순위 먼저', icon: '06' },
+  { key: 'accept', label: '기사 수락', sub: '응답 확인', icon: '07' },
+  { key: 'dispatch', label: '배차 완료', sub: '승객 픽업', icon: '08' },
+  { key: 'complete', label: '운행 완료', sub: '결과 적재', icon: '09' },
 ] as const
 
 type FlowKey = typeof steps[number]['key']
@@ -25,10 +25,12 @@ export function DispatchFlow({
   return (
     <section className={compact ? 'dispatch-flow compact' : 'dispatch-flow'} aria-label="전체 배차 흐름">
       <div className="flow-inner">
-        <div className="flow-head">
-          <span>DISPATCH FLOW</span>
-          <b>콜수락율을 높이기 위한 후보 생성부터 우선발송까지</b>
-        </div>
+        {!compact && (
+          <div className="flow-head">
+            <span>DISPATCH FLOW</span>
+            <b>콜수락율을 높이기 위한 후보 생성부터 우선발송까지</b>
+          </div>
+        )}
         <div className="flow-track">
           {steps.map((step, index) => {
             const isActive = activeSet.size === 0 || activeSet.has(step.key)
@@ -48,14 +50,17 @@ export function DispatchFlow({
           border-bottom: 1px solid var(--line);
           background: linear-gradient(180deg, var(--bg-1), rgba(255, 255, 255, 0.015));
         }
+        .dispatch-flow.compact {
+          background: rgba(7, 10, 16, 0.58);
+        }
         .flow-inner {
           max-width: var(--maxw);
           margin: 0 auto;
           padding: 16px clamp(16px, 2vw, 28px);
         }
         .dispatch-flow.compact .flow-inner {
-          padding-top: 12px;
-          padding-bottom: 12px;
+          padding-top: 10px;
+          padding-bottom: 10px;
         }
         .flow-head {
           display: flex;
@@ -82,6 +87,9 @@ export function DispatchFlow({
           grid-template-columns: repeat(9, minmax(0, 1fr));
           gap: 10px;
           align-items: stretch;
+        }
+        .dispatch-flow.compact .flow-track {
+          gap: 6px;
         }
         .flow-step {
           position: relative;
@@ -114,8 +122,16 @@ export function DispatchFlow({
           border-radius: 13px;
           background: var(--bg-2);
           color: var(--ink-3);
-          font-size: 18px;
+          font-size: 13px;
           line-height: 1;
+          font-weight: 900;
+          font-variant-numeric: tabular-nums;
+        }
+        .dispatch-flow.compact .flow-icon {
+          width: 32px;
+          height: 32px;
+          border-radius: 10px;
+          font-size: 11px;
         }
         .flow-step strong {
           color: var(--ink);
@@ -123,6 +139,10 @@ export function DispatchFlow({
           line-height: 1.2;
           font-weight: 800;
           text-align: center;
+        }
+        .dispatch-flow.compact .flow-step strong {
+          font-size: 12px;
+          font-weight: 800;
         }
         .flow-step em {
           color: var(--ink-3);
@@ -132,6 +152,9 @@ export function DispatchFlow({
           font-weight: 550;
           text-align: center;
         }
+        .dispatch-flow.compact .flow-step em {
+          display: none;
+        }
         .arrow {
           position: absolute;
           top: 12px;
@@ -140,6 +163,12 @@ export function DispatchFlow({
           font-size: 15px;
           font-style: normal;
           z-index: 1;
+        }
+        .dispatch-flow.compact .arrow {
+          top: 8px;
+          right: -8px;
+          font-size: 12px;
+          opacity: 0.5;
         }
         @media (max-width: 1320px) {
           .flow-track {
@@ -164,6 +193,9 @@ export function DispatchFlow({
             justify-items: start;
             grid-template-columns: 42px 1fr;
             column-gap: 12px;
+          }
+          .dispatch-flow.compact .flow-step {
+            grid-template-columns: 32px 1fr;
           }
           .flow-step strong,
           .flow-step em {

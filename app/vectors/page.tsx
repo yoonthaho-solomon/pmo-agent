@@ -277,7 +277,7 @@ export default function VectorsPage() {
         rightSlot={<><Pill color={C.green}>실데이터</Pill><Pill color={C.cyan}>22D COSINE</Pill></>}
       />
 
-      <DispatchFlow active={['callcard', 'similarity']} />
+      <DispatchFlow active={['callcard', 'similarity']} compact />
 
       <section className="top-rail" aria-label="팩터리스트 핵심 지표">
         <RailMetric label="선택 콜카드" value={selectedCall ? '1건 선택' : loading ? '조회 중' : '없음'} meta={`${calls.length.toLocaleString('ko-KR')}건 중 선택`} color={C.cyan} />
@@ -290,10 +290,10 @@ export default function VectorsPage() {
         <section className="hero-card">
           <div>
             <p className="eyebrow">VECTOR FACTOR LIST</p>
-            <h1>콜카드 조건과 기사 운행패턴을 같은 언어로 바꿔 비교합니다</h1>
+            <h1>콜카드 조건과 기사 운행패턴을 같은 숫자 언어로 비교합니다</h1>
             <p className="lead">
-              승객의 출발지, 도착지, 예상거리, 예상요금, ETA가 실제 콜카드의 핵심입니다.
-              임베딩은 이 조건과 기사 누적 운행패턴을 22개 숫자로 바꿔 서로 비교할 수 있게 만드는 과정입니다.
+              출발지, 도착지, 예상거리, 예상요금, 요일, 시간, 호출유형을 기준으로 콜카드를 만들고,
+              기사 누적 운행패턴과 같은 22개 기준으로 비교합니다.
             </p>
           </div>
           <div className="status-card" style={{ '--tone': loadError ? C.red : loading ? C.yellow : C.green } as CSSProperties}>

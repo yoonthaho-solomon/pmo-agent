@@ -435,7 +435,7 @@ export default function SimulatorPage() {
         rightSlot={<button type="button" onClick={runSimulation} disabled={running}>{running ? '재정렬 중' : '시뮬레이션 실행'}</button>}
       />
 
-      <DispatchFlow active={['search', 'similarity', 'rank', 'send', 'accept']} />
+      <DispatchFlow active={['search', 'similarity', 'rank', 'send', 'accept']} compact />
 
       <section className="kpi-row" aria-label="시뮬레이터 상태">
         <Kpi label="조회 상태" value={statusLabel} tone={statusLabel === '정상' ? C.green : C.yellow} />

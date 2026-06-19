@@ -55,64 +55,64 @@ export function PrimaryNav({
           position: sticky;
           top: 0;
           z-index: 140;
-          border-bottom: 1px solid var(--line);
-          background: color-mix(in srgb, var(--bg-0) 86%, transparent);
-          backdrop-filter: blur(16px) saturate(145%);
+          border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+          background: rgba(5, 8, 14, 0.88);
+          backdrop-filter: blur(18px) saturate(150%);
         }
         .inner {
           max-width: var(--maxw);
+          min-height: 78px;
           margin: 0 auto;
-          min-height: var(--nav-h);
-          padding: 10px clamp(16px, 2vw, 28px);
+          padding: 12px clamp(18px, 2vw, 30px);
           display: grid;
-          grid-template-columns: minmax(220px, 1fr) auto minmax(220px, 1fr);
+          grid-template-columns: minmax(230px, 1fr) auto minmax(230px, 1fr);
           align-items: center;
-          gap: 18px;
+          gap: 22px;
         }
         .brand {
           min-width: 0;
+          justify-self: start;
           display: inline-flex;
           align-items: center;
-          gap: 12px;
-          justify-self: start;
+          gap: 13px;
         }
         .mark {
-          width: 34px;
-          height: 34px;
+          width: 40px;
+          height: 40px;
           flex: 0 0 auto;
-          border-radius: 10px;
+          border-radius: 13px;
           display: grid;
           place-items: center;
-          font-size: 13px;
-          font-weight: 800;
-          letter-spacing: 0.02em;
-          color: var(--accent);
-          background: var(--accent-soft);
-          border: 1px solid var(--accent-line);
-          box-shadow: 0 0 22px rgba(56, 189, 248, 0.12);
+          color: #06111f;
+          background: linear-gradient(135deg, #7dd3fc, #8b5cf6);
+          border: 1px solid rgba(255, 255, 255, 0.18);
+          box-shadow: 0 0 34px rgba(56, 189, 248, 0.22);
+          font-size: 14px;
+          font-weight: 950;
+          letter-spacing: -0.03em;
         }
         .brandText {
           min-width: 0;
           display: grid;
           gap: 2px;
-          line-height: 1.08;
+          line-height: 1.05;
         }
         .brandText b {
-          font-size: 17px;
-          font-weight: 850;
-          letter-spacing: -0.02em;
           color: var(--ink);
+          font-size: 20px;
+          font-weight: 950;
+          letter-spacing: -0.04em;
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
         }
         .brandText em {
-          font-size: 11px;
-          font-style: normal;
-          font-weight: 700;
-          letter-spacing: 0.12em;
-          text-transform: uppercase;
           color: var(--accent);
+          font-size: 12px;
+          font-style: normal;
+          font-weight: 850;
+          letter-spacing: 0.13em;
+          text-transform: uppercase;
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
@@ -120,62 +120,83 @@ export function PrimaryNav({
         nav {
           justify-self: center;
           display: inline-flex;
-          gap: 4px;
-          padding: 4px;
-          border: 1px solid var(--line);
-          border-radius: 16px;
-          background: rgba(255, 255, 255, 0.03);
+          align-items: center;
+          gap: 10px;
+          padding: 7px;
+          border: 1px solid rgba(148, 163, 184, 0.2);
+          border-radius: 999px;
+          background:
+            linear-gradient(180deg, rgba(255,255,255,0.055), rgba(255,255,255,0.018)),
+            rgba(3, 6, 12, 0.72);
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 18px 60px rgba(0,0,0,0.24);
         }
         .tab {
           display: inline-grid;
           place-items: center;
-          height: 40px;
-          padding: 0 18px;
-          border-radius: 12px;
-          font-size: 15px;
-          font-weight: 750;
-          letter-spacing: -0.02em;
-          color: var(--ink-3);
+          min-width: 116px;
+          height: 44px;
+          padding: 0 20px;
+          border: 1px solid rgba(148, 163, 184, 0.16);
+          border-radius: 999px;
+          color: rgba(231, 235, 242, 0.76);
+          background: rgba(15, 23, 42, 0.62);
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.035);
+          font-size: 16px;
+          font-weight: 900;
+          letter-spacing: -0.035em;
           white-space: nowrap;
-          transition: color 140ms ease, background 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+          transition: transform 150ms ease, border-color 150ms ease, background 150ms ease, color 150ms ease, box-shadow 150ms ease;
         }
         .tab:hover {
-          color: var(--ink);
-          background: rgba(255, 255, 255, 0.05);
+          color: #ffffff;
+          border-color: rgba(125, 211, 252, 0.48);
+          background: rgba(15, 23, 42, 0.92);
           transform: translateY(-1px);
+          box-shadow: 0 0 22px rgba(56, 189, 248, 0.12);
         }
         .tab.on {
-          color: var(--accent);
-          background: var(--accent-soft);
-          box-shadow: inset 0 0 0 1px var(--accent-line), 0 0 24px rgba(56, 189, 248, 0.12);
+          color: #06111f;
+          border-color: rgba(125, 211, 252, 0.9);
+          background: linear-gradient(135deg, #7dd3fc, #34d399);
+          box-shadow: 0 0 30px rgba(56, 189, 248, 0.26), inset 0 1px 0 rgba(255,255,255,0.35);
         }
         .right {
           justify-self: end;
           display: inline-flex;
           align-items: center;
-          gap: 8px;
+          gap: 10px;
           min-width: 0;
         }
-        @media (max-width: 1080px) {
+        @media (max-width: 1180px) {
           .inner {
             grid-template-columns: 1fr auto;
             grid-auto-rows: auto;
-            gap: 10px;
+            gap: 12px;
           }
           nav {
             grid-column: 1 / -1;
             justify-self: stretch;
-            justify-content: space-between;
             overflow-x: auto;
+            justify-content: flex-start;
+            border-radius: 20px;
           }
           .tab {
-            flex: 1;
             min-width: max-content;
-            padding: 0 14px;
+            flex: 1 0 auto;
           }
           .right {
             grid-row: 1;
             grid-column: 2;
+          }
+        }
+        @media (max-width: 680px) {
+          .brandText b {
+            font-size: 18px;
+          }
+          .tab {
+            height: 42px;
+            padding: 0 16px;
+            font-size: 15px;
           }
         }
       `}</style>
