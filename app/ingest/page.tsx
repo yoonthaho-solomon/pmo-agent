@@ -64,27 +64,18 @@ function shortRange(row?: TableStatus) {
   return `${row.minDate.slice(5)} ~ ${row.maxDate.slice(5)}`
 }
 
-function dayCount(start?: string | null, end?: string | null) {
-  if (!start || !end) return '-'
-  const diff = new Date(`${end}T00:00:00`).getTime() - new Date(`${start}T00:00:00`).getTime()
-  return `${Math.max(0, Math.round(diff / 86400000) + 1)}일`
-}
-
-function tableState(row?: TableStatus) {
-  if (!row) return '확인 필요'
-  if (row.status === 'error') return '오류'
-  if (row.status === 'empty' || !row.count) return '데이터 없음'
-  return '정상'
-}
-
-function tableTone(row?: TableStatus) {
-  if (row?.status === 'error') return C.red
-  if (!row || row.status === 'empty' || !row.count) return C.yellow
-  return C.green
-}
-
 function isReady(row?: TableStatus) {
   return Boolean(row?.count && row.status !== 'error')
+}
+
+function dateRowState(row: DateRow) {
+  if (!row.callcards || !row.driverLogs || !row.matches) {
+    return { label: '누락', tone: C.yellow, level: 'missing' as const }
+  }
+  if (row.callcards < 100 || row.driverLogs < 100 || row.matches < 100) {
+    return { label: '부분', tone: C.orange, level: 'partial' as const }
+  }
+  return { label: '정상', tone: C.green, level: 'ok' as const }
 }
 
 export default function IngestPage() {
@@ -131,11 +122,10 @@ export default function IngestPage() {
   const matching = callTables.find((row) => row.table === 'matching_scores')
   const meterHourly = meterTables.find((row) => row.table === 'meter_hourly_logs')
   const meterDrivers = meterTables.find((row) => row.table === 'meter_driver_logs')
-  const meterDaily = meterTables.find((row) => row.table === 'meter_daily_logs')
   const driverVectors = vectorTables.find((row) => row.table === 'driver_mbti')
 
-  const missingRows = useMemo(
-    () => dateRows.filter((row) => !row.callcards || !row.driverLogs || !row.matches),
+  const attentionRows = useMemo(
+    () => dateRows.filter((row) => dateRowState(row).level !== 'ok'),
     [dateRows],
   )
 
@@ -154,63 +144,84 @@ export default function IngestPage() {
       />
 
       <section className="top-rail" aria-label="데이터 적재 핵심 지표">
-        <RailMetric label="호출데이터" value={shortRange(callcards)} meta={`${dayCount(callcards?.minDate, callcards?.maxDate)} · ${fmt(callcards?.count)}건`} color={C.green} />
-        <RailMetric label="앱미터데이터" value={shortRange(meterHourly)} meta={`${dayCount(meterHourly?.minDate, meterHourly?.maxDate)} · ${fmt(meterHourly?.count)}건`} color={C.cyan} />
-        <RailMetric label="기사 벡터" value={fmt(driverVectors?.count)} meta="driver_mbti 22D" color={C.purple} />
-        <RailMetric label="매칭 결과" value={fmt(matching?.count)} meta="Top 10 저장 결과" color={C.orange} />
+        <RailMetric label="호출데이터" value={shortRange(callcards)} meta={`${fmt(callcards?.count)}건 · 콜카드 원천`} color={C.green} />
+        <RailMetric label="앱미터데이터" value={shortRange(meterHourly)} meta={`${fmt(meterHourly?.count)}건 · 시장 기준 보조`} color={C.cyan} />
+        <RailMetric label="기사 22D 벡터" value={fmt(driverVectors?.count)} meta="기사 운행패턴 임베딩" color={C.purple} />
+        <RailMetric label="매칭 계산" value={fmt(matching?.count)} meta="콜카드 × 후보기사 Top 10" color={C.orange} />
       </section>
 
       <div className="workspace">
         <section className="hero-card">
           <div className="hero-copy">
-            <p className="eyebrow">DATA READINESS</p>
-            <h1>AI 우선배차 검증 데이터가 어디까지 준비됐는지 봅니다</h1>
+            <p className="eyebrow">INGEST TO EMBEDDING</p>
+            <h1>호출과 운행 데이터를 22D 매칭 재료로 만들었습니다</h1>
             <p className="lead">
-              이 화면은 파일 업로드가 아니라 운영 데이터 준비 상태를 보는 관제 화면입니다.
-              호출데이터, 앱미터데이터, 기사 벡터, 매칭 계산이 날짜별로 이어졌는지 확인합니다.
+              호출데이터는 콜카드 조건과 기사 반응 로그의 원천이고, 앱미터데이터는 지역 택시 흐름을 보는 보조 기준입니다.
+              이 데이터로 콜카드 팩터와 기사 운행패턴 팩터를 만들고, 22D 코사인 유사도 검증까지 연결합니다.
             </p>
           </div>
           <div className="readiness" style={{ '--tone': headlineTone } as CSSProperties}>
-            <span>현재 상태</span>
+            <span>준비 판정</span>
             <strong>{headline}</strong>
-            <p>{statusError ?? status?.message ?? 'Supabase 테이블 상태를 확인하고 있습니다.'}</p>
+            <p>{statusError ?? '콜카드 팩터, 기사 로그, 기사 벡터, 매칭 계산의 핵심 연결을 확인합니다.'}</p>
             <div className="ready-ring"><b>{readyCount}</b><em>/4</em></div>
           </div>
         </section>
 
-        <section className="main-grid">
-          <aside className="left-stack">
-            <SectionTitle label="DATA COVERAGE" title="적재 범위" />
-            <CoverageCard title="호출데이터" row={callcards} color={C.green} description="콜카드 팩터와 수락·미수락 기준" />
-            <CoverageCard title="기사 로그" row={driverLogs} color={C.cyan} description="기사별 호출 반응과 운행 패턴 기초" />
-            <CoverageCard title="앱미터데이터" row={meterHourly} color={C.purple} description="천안 택시 흐름과 시장 기준 보조 데이터" />
-          </aside>
-
-          <section className="center-stage">
-            <SectionTitle label="DATE TIMELINE" title="날짜별 연결 상태" />
-            <CoverageTimeline rows={dateRows} />
-          </section>
-
-          <aside className="right-stack">
-            <SectionTitle label="AUTOMATION" title="자동 적재 파이프라인" />
-            <CommandCard title="호출데이터 자동 적재" command="npm run call:watch" color={C.green} />
-            <CommandCard title="앱미터 자동 적재" command="npm run meter:watch" color={C.cyan} />
-            <NoticeCard title="중요" body="Vercel 화면이 폴더를 직접 감시하는 것이 아닙니다. PC 또는 서버에서 watch 프로세스가 실행되어야 새 파일이 Supabase로 들어갑니다." color={C.orange} />
-            <NoticeCard title="운영 기준" body="앱미터는 기사 MBTI의 주 원천이 아니라 지역별 택시 흐름과 시장 기준을 보는 보조 데이터입니다." color={C.purple} />
-          </aside>
+        <section className="flow-card">
+          <SectionTitle label="CORE FLOW" title="적재 데이터가 매칭 재료가 되는 흐름" />
+          <div className="flow-steps">
+            <FlowStep no="01" title="호출데이터 적재" body="콜 조건, 기사 ID, 차량 ID, 상태값, 좌표, 예상거리·요금·ETA를 읽습니다." color={C.green} />
+            <FlowStep no="02" title="콜카드·기사 로그 생성" body="콜카드는 요청 조건 팩터가 되고, 수락·취소·만료 결과는 기사 반응 로그가 됩니다." color={C.cyan} />
+            <FlowStep no="03" title="기사 22D 벡터 생성" body="기사별 누적 반응과 운행패턴을 시간대·요일·거리·요금·상품 기준으로 임베딩합니다." color={C.purple} />
+            <FlowStep no="04" title="코사인 유사도 계산" body="콜카드 22D와 기사 22D를 비교해 Top 10 후보 검증 결과를 만듭니다." color={C.orange} />
+          </div>
         </section>
 
-        <section className="bottom-grid">
-          <SupportPanel title="앱미터 보조 기준" color={C.cyan} rows={[
-            ['시간대 로그', rangeText(meterHourly), fmt(meterHourly?.count)],
-            ['기사별 로그', rangeText(meterDrivers), fmt(meterDrivers?.count)],
-            ['일별 요약', rangeText(meterDaily), fmt(meterDaily?.count)],
-          ]} />
-          <SupportPanel title="누락 확인" color={missingRows.length ? C.yellow : C.green} rows={[
-            ['최근 14일 누락', `${missingRows.length}일`, missingRows.length ? '확인 필요' : '정상'],
-            ['호출-기사 연결', tableState(driverLogs), rangeText(driverLogs)],
-            ['매칭 계산', tableState(matching), rangeText(matching)],
-          ]} />
+        <section className="data-grid">
+          <DataSummaryCard
+            title="호출데이터"
+            subtitle="AI 우선배차의 주 원천"
+            color={C.green}
+            rows={[
+              ['적재 기간', rangeText(callcards)],
+              ['콜카드 팩터', `${fmt(callcards?.count)}건`],
+              ['기사 반응 로그', `${fmt(driverLogs?.count)}건`],
+              ['역할', '콜 조건과 수락·미수락 패턴 생성'],
+            ]}
+          />
+          <DataSummaryCard
+            title="앱미터데이터"
+            subtitle="기사 MBTI 주 원천이 아닌 시장 기준 보조 데이터"
+            color={C.cyan}
+            rows={[
+              ['적재 기간', rangeText(meterHourly)],
+              ['시간대 요약', `${fmt(meterHourly?.count)}건`],
+              ['기사별 로그', `${fmt(meterDrivers?.count)}건`],
+              ['건수가 적은 이유', '원천 콜 단위가 아니라 일별·시간대 요약 단위'],
+            ]}
+          />
+        </section>
+
+        <section className="result-panel">
+          <SectionTitle label="GENERATED OUTPUT" title="적재 이후 생성된 매칭 재료" />
+          <div className="result-grid">
+            <ResultCard title="콜카드 팩터" value={fmt(callcards?.count)} body="실제 호출 조건을 22D 콜카드 벡터로 변환" color={C.green} />
+            <ResultCard title="기사 로그" value={fmt(driverLogs?.count)} body="기사별 콜 수락·취소·만료 반응 패턴 집계" color={C.cyan} />
+            <ResultCard title="기사 22D 벡터" value={fmt(driverVectors?.count)} body="누적 운행패턴 기반 driver_mbti 임베딩" color={C.purple} />
+            <ResultCard title="매칭 계산" value={fmt(matching?.count)} body="콜카드와 후보기사 Top 10 유사도 계산 결과" color={C.orange} />
+          </div>
+        </section>
+
+        <section className="attention-panel">
+          <SectionTitle label="CHECK POINT" title="확인이 필요한 날짜만 봅니다" />
+          <div className="attention-summary">
+            <strong style={{ color: attentionRows.length ? C.yellow : C.green }}>{attentionRows.length}일</strong>
+            <p>
+              전체 날짜를 모두 나열하지 않고, 콜카드·기사 로그·매칭 계산이 비어 있거나 비정상적으로 적은 날짜만 표시합니다.
+            </p>
+          </div>
+          <CoverageTimeline rows={attentionRows} />
         </section>
       </div>
 
@@ -245,10 +256,10 @@ export default function IngestPage() {
         }
 
         .hero-card,
-        .left-stack,
-        .center-stage,
-        .right-stack,
-        .support-panel {
+        .flow-card,
+        .data-card,
+        .result-panel,
+        .attention-panel {
           border: 1px solid ${C.line};
           border-radius: 8px;
           background: linear-gradient(180deg, rgba(15, 23, 42, 0.78), rgba(5, 8, 16, 0.86));
@@ -280,7 +291,7 @@ export default function IngestPage() {
         h1 {
           max-width: 980px;
           margin: 0;
-          font-size: 58px;
+          font-size: clamp(46px, 3vw, 58px);
           line-height: 1.06;
           letter-spacing: 0;
         }
@@ -315,12 +326,13 @@ export default function IngestPage() {
 
         .readiness strong {
           color: var(--tone);
-          font-size: 54px;
+          font-size: clamp(42px, 3vw, 54px);
           line-height: 1;
+          word-break: keep-all;
         }
 
         .readiness p {
-          max-width: 270px;
+          max-width: 285px;
           margin: 0;
           color: ${C.sub};
           font-size: 19px;
@@ -355,44 +367,63 @@ export default function IngestPage() {
           font-weight: 800;
         }
 
-        .main-grid {
+        .data-grid {
           display: grid;
-          grid-template-columns: 330px minmax(0, 1fr) 340px;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
           gap: 22px;
           align-items: start;
         }
 
-        .left-stack,
-        .right-stack,
-        .center-stage {
-          min-width: 0;
-          padding: 24px;
+        .flow-card,
+        .result-panel,
+        .attention-panel {
+          padding: 28px;
         }
 
-        .left-stack,
-        .right-stack {
+        .flow-steps {
           display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
           gap: 16px;
-          align-content: start;
         }
 
-        .center-stage {
-          min-height: 620px;
-        }
-
-        .bottom-grid {
+        .result-grid {
           display: grid;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 22px;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 16px;
+        }
+
+        .attention-panel {
+          display: grid;
+          gap: 18px;
+        }
+
+        .attention-summary {
+          display: grid;
+          grid-template-columns: 160px minmax(0, 1fr);
+          gap: 18px;
+          align-items: center;
+          padding: 18px;
+          border: 1px solid ${C.line};
+          border-radius: 8px;
+          background: rgba(15, 23, 42, 0.64);
+        }
+
+        .attention-summary strong {
+          font-size: 46px;
+          line-height: 1;
+        }
+
+        .attention-summary p {
+          margin: 0;
+          color: ${C.sub};
+          font-size: 21px;
+          line-height: 1.45;
+          font-weight: 700;
         }
 
         @media (max-width: 1320px) {
-          .main-grid {
-            grid-template-columns: minmax(280px, 0.8fr) minmax(0, 1.2fr);
-          }
-
-          .right-stack {
-            grid-column: 1 / -1;
+          .flow-steps,
+          .result-grid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
           }
         }
@@ -400,9 +431,10 @@ export default function IngestPage() {
         @media (max-width: 980px) {
           .top-rail,
           .hero-card,
-          .main-grid,
-          .bottom-grid,
-          .right-stack {
+          .data-grid,
+          .flow-steps,
+          .result-grid,
+          .attention-summary {
             grid-template-columns: 1fr;
           }
 
@@ -501,63 +533,190 @@ function SectionTitle({ label, title }: { label: string; title: string }) {
   )
 }
 
-function CoverageCard({ title, row, color, description }: { title: string; row?: TableStatus; color: string; description: string }) {
-  const tone = tableTone(row) || color
+function FlowStep({ no, title, body, color }: { no: string; title: string; body: string; color: string }) {
   return (
-    <article className="coverage" style={{ '--tone': tone } as CSSProperties}>
-      <div className="coverage-head">
-        <h3>{title}</h3>
-        <span>{tableState(row)}</span>
-      </div>
-      <strong>{rangeText(row)}</strong>
-      <p>{dayCount(row?.minDate, row?.maxDate)} · {fmt(row?.count)}건</p>
-      <em>{row?.error ?? description}</em>
+    <article className="flow-step" style={{ '--tone': color } as CSSProperties}>
+      <span>{no}</span>
+      <h3>{title}</h3>
+      <p>{body}</p>
       <style jsx>{`
-        .coverage {
+        .flow-step {
+          min-height: 230px;
           display: grid;
-          gap: 10px;
-          padding: 18px;
-          border: 1px solid color-mix(in srgb, var(--tone) 44%, transparent);
+          align-content: start;
+          gap: 13px;
+          padding: 22px;
+          border: 1px solid color-mix(in srgb, var(--tone) 42%, transparent);
           border-radius: 8px;
-          background: linear-gradient(135deg, color-mix(in srgb, var(--tone) 10%, transparent), rgba(15, 23, 42, 0.5));
+          background: linear-gradient(135deg, color-mix(in srgb, var(--tone) 12%, transparent), rgba(15, 23, 42, 0.55));
         }
 
-        .coverage-head {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 12px;
+        span {
+          width: 58px;
+          height: 58px;
+          display: grid;
+          place-items: center;
+          color: var(--tone);
+          border: 1px solid color-mix(in srgb, var(--tone) 48%, transparent);
+          border-radius: 16px;
+          background: rgba(5, 8, 16, 0.58);
+          font-size: 22px;
+          font-weight: 950;
         }
 
         h3 {
           margin: 0;
           color: ${C.ink};
+          font-size: 26px;
+          line-height: 1.14;
+        }
+
+        p {
+          margin: 0;
+          color: ${C.sub};
+          font-size: 20px;
+          line-height: 1.42;
+          font-weight: 680;
+        }
+      `}</style>
+    </article>
+  )
+}
+
+function DataSummaryCard({
+  title,
+  subtitle,
+  color,
+  rows,
+}: {
+  title: string
+  subtitle: string
+  color: string
+  rows: [string, string][]
+}) {
+  return (
+    <article className="data-card" style={{ '--tone': color } as CSSProperties}>
+      <div className="data-head">
+        <span>DATA SOURCE</span>
+        <h3>{title}</h3>
+        <p>{subtitle}</p>
+      </div>
+      <div className="data-rows">
+        {rows.map(([label, value]) => (
+          <div key={label}>
+            <span>{label}</span>
+            <strong>{value}</strong>
+          </div>
+        ))}
+      </div>
+      <style jsx>{`
+        .data-card {
+          min-width: 0;
+          padding: 28px;
+          border-color: color-mix(in srgb, var(--tone) 42%, transparent);
+        }
+
+        .data-head span {
+          color: var(--tone);
+          font-size: 20px;
+          font-weight: 950;
+        }
+
+        h3 {
+          margin: 10px 0 0;
+          color: ${C.ink};
+          font-size: 42px;
+          line-height: 1.08;
+        }
+
+        p {
+          margin: 10px 0 0;
+          color: ${C.sub};
+          font-size: 21px;
+          line-height: 1.42;
+          font-weight: 700;
+        }
+
+        .data-rows {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 14px;
+          margin-top: 24px;
+        }
+
+        .data-rows div {
+          min-width: 0;
+          min-height: 116px;
+          display: grid;
+          align-content: center;
+          gap: 8px;
+          padding: 18px;
+          border: 1px solid ${C.line};
+          border-radius: 8px;
+          background: rgba(5, 8, 16, 0.48);
+        }
+
+        .data-rows span {
+          color: ${C.muted};
+          font-size: 18px;
+          font-weight: 900;
+        }
+
+        .data-rows strong {
+          color: ${C.ink};
           font-size: 23px;
-          line-height: 1.18;
+          line-height: 1.22;
+          overflow-wrap: anywhere;
+        }
+
+        @media (max-width: 760px) {
+          .data-rows {
+            grid-template-columns: 1fr;
+          }
+        }
+      `}</style>
+    </article>
+  )
+}
+
+function ResultCard({ title, value, body, color }: { title: string; value: string; body: string; color: string }) {
+  return (
+    <article className="result-card" style={{ '--tone': color } as CSSProperties}>
+      <span>{title}</span>
+      <strong>{value}</strong>
+      <p>{body}</p>
+      <style jsx>{`
+        .result-card {
+          min-width: 0;
+          min-height: 210px;
+          display: grid;
+          align-content: start;
+          gap: 12px;
+          padding: 22px;
+          border: 1px solid color-mix(in srgb, var(--tone) 42%, transparent);
+          border-radius: 8px;
+          background: linear-gradient(145deg, color-mix(in srgb, var(--tone) 10%, transparent), rgba(15, 23, 42, 0.58));
         }
 
         span {
           color: var(--tone);
-          font-size: 18px;
-          font-weight: 900;
-          white-space: nowrap;
+          font-size: 21px;
+          font-weight: 950;
         }
 
         strong {
           color: ${C.ink};
-          font-size: 22px;
-          line-height: 1.22;
-          word-break: keep-all;
+          font-size: 38px;
+          line-height: 1.05;
+          overflow-wrap: anywhere;
         }
 
-        p,
-        em {
+        p {
           margin: 0;
           color: ${C.sub};
-          font-size: 19px;
+          font-size: 20px;
           line-height: 1.42;
-          font-style: normal;
-          font-weight: 650;
+          font-weight: 700;
         }
       `}</style>
     </article>
@@ -589,14 +748,14 @@ function CoverageTimeline({ rows }: { rows: DateRow[] }) {
   return (
     <div className="timeline">
       {rows.map((row) => {
-        const ok = Boolean(row.callcards && row.driverLogs && row.matches)
-        const tone = ok ? C.green : C.yellow
+        const state = dateRowState(row)
+        const tone = state.tone
         const max = Math.max(row.callcards ?? 0, row.driverLogs ?? 0, row.matches ?? 0, 1)
         return (
           <article key={row.date} className="date-card" style={{ '--tone': tone } as CSSProperties}>
             <div className="date-head">
               <strong>{row.date.slice(5)}</strong>
-              <span>{ok ? '정상' : '확인'}</span>
+              <span>{state.label}</span>
             </div>
             <MiniBar label="콜" value={row.callcards} max={max} color={C.green} />
             <MiniBar label="로그" value={row.driverLogs} max={max} color={C.cyan} />
@@ -689,144 +848,6 @@ function MiniBar({ label, value, max, color }: { label: string; value: number | 
         }
       `}</style>
     </div>
-  )
-}
-
-function CommandCard({ title, command, color }: { title: string; command: string; color: string }) {
-  return (
-    <article className="command" style={{ '--tone': color } as CSSProperties}>
-      <span>{title}</span>
-      <code>{command}</code>
-      <style jsx>{`
-        .command {
-          display: grid;
-          gap: 10px;
-          padding: 18px;
-          border: 1px solid color-mix(in srgb, var(--tone) 44%, transparent);
-          border-radius: 8px;
-          background: color-mix(in srgb, var(--tone) 9%, transparent);
-        }
-
-        span {
-          color: var(--tone);
-          font-size: 20px;
-          font-weight: 900;
-        }
-
-        code {
-          min-width: 0;
-          color: ${C.ink};
-          font-size: 21px;
-          line-height: 1.25;
-          font-weight: 900;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-      `}</style>
-    </article>
-  )
-}
-
-function NoticeCard({ title, body, color }: { title: string; body: string; color: string }) {
-  return (
-    <article className="notice" style={{ '--tone': color } as CSSProperties}>
-      <h3>{title}</h3>
-      <p>{body}</p>
-      <style jsx>{`
-        .notice {
-          padding: 18px;
-          border: 1px solid color-mix(in srgb, var(--tone) 42%, transparent);
-          border-radius: 8px;
-          background: color-mix(in srgb, var(--tone) 9%, transparent);
-        }
-
-        h3 {
-          margin: 0;
-          color: var(--tone);
-          font-size: 22px;
-          line-height: 1.2;
-        }
-
-        p {
-          margin: 10px 0 0;
-          color: ${C.sub};
-          font-size: 20px;
-          line-height: 1.45;
-          font-weight: 650;
-        }
-      `}</style>
-    </article>
-  )
-}
-
-function SupportPanel({ title, color, rows }: { title: string; color: string; rows: [string, string, string][] }) {
-  return (
-    <article className="support-panel">
-      <h3 style={{ color }}>{title}</h3>
-      <div className="support-rows">
-        {rows.map(([label, value, count]) => (
-          <div key={label}>
-            <span>{label}</span>
-            <strong>{value}</strong>
-            <em>{count}</em>
-          </div>
-        ))}
-      </div>
-      <style jsx>{`
-        .support-panel {
-          padding: 24px;
-        }
-
-        h3 {
-          margin: 0 0 18px;
-          font-size: 28px;
-          line-height: 1.15;
-        }
-
-        .support-rows {
-          display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
-          gap: 14px;
-        }
-
-        .support-rows div {
-          min-width: 0;
-          padding: 18px;
-          border: 1px solid ${C.line};
-          border-radius: 8px;
-          background: ${C.panel2};
-        }
-
-        span,
-        em {
-          display: block;
-          color: ${C.sub};
-          font-size: 18px;
-          line-height: 1.35;
-          font-style: normal;
-          font-weight: 700;
-        }
-
-        strong {
-          display: block;
-          min-width: 0;
-          margin: 9px 0;
-          color: ${C.ink};
-          font-size: 22px;
-          line-height: 1.25;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-
-        @media (max-width: 860px) {
-          .support-rows {
-            grid-template-columns: 1fr;
-          }
-        }
-      `}</style>
-    </article>
   )
 }
 
