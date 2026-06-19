@@ -481,17 +481,18 @@ export default function SimulatorPage() {
         <section className="panel stage-panel">
           <div className="stage-head">
             <div>
-              <SectionEyebrow>MATCHING FIELD</SectionEyebrow>
-              <h2>{selected ? `1순위 ${selected.driver.driver_id}` : '콜카드 입력 대기'}</h2>
-              <p>중앙의 콜카드를 기준으로 후보 기사가 최종점수 순으로 배치됩니다. 선이 굵을수록 매칭 우선도가 높습니다.</p>
+              <SectionEyebrow>AI DISPATCH SIMULATOR</SectionEyebrow>
+              <h2>{selected ? `우선발송 1순위 ${selected.driver.driver_id}` : '콜카드를 선택하면 기사군이 재정렬됩니다'}</h2>
+              <p>콜카드 원본 조건, 22D 성향 벡터, 출발·도착 H3 공간 적합도를 함께 비교해서 가장 먼저 보낼 기사 후보를 보여줍니다.</p>
             </div>
             <div className="score-hero">
-              <span>BEST</span>
+              <span>FINAL SCORE</span>
               <b>{selected ? Math.round(selected.finalScore) : '-'}</b>
-              <em>최종점수</em>
+              <em>성향 75% + 공간 25%</em>
             </div>
           </div>
 
+          <WinnerSpotlight selected={selected} callcard={selectedCallcard} />
           <ReadinessCard
             drivers={drivers.length}
             callcards={callcards.length}
@@ -502,6 +503,12 @@ export default function SimulatorPage() {
             callcardError={callcardLoadError}
           />
 
+          <DispatchStory
+            callcards={callcards.length}
+            drivers={drivers.length}
+            ranked={ranked.length}
+            selected={selected}
+          />
           <MatchField
             ranked={ranked}
             selectedId={selectedDriverId}
@@ -561,6 +568,7 @@ export default function SimulatorPage() {
           )}
 
           <DriverCard selected={selected} />
+          <DispatchPreview selected={selected} callcard={selectedCallcard} distance={distance} fare={fare} eta={eta} />
           <RadiusCard ranked={ranked} selectedId={selectedDriverId} onSelect={setSelectedDriverId} />
         </aside>
       </section>
@@ -762,6 +770,92 @@ function ReadinessCard({
   )
 }
 
+function WinnerSpotlight({ selected, callcard }: { selected?: Ranked; callcard: SimulatorCallcardRow | null }) {
+  return (
+    <section className="winner-spotlight">
+      <div className="winner-copy">
+        <span>우선발송 후보</span>
+        <h3>{selected?.driver.driver_id ?? '후보 계산 대기'}</h3>
+        <p>선택된 콜카드와 누적 기사 패턴을 비교해, 지금 먼저 발송할 기사와 점수 근거를 한 화면에서 확인합니다.</p>
+      </div>
+      <div className="winner-metrics">
+        <div><span>최종</span><b>{selected ? Math.round(selected.finalScore) : '-'}</b></div>
+        <div><span>성향</span><b>{pct(selected?.similarityScore)}</b></div>
+        <div><span>공간</span><b>{pct(selected?.spatial.spatialScore)}</b></div>
+        <div><span>콜카드</span><b>{callcard?.call_date ?? '-'}</b></div>
+      </div>
+    </section>
+  )
+}
+
+function DispatchStory({
+  callcards,
+  drivers,
+  ranked,
+  selected,
+}: {
+  callcards: number
+  drivers: number
+  ranked: number
+  selected?: Ranked
+}) {
+  const steps = [
+    { label: '01', title: '콜카드 원본 조건', value: `${callcards.toLocaleString()}건`, desc: '주소, 좌표, H3, 요금, 거리, 시간 조건을 읽습니다.' },
+    { label: '02', title: '기사 운행패턴', value: `${drivers.toLocaleString()}명`, desc: '누적 운행 이력에서 기사별 22D 성향을 비교합니다.' },
+    { label: '03', title: '공간 적합도', value: pct(selected?.spatial.spatialScore), desc: '출발 H3와 도착 H3가 기사 선호 H3와 가까운지 봅니다.' },
+    { label: '04', title: '우선발송 순위', value: `${ranked.toLocaleString()}명`, desc: '최종점수 순서로 먼저 보낼 후보를 정렬합니다.' },
+  ]
+  return (
+    <div className="dispatch-story" aria-label="시뮬레이션 계산 흐름">
+      {steps.map((step) => (
+        <div key={step.label} className="story-step">
+          <span>{step.label}</span>
+          <strong>{step.title}</strong>
+          <b>{step.value}</b>
+          <p>{step.desc}</p>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function DispatchPreview({
+  selected,
+  callcard,
+  distance,
+  fare,
+  eta,
+}: {
+  selected?: Ranked
+  callcard: SimulatorCallcardRow | null
+  distance: number
+  fare: number
+  eta: number
+}) {
+  return (
+    <section className="dispatch-preview">
+      <div className="card-head">
+        <b>기사 수신 카드 예시</b>
+        <span>시뮬레이션</span>
+      </div>
+      <div className="phone-card">
+        <div className="phone-top">
+          <span>AI 우선배차</span>
+          <b>{selected ? `${Math.round(selected.finalScore)}점` : '-'}</b>
+        </div>
+        <strong>{callcard?.passenger_addr ?? '출발지 정보 없음'}</strong>
+        <em>{callcard?.dest_addr ?? '도착지 정보 없음'}</em>
+        <div className="phone-facts">
+          <span>{formatKm(distance)}</span>
+          <span>{formatFare(fare)}</span>
+          <span>ETA {eta}초</span>
+        </div>
+        <p>픽업거리와 ETA는 실제 기사 위치가 연결되기 전까지 데모용 시뮬레이션 값입니다.</p>
+        <div className="phone-actions"><button type="button">수락</button><button type="button">넘김</button></div>
+      </div>
+    </section>
+  )
+}
 function MatchField({
   ranked,
   selectedId,
@@ -1358,6 +1452,183 @@ const pageCss = `
     font-size: 20px;
     line-height: 1.4;
   }
+  .winner-spotlight {
+    margin-top: 18px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 18px;
+    align-items: stretch;
+    border: 1px solid rgba(34,211,238,.35);
+    border-radius: 28px;
+    background:
+      radial-gradient(circle at 12% 20%, rgba(34,211,238,.22), transparent 34%),
+      linear-gradient(135deg, rgba(34,211,238,.12), rgba(139,92,246,.12));
+    padding: 22px;
+  }
+  .winner-copy span,
+  .story-step span,
+  .phone-top span {
+    color: ${C.cyan};
+    font-size: 20px;
+    font-weight: 950;
+  }
+  .winner-copy h3 {
+    margin-top: 8px;
+    font-size: clamp(34px, 3.2vw, 58px);
+    line-height: 1;
+    font-weight: 950;
+    overflow-wrap: anywhere;
+  }
+  .winner-copy p {
+    margin-top: 10px;
+    color: ${C.sub};
+    font-size: 22px;
+    line-height: 1.42;
+    font-weight: 800;
+  }
+  .winner-metrics {
+    min-width: 420px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+  .winner-metrics div,
+  .story-step,
+  .phone-card {
+    min-width: 0;
+    border: 1px solid rgba(255,255,255,.10);
+    border-radius: 20px;
+    background: rgba(5,8,16,.58);
+    padding: 16px;
+  }
+  .winner-metrics span {
+    display: block;
+    color: ${C.muted};
+    font-size: 19px;
+    font-weight: 950;
+  }
+  .winner-metrics b {
+    display: block;
+    margin-top: 4px;
+    color: ${C.ink};
+    font-size: 34px;
+    line-height: 1.05;
+    font-weight: 950;
+    overflow-wrap: anywhere;
+  }
+  .dispatch-story {
+    margin-top: 18px;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 14px;
+  }
+  .story-step {
+    position: relative;
+    overflow: hidden;
+  }
+  .story-step::after {
+    content: '';
+    position: absolute;
+    right: -30px;
+    top: -30px;
+    width: 92px;
+    height: 92px;
+    border-radius: 999px;
+    background: rgba(34,211,238,.10);
+  }
+  .story-step strong {
+    display: block;
+    margin-top: 10px;
+    font-size: 22px;
+    line-height: 1.2;
+  }
+  .story-step b {
+    display: block;
+    margin-top: 12px;
+    color: ${C.ink};
+    font-size: 34px;
+    line-height: 1;
+  }
+  .story-step p {
+    margin-top: 10px;
+    color: ${C.sub};
+    font-size: 19px;
+    line-height: 1.35;
+    font-weight: 800;
+  }
+  .dispatch-preview {
+    margin-top: 18px;
+  }
+  .phone-card {
+    background:
+      radial-gradient(circle at 80% 10%, rgba(16,185,129,.22), transparent 36%),
+      rgba(5,8,16,.72);
+  }
+  .phone-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+  .phone-top b {
+    color: ${C.green};
+    font-size: 34px;
+  }
+  .phone-card strong,
+  .phone-card em {
+    display: block;
+    overflow-wrap: anywhere;
+  }
+  .phone-card strong {
+    font-size: 24px;
+    line-height: 1.25;
+  }
+  .phone-card em {
+    margin-top: 8px;
+    color: ${C.sub};
+    font-size: 21px;
+    line-height: 1.3;
+    font-style: normal;
+    font-weight: 850;
+  }
+  .phone-facts {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 16px;
+  }
+  .phone-facts span {
+    border-radius: 14px;
+    background: rgba(255,255,255,.06);
+    padding: 12px;
+    color: ${C.ink};
+    font-size: 20px;
+    font-weight: 950;
+    text-align: center;
+  }
+  .phone-card p {
+    margin-top: 14px;
+    color: ${C.yellow};
+    font-size: 19px;
+    line-height: 1.35;
+    font-weight: 850;
+  }
+  .phone-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 16px;
+  }
+  .phone-actions button {
+    min-height: 54px;
+    border: 1px solid rgba(34,211,238,.35);
+    border-radius: 16px;
+    color: ${C.ink};
+    background: rgba(34,211,238,.12);
+    font-size: 21px;
+    font-weight: 950;
+  }
   .match-field {
     position: relative;
     height: clamp(440px, 48vh, 640px);
@@ -1844,3 +2115,5 @@ const pageCss = `
     }
   }
 `
+
+
