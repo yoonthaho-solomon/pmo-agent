@@ -1,8 +1,7 @@
 'use client'
 
-import { DispatchFlow } from '@/app/components/DispatchFlow'
 import { PrimaryNav } from '@/app/components/PrimaryNav'
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 
 type TableStatus = {
   table: string
@@ -36,67 +35,84 @@ type SystemStatusResponse = {
 }
 
 const C = {
-  bg: '#05070D',
-  panel: 'rgba(10, 15, 27, 0.92)',
-  panel2: 'rgba(16, 24, 39, 0.78)',
-  ink: '#F8FAFC',
-  sub: '#B8C7DE',
-  muted: '#7C8AA3',
-  line: 'rgba(148, 163, 184, 0.18)',
-  cyan: '#22D3EE',
-  green: '#34D399',
-  yellow: '#FBBF24',
-  orange: '#FB923C',
-  red: '#F43F5E',
-  purple: '#A78BFA',
-  slate: '#64748B',
-} as const
+  bg: '#070a10',
+  panel: '#10151f',
+  panel2: '#151b27',
+  line: 'rgba(255,255,255,.09)',
+  ink: '#f3f7ff',
+  sub: '#b8c7da',
+  muted: '#7f8da3',
+  cyan: '#38bdf8',
+  green: '#54d17a',
+  orange: '#f59e42',
+  violet: '#9b7cff',
+  yellow: '#f2c14e',
+  red: '#f15d64',
+}
 
-function fmt(n: number | null | undefined) {
-  return n == null ? '-' : n.toLocaleString('ko-KR')
+function fmt(value: number | null | undefined) {
+  return value == null ? '-' : value.toLocaleString('ko-KR')
+}
+
+function dateOnly(value?: string | null) {
+  return value ? value.slice(0, 10) : null
 }
 
 function rangeText(row?: TableStatus) {
-  if (!row?.minDate || !row?.maxDate) return '-'
-  return `${row.minDate} ~ ${row.maxDate}`
+  const start = dateOnly(row?.minDate)
+  const end = dateOnly(row?.maxDate)
+  if (!start || !end) return '-'
+  return `${start} ~ ${end}`
 }
 
 function shortRange(row?: TableStatus) {
-  if (!row?.minDate || !row?.maxDate) return '-'
-  return `${row.minDate.slice(5)} ~ ${row.maxDate.slice(5)}`
+  const start = dateOnly(row?.minDate)
+  const end = dateOnly(row?.maxDate)
+  if (!start || !end) return '-'
+  return `${start.slice(5)} ~ ${end.slice(5)}`
 }
 
-function isReady(row?: TableStatus) {
+function dayCount(start?: string | null, end?: string | null) {
+  const a = dateOnly(start)
+  const b = dateOnly(end)
+  if (!a || !b) return '-'
+  const diff = new Date(`${b}T00:00:00`).getTime() - new Date(`${a}T00:00:00`).getTime()
+  if (Number.isNaN(diff)) return '-'
+  return `${Math.max(0, Math.round(diff / 86400000) + 1)}일`
+}
+
+function rowReady(row?: TableStatus) {
   return Boolean(row?.count && row.status !== 'error')
 }
 
-function dateRowState(row: DateRow) {
-  if (!row.callcards || !row.driverLogs || !row.matches) {
-    return { label: '누락', tone: C.red, level: 'missing' as const, score: 20 }
-  }
-  if (row.callcards < 100 || row.driverLogs < 100 || row.matches < 100) {
-    return { label: '부분', tone: C.yellow, level: 'partial' as const, score: 55 }
-  }
-  return { label: '정상', tone: C.green, level: 'ok' as const, score: 92 }
+function rowState(row?: TableStatus) {
+  if (!row) return '확인 필요'
+  if (row.status === 'error') return '오류'
+  if (!row.count) return '비어 있음'
+  return '정상'
 }
 
-function statusCount(rows: DateRow[], level: 'ok' | 'partial' | 'missing') {
-  return rows.filter((row) => dateRowState(row).level === level).length
+function rowTone(row?: TableStatus) {
+  if (!row) return C.yellow
+  if (row.status === 'error') return C.red
+  if (!row.count) return C.yellow
+  return C.green
 }
 
 export default function IngestPage() {
   const [loading, setLoading] = useState(true)
   const [status, setStatus] = useState<SystemStatusResponse | null>(null)
   const [statusError, setStatusError] = useState<string | null>(null)
-  const [metric, setMetric] = useState<'callcards' | 'driverLogs' | 'matches'>('callcards')
 
   useEffect(() => {
     let cancelled = false
+
     async function load() {
       setLoading(true)
       setStatusError(null)
       const controller = new AbortController()
       const timeout = window.setTimeout(() => controller.abort(), 9000)
+
       const nextStatus = await fetch('/api/system-status', { cache: 'no-store', signal: controller.signal })
         .then(async (res) => {
           if (!res.ok) return { error: `상태 API 응답 실패 (${res.status})` } as SystemStatusResponse
@@ -104,7 +120,7 @@ export default function IngestPage() {
         })
         .catch((error: Error) => ({
           error: error.name === 'AbortError'
-            ? '상태 API 응답이 지연되고 있습니다. Supabase 연결과 Vercel 환경변수를 확인하세요.'
+            ? '상태 API 응답이 지연되고 있습니다. Supabase 환경변수와 테이블 권한을 확인하세요.'
             : error.message,
         } as SystemStatusResponse))
         .finally(() => window.clearTimeout(timeout))
@@ -116,7 +132,9 @@ export default function IngestPage() {
     }
 
     load()
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   const callTables = useMemo(() => status?.callTables ?? [], [status?.callTables])
@@ -129,618 +147,716 @@ export default function IngestPage() {
   const matching = callTables.find((row) => row.table === 'matching_scores')
   const meterHourly = meterTables.find((row) => row.table === 'meter_hourly_logs')
   const meterDrivers = meterTables.find((row) => row.table === 'meter_driver_logs')
+  const meterDaily = meterTables.find((row) => row.table === 'meter_daily_logs')
   const driverVectors = vectorTables.find((row) => row.table === 'driver_mbti')
 
-  const okDays = statusCount(dateRows, 'ok')
-  const partialDays = statusCount(dateRows, 'partial')
-  const missingDays = statusCount(dateRows, 'missing')
-  const issueRows = useMemo(
-    () => dateRows.filter((row) => dateRowState(row).level !== 'ok').slice(0, 5),
+  const missingRows = useMemo(
+    () => dateRows.filter((row) => !row.callcards || !row.driverLogs || !row.matches),
     [dateRows],
   )
-  const coreReady = Boolean(isReady(callcards) && isReady(driverLogs) && isReady(driverVectors))
-  const headline = loading ? '조회 중' : coreReady ? '매칭 준비 완료' : '확인 필요'
-  const headlineTone = loading ? C.cyan : coreReady ? C.green : C.yellow
+
+  const readyCount = [
+    rowReady(callcards),
+    rowReady(driverLogs),
+    rowReady(driverVectors),
+    rowReady(matching),
+  ].filter(Boolean).length
+  const statusLabel = loading ? '확인 중' : readyCount >= 3 ? '분석 가능' : '확인 필요'
+  const statusTone = loading ? C.cyan : readyCount >= 3 ? C.green : C.yellow
 
   return (
     <main className="page">
       <PrimaryNav
         active="/ingest"
         title="KONAMOBILITY"
-        subtitle="Data Status"
-        rightSlot={<><Pill color={C.green}>READ ONLY</Pill><Pill color={C.cyan}>SUPABASE</Pill></>}
+        subtitle="DATA RADAR"
+        rightSlot={(
+          <>
+            <Pill color={C.green}>READ ONLY</Pill>
+            <Pill color={C.cyan}>SUPABASE</Pill>
+          </>
+        )}
       />
 
-      <DispatchFlow active={['request', 'callcard']} />
-
-      <section className="kpi-strip" aria-label="데이터 현황 핵심 지표">
-        <Kpi label="호출데이터" value={shortRange(callcards)} meta={`${fmt(callcards?.count)}건`} color={C.cyan} />
-        <Kpi label="앱미터데이터" value={shortRange(meterHourly)} meta={`${fmt(meterHourly?.count)}건`} color={C.green} />
-        <Kpi label="기사 벡터" value={fmt(driverVectors?.count)} meta="driver_mbti 22D" color={C.purple} />
-        <Kpi label="매칭 결과" value={fmt(matching?.count)} meta="Top 10 저장 결과" color={C.orange} />
-        <Kpi label="누락 확인" value={`${missingDays}일`} meta={`${okDays}일 정상 · ${partialDays}일 부분`} color={missingDays ? C.red : C.green} />
+      <section className="topRail" aria-label="적재 핵심 지표">
+        <Kpi title="호출데이터" value={shortRange(callcards)} meta={`${dayCount(callcards?.minDate, callcards?.maxDate)} · ${fmt(callcards?.count)}건`} color={C.green} />
+        <Kpi title="앱미터데이터" value={shortRange(meterHourly)} meta={`${dayCount(meterHourly?.minDate, meterHourly?.maxDate)} · ${fmt(meterHourly?.count)}건`} color={C.cyan} />
+        <Kpi title="기사 운행패턴" value={fmt(driverVectors?.count)} meta="driver_mbti 22D 기사 벡터" color={C.violet} />
+        <Kpi title="우선발송 후보" value={fmt(matching?.count)} meta="콜카드별 Top 10 계산 결과" color={C.orange} />
       </section>
 
-      <section className="ops-board">
-        <aside className="left-rail panel">
-          <PanelTitle label="CRITICAL ISSUES" title="먼저 확인할 것" />
-          <IssueList rows={issueRows} loading={loading} error={statusError} />
-          <SourceCard
-            title="호출데이터"
-            badge="주 원천"
-            color={C.cyan}
-            rows={[
-              ['기간', rangeText(callcards)],
-              ['콜카드 팩터', `${fmt(callcards?.count)}건`],
-              ['기사 반응 로그', `${fmt(driverLogs?.count)}건`],
-            ]}
-          />
-          <SourceCard
-            title="앱미터데이터"
-            badge="시장 기준"
+      <div className="shell">
+        <section className="hero">
+          <div>
+            <span className="eyebrow">DATA READINESS</span>
+            <h1>콜수락율 분석에 필요한 데이터가 어디까지 쌓였는지 봅니다.</h1>
+            <p>
+              이 화면은 파일 업로드 화면이 아닙니다. 호출데이터와 앱미터데이터가 Supabase에 적재된 범위,
+              기사 운행패턴 벡터 생성 여부, 콜카드별 우선발송 후보 계산 여부를 확인합니다.
+            </p>
+          </div>
+          <StatusDial label={statusLabel} value={`${readyCount}/4`} color={statusTone} note={statusError ?? status?.message ?? '호출·기사·벡터·매칭 테이블을 읽고 있습니다.'} />
+        </section>
+
+        <section className="focusGrid" aria-label="적재 현황 핵심">
+          <CoverageCard
+            label="호출데이터"
+            title="승객 호출과 콜카드 조건"
+            row={callcards}
             color={C.green}
-            rows={[
-              ['기간', rangeText(meterHourly)],
-              ['시간대 로그', `${fmt(meterHourly?.count)}건`],
-              ['기사별 로그', `${fmt(meterDrivers?.count)}건`],
-            ]}
+            body="지역, 요일, 시간, 출발지, 도착지, 예상거리, 예상요금, 호출유형을 읽어 콜카드 팩터를 만듭니다."
           />
-        </aside>
+          <CoverageCard
+            label="기사 운행패턴"
+            title="콜을 실제로 받아준 기사 기록"
+            row={driverLogs}
+            color={C.violet}
+            body="기사별 수락·운행 기록을 모아 시간대, 요일, 거리, 요금, 상품 성향을 22D 벡터로 만듭니다."
+          />
+          <CoverageCard
+            label="앱미터데이터"
+            title="지역 시장 흐름을 보는 보조 데이터"
+            row={meterHourly}
+            color={C.cyan}
+            body="천안 앱미터 기준의 운행량과 수입 흐름입니다. 기사 MBTI의 주 원천이 아니라 시장 보조 기준입니다."
+          />
+        </section>
 
-        <section className="center-stage panel">
-          <div className="stage-head">
-            <div>
-              <span>DATA READINESS MAP</span>
-              <h1>적재된 데이터가 임베딩과 매칭 계산으로 이어졌는지 봅니다</h1>
-            </div>
-            <div className="status-orb" style={{ '--tone': headlineTone } as CSSProperties}>
-              <span>현재 상태</span>
-              <b>{headline}</b>
-            </div>
-          </div>
-
-          <div className="metric-tabs" aria-label="날짜 셀 기준 선택">
-            <button type="button" className={metric === 'callcards' ? 'active' : ''} onClick={() => setMetric('callcards')}>콜카드</button>
-            <button type="button" className={metric === 'driverLogs' ? 'active' : ''} onClick={() => setMetric('driverLogs')}>기사 로그</button>
-            <button type="button" className={metric === 'matches' ? 'active' : ''} onClick={() => setMetric('matches')}>매칭 결과</button>
-          </div>
-
-          <DateCellMap rows={dateRows} metric={metric} />
-
-          <div className="flow-summary">
-            <FlowCard no="01" title="호출 원천" value={fmt(callcards?.count)} color={C.cyan} />
-            <FlowCard no="02" title="기사 로그" value={fmt(driverLogs?.count)} color={C.green} />
-            <FlowCard no="03" title="기사 22D" value={fmt(driverVectors?.count)} color={C.purple} />
-            <FlowCard no="04" title="매칭 계산" value={fmt(matching?.count)} color={C.orange} />
+        <section className="pipeline">
+          <SectionTitle label="FROM DATA TO MATCHING" title="적재된 데이터가 우선배차 재료가 되는 흐름" />
+          <div className="flowCards">
+            <FlowCard no="01" title="콜카드 조건 추출" text="출발지·도착지, 시간, 요일, 거리, 요금, 호출유형을 콜 조건으로 정리합니다." color={C.green} />
+            <FlowCard no="02" title="기사 운행패턴 임베딩" text="기사별 누적 운행기록을 같은 22개 기준으로 바꿔 비교 가능한 벡터로 만듭니다." color={C.violet} />
+            <FlowCard no="03" title="유사도와 공간 적합도 계산" text="콜 조건과 기사 패턴의 유사도, 출발·도착 H3 적합도를 분리해 계산합니다." color={C.cyan} />
+            <FlowCard no="04" title="먼저 보낼 기사 순서 저장" text="콜수락율을 높이기 위해 가장 받아줄 가능성이 높은 기사 순서로 Top 10 후보를 저장합니다." color={C.orange} />
           </div>
         </section>
 
-        <aside className="right-rail panel">
-          <PanelTitle label="ANALYSIS MODE" title="분석 기준" />
-          <ModeList active={metric} onChange={setMetric} />
-          <PanelTitle label="GENERATED OUTPUT" title="생성된 재료" />
-          <OutputStack
-            items={[
-              ['콜카드 팩터', fmt(callcards?.count), C.cyan],
-              ['기사 반응 로그', fmt(driverLogs?.count), C.green],
-              ['기사 22D 벡터', fmt(driverVectors?.count), C.purple],
-              ['매칭 결과', fmt(matching?.count), C.orange],
+        <section className="dateSection">
+          <div>
+            <SectionTitle label="DATE CONNECTION" title="날짜별 연결 상태" />
+            <p className="sectionLead">날짜가 늘어날수록 모든 날짜 카드를 크게 보여주기보다, 최근 적재일의 콜·로그·매칭 연결만 빠르게 확인합니다.</p>
+          </div>
+          <CoverageTimeline rows={dateRows} />
+        </section>
+
+        <section className="supportGrid">
+          <SupportPanel
+            title="앱미터 보조 데이터"
+            color={C.cyan}
+            rows={[
+              ['시간대 로그', rangeText(meterHourly), `${fmt(meterHourly?.count)}건`],
+              ['기사별 로그', rangeText(meterDrivers), `${fmt(meterDrivers?.count)}건`],
+              ['일별 요약', rangeText(meterDaily), `${fmt(meterDaily?.count)}건`],
             ]}
           />
-          <div className="note-card">
-            <span>운영 기준</span>
-            <p>호출데이터는 AI 우선배차의 핵심 원천입니다. 앱미터데이터는 기사 MBTI 주 원천이 아니라 지역 택시 흐름을 보는 보조 기준입니다.</p>
-          </div>
-        </aside>
-      </section>
+          <SupportPanel
+            title="누락 확인"
+            color={missingRows.length ? C.yellow : C.green}
+            rows={[
+              ['누락 날짜', `${missingRows.length}일`, missingRows.length ? '확인 필요' : '최근 범위 정상'],
+              ['호출-기사 연결', rowState(driverLogs), rangeText(driverLogs)],
+              ['매칭 계산', rowState(matching), rangeText(matching)],
+            ]}
+          />
+        </section>
+      </div>
 
-      <style jsx>{pageCss}</style>
+      <style jsx>{`
+        .page {
+          min-height: 100vh;
+          color: ${C.ink};
+          background:
+            linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px),
+            radial-gradient(circle at 30% 0%, rgba(56,189,248,.12), transparent 32rem),
+            radial-gradient(circle at 80% 12%, rgba(155,124,255,.12), transparent 34rem),
+            ${C.bg};
+          background-size: 52px 52px, 52px 52px, auto, auto, auto;
+        }
+        .topRail {
+          max-width: var(--maxw);
+          margin: 0 auto;
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          border-bottom: 1px solid ${C.line};
+          border-left: 1px solid ${C.line};
+        }
+        .shell {
+          max-width: var(--maxw);
+          margin: 0 auto;
+          padding: clamp(22px, 2.2vw, 38px) clamp(16px, 2vw, 28px) 72px;
+        }
+        .hero {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) minmax(300px, 430px);
+          gap: clamp(18px, 2vw, 28px);
+          align-items: stretch;
+          border: 1px solid ${C.line};
+          border-radius: 24px;
+          background: linear-gradient(135deg, rgba(16,21,31,.96), rgba(15,20,32,.78));
+          box-shadow: 0 32px 120px rgba(0,0,0,.35);
+          padding: clamp(24px, 3vw, 46px);
+        }
+        .eyebrow {
+          display: block;
+          color: ${C.cyan};
+          font-size: 18px;
+          line-height: 1;
+          font-weight: 900;
+          letter-spacing: .1em;
+          text-transform: uppercase;
+        }
+        h1 {
+          max-width: 16ch;
+          margin: 16px 0 0;
+          color: ${C.ink};
+          font-size: clamp(42px, 5vw, 76px);
+          line-height: .98;
+          font-weight: 950;
+          letter-spacing: -.06em;
+        }
+        .hero p {
+          max-width: 62ch;
+          margin: 24px 0 0;
+          color: ${C.sub};
+          font-size: clamp(20px, 1.45vw, 25px);
+          line-height: 1.48;
+          font-weight: 650;
+        }
+        .focusGrid {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 16px;
+          margin-top: 18px;
+        }
+        .pipeline,
+        .dateSection,
+        .supportGrid {
+          margin-top: 18px;
+          border: 1px solid ${C.line};
+          border-radius: 22px;
+          background: rgba(16, 21, 31, .72);
+          padding: clamp(20px, 2vw, 30px);
+        }
+        .flowCards {
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 14px;
+          margin-top: 18px;
+        }
+        .dateSection {
+          display: grid;
+          grid-template-columns: minmax(240px, .32fr) minmax(0, 1fr);
+          gap: 22px;
+          align-items: start;
+        }
+        .sectionLead {
+          margin: 12px 0 0;
+          color: ${C.sub};
+          font-size: 18px;
+          line-height: 1.5;
+          font-weight: 650;
+        }
+        .supportGrid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 16px;
+        }
+        @media (max-width: 1180px) {
+          .topRail,
+          .focusGrid,
+          .flowCards,
+          .dateSection,
+          .supportGrid {
+            grid-template-columns: 1fr 1fr;
+          }
+          .hero {
+            grid-template-columns: 1fr;
+          }
+        }
+        @media (max-width: 760px) {
+          .topRail,
+          .focusGrid,
+          .flowCards,
+          .dateSection,
+          .supportGrid {
+            grid-template-columns: 1fr;
+          }
+          h1 {
+            font-size: 42px;
+          }
+        }
+      `}</style>
     </main>
   )
 }
 
-function Kpi({ label, value, meta, color }: { label: string; value: string; meta: string; color: string }) {
+function Kpi({ title, value, meta, color }: { title: string; value: string; meta: string; color: string }) {
   return (
     <article className="kpi">
-      <span>{label}</span>
-      <b style={{ color }}>{value}</b>
-      <p>{meta}</p>
+      <span>{title}</span>
+      <strong style={{ color }}>{value}</strong>
+      <em>{meta}</em>
+      <style jsx>{`
+        .kpi {
+          min-height: 120px;
+          padding: 22px 24px;
+          border-right: 1px solid ${C.line};
+          background: rgba(7,10,16,.72);
+          display: grid;
+          align-content: center;
+          gap: 8px;
+          min-width: 0;
+        }
+        span {
+          color: ${C.muted};
+          font-size: 18px;
+          font-weight: 850;
+        }
+        strong {
+          font-size: clamp(28px, 2.4vw, 42px);
+          line-height: 1;
+          font-weight: 950;
+          letter-spacing: -.04em;
+          font-variant-numeric: tabular-nums;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        em {
+          color: ${C.sub};
+          font-size: 18px;
+          line-height: 1.25;
+          font-style: normal;
+          font-weight: 650;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+      `}</style>
     </article>
   )
 }
 
-function PanelTitle({ label, title }: { label: string; title: string }) {
+function StatusDial({ label, value, color, note }: { label: string; value: string; color: string; note: string }) {
   return (
-    <div className="panel-title">
+    <aside className="status" style={{ borderColor: `${color}55`, background: `${color}10` }}>
+      <span>현재 상태</span>
+      <strong style={{ color }}>{label}</strong>
+      <div className="dial" style={{ borderColor: `${color}55`, color }}>
+        {value}
+      </div>
+      <p>{note}</p>
+      <style jsx>{`
+        .status {
+          position: relative;
+          min-height: 260px;
+          border: 1px solid;
+          border-radius: 20px;
+          padding: 28px;
+          display: grid;
+          align-content: center;
+          gap: 12px;
+          overflow: hidden;
+        }
+        .status::after {
+          content: '';
+          position: absolute;
+          width: 220px;
+          height: 220px;
+          right: -70px;
+          bottom: -70px;
+          border-radius: 999px;
+          background: currentColor;
+          opacity: .06;
+        }
+        span {
+          color: ${C.sub};
+          font-size: 20px;
+          font-weight: 850;
+        }
+        strong {
+          max-width: 8ch;
+          font-size: clamp(44px, 4vw, 66px);
+          line-height: .95;
+          font-weight: 950;
+          letter-spacing: -.06em;
+        }
+        .dial {
+          position: absolute;
+          right: 28px;
+          bottom: 24px;
+          width: 88px;
+          height: 88px;
+          border: 1px solid;
+          border-radius: 999px;
+          display: grid;
+          place-items: center;
+          font-size: 26px;
+          font-weight: 950;
+          font-variant-numeric: tabular-nums;
+        }
+        p {
+          max-width: 21rem;
+          margin: 0;
+          color: ${C.sub};
+          font-size: 18px;
+          line-height: 1.45;
+          font-weight: 650;
+        }
+      `}</style>
+    </aside>
+  )
+}
+
+function CoverageCard({ label, title, row, body, color }: {
+  label: string
+  title: string
+  row?: TableStatus
+  body: string
+  color: string
+}) {
+  const tone = rowTone(row)
+  return (
+    <article className="coverage" style={{ borderColor: `${color}4d` }}>
+      <div className="head">
+        <span style={{ color }}>{label}</span>
+        <b style={{ color: tone }}>{rowState(row)}</b>
+      </div>
+      <h2>{title}</h2>
+      <strong>{rangeText(row)}</strong>
+      <em>{dayCount(row?.minDate, row?.maxDate)} · {fmt(row?.count)}건</em>
+      <p>{body}</p>
+      <style jsx>{`
+        .coverage {
+          min-height: 290px;
+          border: 1px solid;
+          border-radius: 22px;
+          background: linear-gradient(135deg, rgba(16,21,31,.94), rgba(21,27,39,.72));
+          padding: 24px;
+          box-shadow: 0 24px 80px rgba(0,0,0,.24);
+        }
+        .head {
+          display: flex;
+          justify-content: space-between;
+          gap: 16px;
+          align-items: center;
+        }
+        span,
+        b {
+          font-size: 18px;
+          font-weight: 900;
+        }
+        h2 {
+          margin: 22px 0 0;
+          color: ${C.ink};
+          font-size: clamp(28px, 2vw, 38px);
+          line-height: 1.1;
+          font-weight: 950;
+          letter-spacing: -.04em;
+        }
+        strong {
+          display: block;
+          margin-top: 22px;
+          color: ${C.ink};
+          font-size: 25px;
+          line-height: 1.2;
+          font-weight: 900;
+          font-variant-numeric: tabular-nums;
+        }
+        em {
+          display: block;
+          margin-top: 8px;
+          color: ${C.sub};
+          font-size: 20px;
+          line-height: 1.3;
+          font-style: normal;
+          font-weight: 750;
+        }
+        p {
+          margin: 18px 0 0;
+          color: ${C.sub};
+          font-size: 18px;
+          line-height: 1.5;
+          font-weight: 650;
+        }
+      `}</style>
+    </article>
+  )
+}
+
+function SectionTitle({ label, title }: { label: string; title: string }) {
+  return (
+    <div>
       <span>{label}</span>
       <h2>{title}</h2>
+      <style jsx>{`
+        span {
+          display: block;
+          color: ${C.cyan};
+          font-size: 18px;
+          font-weight: 900;
+          letter-spacing: .1em;
+          text-transform: uppercase;
+        }
+        h2 {
+          margin: 8px 0 0;
+          color: ${C.ink};
+          font-size: clamp(30px, 2.4vw, 44px);
+          line-height: 1.08;
+          font-weight: 950;
+          letter-spacing: -.05em;
+        }
+      `}</style>
     </div>
   )
 }
 
-function IssueList({ rows, loading, error }: { rows: DateRow[]; loading: boolean; error: string | null }) {
-  if (loading) return <div className="issue-card info"><b>상태 조회 중</b><p>Supabase 적재 현황을 확인하고 있습니다.</p></div>
-  if (error) return <div className="issue-card high"><b>연결 확인 필요</b><p>{error}</p></div>
-  if (!rows.length) return <div className="issue-card ok"><b>주요 누락 없음</b><p>조회된 날짜 기준으로 콜카드, 기사 로그, 매칭 결과가 연결되어 있습니다.</p></div>
+function FlowCard({ no, title, text, color }: { no: string; title: string; text: string; color: string }) {
   return (
-    <div className="issue-list">
-      {rows.map((row) => {
-        const state = dateRowState(row)
-        return (
-          <article key={row.date} className="issue-card" style={{ '--tone': state.tone } as CSSProperties}>
-            <span>{state.label}</span>
-            <b>{row.date}</b>
-            <p>콜 {fmt(row.callcards)} · 로그 {fmt(row.driverLogs)} · 매칭 {fmt(row.matches)}</p>
-          </article>
-        )
-      })}
-    </div>
-  )
-}
-
-function SourceCard({ title, badge, color, rows }: { title: string; badge: string; color: string; rows: [string, string][] }) {
-  return (
-    <article className="source-card" style={{ '--tone': color } as CSSProperties}>
-      <div>
-        <span>{badge}</span>
-        <h3>{title}</h3>
-      </div>
-      {rows.map(([label, value]) => (
-        <p key={label}><em>{label}</em><b>{value}</b></p>
-      ))}
+    <article className="flowCard" style={{ borderColor: `${color}44` }}>
+      <span style={{ color }}>{no}</span>
+      <h3>{title}</h3>
+      <p>{text}</p>
+      <style jsx>{`
+        .flowCard {
+          border: 1px solid;
+          border-radius: 18px;
+          background: rgba(21,27,39,.72);
+          padding: 20px;
+          min-height: 210px;
+        }
+        span {
+          display: block;
+          font-size: 20px;
+          font-weight: 950;
+          font-variant-numeric: tabular-nums;
+        }
+        h3 {
+          margin: 18px 0 0;
+          color: ${C.ink};
+          font-size: 25px;
+          line-height: 1.16;
+          font-weight: 950;
+          letter-spacing: -.04em;
+        }
+        p {
+          margin: 14px 0 0;
+          color: ${C.sub};
+          font-size: 18px;
+          line-height: 1.5;
+          font-weight: 650;
+        }
+      `}</style>
     </article>
   )
 }
 
-function DateCellMap({ rows, metric }: { rows: DateRow[]; metric: 'callcards' | 'driverLogs' | 'matches' }) {
+function CoverageTimeline({ rows }: { rows: DateRow[] }) {
   if (!rows.length) {
-    return <div className="empty-map">날짜별 적재 상태를 표시할 데이터가 없습니다.</div>
+    return (
+      <div className="empty">
+        날짜별 연결 상태를 표시할 데이터가 없습니다.
+        <style jsx>{`
+          .empty {
+            border: 1px solid ${C.yellow}55;
+            border-radius: 18px;
+            background: ${C.yellow}12;
+            padding: 24px;
+            color: ${C.yellow};
+            font-size: 20px;
+            font-weight: 800;
+          }
+        `}</style>
+      </div>
+    )
   }
-  const max = Math.max(...rows.map((row) => Number(row[metric] ?? 0)), 1)
+
+  const recentRows = rows.slice(-12)
   return (
-    <div className="date-map">
-      {rows.map((row) => {
-        const state = dateRowState(row)
-        const raw = Number(row[metric] ?? 0)
-        const intensity = Math.max(0.18, Math.min(1, raw / max))
+    <div className="timeline">
+      {recentRows.map((row) => {
+        const ok = Boolean(row.callcards && row.driverLogs && row.matches)
+        const tone = ok ? C.green : C.yellow
+        const max = Math.max(row.callcards ?? 0, row.driverLogs ?? 0, row.matches ?? 0, 1)
         return (
-          <article
-            key={row.date}
-            className="date-cell"
-            style={{ '--tone': state.tone, '--alpha': intensity } as CSSProperties}
-            title={`${row.date} · ${metric} ${raw}`}
-          >
-            <span>{row.date.slice(5)}</span>
-            <b>{fmt(raw)}</b>
-            <em>{state.label}</em>
+          <article key={row.date} className="day" style={{ borderColor: `${tone}44`, background: `${tone}0d` }}>
+            <div className="dayTop">
+              <strong>{row.date.slice(5)}</strong>
+              <span style={{ color: tone }}>{ok ? '정상' : '확인'}</span>
+            </div>
+            <MiniBar label="콜" value={row.callcards} max={max} color={C.green} />
+            <MiniBar label="로그" value={row.driverLogs} max={max} color={C.cyan} />
+            <MiniBar label="매칭" value={row.matches} max={max} color={C.orange} />
           </article>
         )
       })}
+      <style jsx>{`
+        .timeline {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+          gap: 12px;
+        }
+        .day {
+          border: 1px solid;
+          border-radius: 16px;
+          padding: 16px;
+          display: grid;
+          gap: 12px;
+        }
+        .dayTop {
+          display: flex;
+          justify-content: space-between;
+          gap: 10px;
+          align-items: center;
+        }
+        .dayTop strong {
+          color: ${C.ink};
+          font-size: 25px;
+          line-height: 1;
+          font-weight: 950;
+          font-variant-numeric: tabular-nums;
+        }
+        .dayTop span {
+          font-size: 17px;
+          font-weight: 900;
+        }
+      `}</style>
     </div>
   )
 }
 
-function FlowCard({ no, title, value, color }: { no: string; title: string; value: string; color: string }) {
+function MiniBar({ label, value, max, color }: { label: string; value: number | null; max: number; color: string }) {
+  const width = value == null ? 0 : Math.max(3, Math.min(100, Math.round((value / max) * 100)))
   return (
-    <article className="flow-card" style={{ '--tone': color } as CSSProperties}>
-      <span>{no}</span>
-      <b>{title}</b>
-      <strong>{value}</strong>
+    <div className="bar">
+      <div className="meta">
+        <span>{label}</span>
+        <strong>{fmt(value)}</strong>
+      </div>
+      <div className="track">
+        <i style={{ width: `${width}%`, background: color }} />
+      </div>
+      <style jsx>{`
+        .bar {
+          display: grid;
+          gap: 7px;
+        }
+        .meta {
+          display: flex;
+          justify-content: space-between;
+          gap: 10px;
+          color: ${C.sub};
+          font-size: 17px;
+          font-weight: 850;
+        }
+        .meta strong {
+          color: ${C.ink};
+          font-variant-numeric: tabular-nums;
+        }
+        .track {
+          height: 9px;
+          border-radius: 999px;
+          background: rgba(255,255,255,.08);
+          overflow: hidden;
+        }
+        .track i {
+          display: block;
+          height: 100%;
+          border-radius: inherit;
+        }
+      `}</style>
+    </div>
+  )
+}
+
+function SupportPanel({ title, color, rows }: { title: string; color: string; rows: [string, string, string][] }) {
+  return (
+    <article className="support">
+      <h3 style={{ color }}>{title}</h3>
+      <div className="rows">
+        {rows.map(([label, value, meta]) => (
+          <div key={label} className="cell">
+            <span>{label}</span>
+            <strong>{value}</strong>
+            <em>{meta}</em>
+          </div>
+        ))}
+      </div>
+      <style jsx>{`
+        .support {
+          min-width: 0;
+        }
+        h3 {
+          margin: 0 0 14px;
+          font-size: 28px;
+          line-height: 1.15;
+          font-weight: 950;
+          letter-spacing: -.04em;
+        }
+        .rows {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 12px;
+        }
+        .cell {
+          min-width: 0;
+          border: 1px solid ${C.line};
+          border-radius: 16px;
+          background: ${C.panel2};
+          padding: 18px;
+        }
+        span {
+          display: block;
+          color: ${C.sub};
+          font-size: 18px;
+          font-weight: 850;
+        }
+        strong {
+          display: block;
+          margin-top: 12px;
+          color: ${C.ink};
+          font-size: 22px;
+          line-height: 1.2;
+          font-weight: 950;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        em {
+          display: block;
+          margin-top: 8px;
+          color: ${C.sub};
+          font-size: 18px;
+          line-height: 1.3;
+          font-style: normal;
+          font-weight: 700;
+        }
+        @media (max-width: 900px) {
+          .rows {
+            grid-template-columns: 1fr;
+          }
+        }
+      `}</style>
     </article>
-  )
-}
-
-function ModeList({ active, onChange }: { active: 'callcards' | 'driverLogs' | 'matches'; onChange: (value: 'callcards' | 'driverLogs' | 'matches') => void }) {
-  const items = [
-    ['callcards', '콜카드 기준', '원천 호출 조건'],
-    ['driverLogs', '기사 로그 기준', '기사 반응 패턴'],
-    ['matches', '매칭 결과 기준', 'Top 10 저장 결과'],
-  ] as const
-  return (
-    <div className="mode-list">
-      {items.map(([key, label, desc]) => (
-        <button key={key} type="button" className={active === key ? 'active' : ''} onClick={() => onChange(key)}>
-          <b>{label}</b>
-          <span>{desc}</span>
-        </button>
-      ))}
-    </div>
-  )
-}
-
-function OutputStack({ items }: { items: [string, string, string][] }) {
-  return (
-    <div className="output-stack">
-      {items.map(([label, value, color]) => (
-        <div key={label} style={{ '--tone': color } as CSSProperties}>
-          <span>{label}</span>
-          <b>{value}</b>
-        </div>
-      ))}
-    </div>
   )
 }
 
 function Pill({ children, color }: { children: ReactNode; color: string }) {
   return (
-    <span style={{ color, border: `1px solid ${color}66`, background: `${color}18`, borderRadius: 12, padding: '10px 14px', fontSize: 18, fontWeight: 900 }}>
+    <span style={{
+      color,
+      border: `1px solid ${color}55`,
+      background: `${color}16`,
+      borderRadius: 12,
+      padding: '9px 13px',
+      fontSize: 13,
+      fontWeight: 900,
+      letterSpacing: '.06em',
+      whiteSpace: 'nowrap',
+    }}>
       {children}
     </span>
   )
 }
-
-const pageCss = `
-  .page {
-    min-height: 100vh;
-    color: ${C.ink};
-    background:
-      linear-gradient(90deg, rgba(148,163,184,.045) 1px, transparent 1px),
-      linear-gradient(180deg, rgba(148,163,184,.035) 1px, transparent 1px),
-      radial-gradient(circle at 50% 0%, rgba(34,211,238,.11), transparent 34rem),
-      ${C.bg};
-    background-size: 72px 72px, 72px 72px, auto, auto;
-    font-family: Pretendard, "Apple SD Gothic Neo", "Malgun Gothic", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    font-size: var(--pmo-fs-label);
-  }
-  .kpi-strip {
-    position: sticky;
-    top: 84px;
-    z-index: 90;
-    display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    border-bottom: 1px solid ${C.line};
-    background: rgba(5,7,13,.92);
-    backdrop-filter: blur(18px);
-  }
-  .kpi {
-    min-height: 118px;
-    display: grid;
-    align-content: center;
-    gap: 4px;
-    padding: 18px 24px;
-    border-right: 1px solid ${C.line};
-  }
-  .kpi span {
-    color: ${C.sub};
-    font-size: var(--pmo-fs-label);
-    font-weight: 950;
-  }
-  .kpi b {
-    font-size: var(--pmo-fs-metric);
-    line-height: 1;
-    font-weight: 950;
-    text-shadow: 0 0 14px rgba(34,211,238,.16);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .kpi p {
-    margin: 0;
-    color: ${C.sub};
-    font-size: var(--pmo-fs-label);
-    line-height: 1.2;
-    font-weight: 800;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .ops-board {
-    display: grid;
-    grid-template-columns: minmax(300px, 0.82fr) minmax(640px, 2.05fr) minmax(300px, .88fr);
-    min-height: calc(100vh - 270px);
-  }
-  .panel {
-    min-width: 0;
-    border: 1px solid rgba(148,163,184,.18);
-    background: linear-gradient(180deg, rgba(10,15,27,.92), rgba(5,8,16,.94));
-    box-shadow: 0 26px 80px rgba(0,0,0,.32), inset 0 1px 0 rgba(255,255,255,.035);
-  }
-  .left-rail,
-  .right-rail {
-    padding: 24px;
-    display: grid;
-    align-content: start;
-    gap: 18px;
-  }
-  .center-stage {
-    padding: 28px;
-    border-left: 1px solid ${C.line};
-    border-right: 1px solid ${C.line};
-  }
-  .panel-title {
-    display: grid;
-    gap: 8px;
-  }
-  .panel-title span,
-  .stage-head span {
-    color: ${C.cyan};
-    font-size: var(--pmo-fs-label);
-    font-weight: 950;
-  }
-  .panel-title h2 {
-    margin: 0;
-    color: ${C.ink};
-    font-size: var(--pmo-fs-section);
-    line-height: 1.08;
-  }
-  .stage-head {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 300px;
-    gap: 24px;
-    align-items: stretch;
-  }
-  .stage-head h1 {
-    max-width: 980px;
-    margin: 8px 0 0;
-    font-size: var(--pmo-fs-hero);
-    line-height: 1.04;
-    letter-spacing: 0;
-  }
-  .status-orb {
-    display: grid;
-    align-content: center;
-    gap: 8px;
-    min-height: 180px;
-    padding: 24px;
-    border: 1px solid color-mix(in srgb, var(--tone) 48%, transparent);
-    border-radius: 22px;
-    background: radial-gradient(circle at 70% 30%, color-mix(in srgb, var(--tone) 22%, transparent), transparent 60%), rgba(15,23,42,.62);
-  }
-  .status-orb span {
-    color: ${C.sub};
-    font-size: var(--pmo-fs-label);
-    font-weight: 950;
-  }
-  .status-orb b {
-    color: var(--tone);
-    font-size: 44px;
-    line-height: 1.04;
-  }
-  .metric-tabs {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-    margin-top: 22px;
-  }
-  .metric-tabs button,
-  .mode-list button {
-    border: 1px solid ${C.line};
-    border-radius: 999px;
-    color: ${C.sub};
-    background: rgba(15,23,42,.76);
-    padding: 12px 20px;
-    font-size: var(--pmo-fs-label);
-    font-weight: 950;
-    cursor: pointer;
-    transition: transform 150ms ease, border-color 150ms ease, background 150ms ease;
-  }
-  .metric-tabs button.active,
-  .metric-tabs button:hover {
-    color: #06101B;
-    border-color: ${C.green};
-    background: ${C.green};
-  }
-  .date-map {
-    margin-top: 22px;
-    min-height: 480px;
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
-    gap: 12px;
-    align-content: start;
-    padding: 18px;
-    border: 1px solid ${C.line};
-    border-radius: 24px;
-    background:
-      radial-gradient(circle at 50% 35%, rgba(34,211,238,.12), transparent 28rem),
-      rgba(2,6,15,.62);
-  }
-  .date-cell {
-    min-height: 112px;
-    display: grid;
-    align-content: space-between;
-    gap: 10px;
-    padding: 14px;
-    border: 1px solid color-mix(in srgb, var(--tone) 52%, transparent);
-    border-radius: 18px;
-    background: color-mix(in srgb, var(--tone) calc(var(--alpha) * 34%), rgba(15,23,42,.78));
-    box-shadow: 0 0 18px color-mix(in srgb, var(--tone) calc(var(--alpha) * 18%), transparent);
-  }
-  .date-cell span {
-    color: ${C.ink};
-    font-size: var(--pmo-fs-body-lg);
-    font-weight: 950;
-  }
-  .date-cell b {
-    color: ${C.ink};
-    font-size: var(--pmo-fs-body-lg);
-    line-height: 1;
-    overflow-wrap: anywhere;
-  }
-  .date-cell em {
-    color: var(--tone);
-    font-size: var(--pmo-fs-caption);
-    font-style: normal;
-    font-weight: 950;
-  }
-  .empty-map {
-    margin-top: 22px;
-    min-height: 420px;
-    display: grid;
-    place-items: center;
-    border: 1px solid rgba(245,158,11,.42);
-    border-radius: 24px;
-    color: ${C.yellow};
-    background: rgba(245,158,11,.08);
-    font-size: var(--pmo-fs-body-lg);
-    font-weight: 900;
-  }
-  .flow-summary {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 14px;
-    margin-top: 18px;
-  }
-  .flow-card {
-    min-width: 0;
-    border: 1px solid color-mix(in srgb, var(--tone) 42%, transparent);
-    border-radius: 18px;
-    background: color-mix(in srgb, var(--tone) 10%, rgba(15,23,42,.72));
-    padding: 16px;
-  }
-  .flow-card span {
-    color: var(--tone);
-    font-size: var(--pmo-fs-caption);
-    font-weight: 950;
-  }
-  .flow-card b {
-    display: block;
-    margin-top: 8px;
-    font-size: var(--pmo-fs-body);
-  }
-  .flow-card strong {
-    display: block;
-    margin-top: 8px;
-    font-size: var(--pmo-fs-section);
-    line-height: 1;
-  }
-  .issue-list {
-    display: grid;
-    gap: 12px;
-  }
-  .issue-card {
-    display: grid;
-    gap: 8px;
-    border: 1px solid color-mix(in srgb, var(--tone, ${C.yellow}) 42%, transparent);
-    border-radius: 18px;
-    background: color-mix(in srgb, var(--tone, ${C.yellow}) 10%, rgba(15,23,42,.76));
-    padding: 18px;
-  }
-  .issue-card span {
-    width: fit-content;
-    border-radius: 999px;
-    color: var(--tone, ${C.yellow});
-    background: color-mix(in srgb, var(--tone, ${C.yellow}) 14%, transparent);
-    padding: 4px 10px;
-    font-size: var(--pmo-fs-caption);
-    font-weight: 950;
-  }
-  .issue-card b {
-    font-size: var(--pmo-fs-body-lg);
-    line-height: 1.15;
-  }
-  .issue-card p {
-    margin: 0;
-    color: ${C.sub};
-    font-size: var(--pmo-fs-label);
-    line-height: 1.35;
-    font-weight: 800;
-  }
-  .issue-card.ok { --tone: ${C.green}; }
-  .issue-card.high { --tone: ${C.red}; }
-  .issue-card.info { --tone: ${C.cyan}; }
-  .source-card,
-  .note-card {
-    display: grid;
-    gap: 12px;
-    border: 1px solid color-mix(in srgb, var(--tone, ${C.orange}) 38%, transparent);
-    border-radius: 20px;
-    background: color-mix(in srgb, var(--tone, ${C.orange}) 9%, rgba(15,23,42,.72));
-    padding: 18px;
-  }
-  .source-card span,
-  .note-card span {
-    color: var(--tone, ${C.orange});
-    font-size: var(--pmo-fs-caption);
-    font-weight: 950;
-  }
-  .source-card h3 {
-    margin: 2px 0 0;
-    font-size: var(--pmo-fs-section);
-    line-height: 1;
-  }
-  .source-card p {
-    display: grid;
-    gap: 4px;
-    margin: 0;
-  }
-  .source-card em {
-    color: ${C.muted};
-    font-size: var(--pmo-fs-caption);
-    font-style: normal;
-    font-weight: 900;
-  }
-  .source-card b {
-    color: ${C.ink};
-    font-size: var(--pmo-fs-body);
-    line-height: 1.25;
-    overflow-wrap: anywhere;
-  }
-  .mode-list {
-    display: grid;
-    gap: 12px;
-  }
-  .mode-list button {
-    display: grid;
-    justify-items: start;
-    gap: 4px;
-    border-radius: 18px;
-    padding: 16px;
-    text-align: left;
-  }
-  .mode-list button.active,
-  .mode-list button:hover {
-    border-color: ${C.cyan};
-    background: rgba(34,211,238,.12);
-    color: ${C.ink};
-  }
-  .mode-list b {
-    font-size: var(--pmo-fs-body);
-  }
-  .mode-list span {
-    color: ${C.muted};
-    font-size: var(--pmo-fs-caption);
-    font-weight: 850;
-  }
-  .output-stack {
-    display: grid;
-    gap: 12px;
-  }
-  .output-stack div {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 12px;
-    border: 1px solid color-mix(in srgb, var(--tone) 36%, transparent);
-    border-radius: 16px;
-    background: color-mix(in srgb, var(--tone) 8%, rgba(15,23,42,.74));
-    padding: 15px;
-  }
-  .output-stack span {
-    color: ${C.sub};
-    font-size: var(--pmo-fs-label);
-    font-weight: 900;
-  }
-  .output-stack b {
-    color: var(--tone);
-    font-size: var(--pmo-fs-body-lg);
-    line-height: 1;
-  }
-  .note-card p {
-    margin: 0;
-    color: ${C.sub};
-    font-size: var(--pmo-fs-label);
-    line-height: 1.45;
-    font-weight: 780;
-  }
-  @media (max-width: 1360px) {
-    .ops-board { grid-template-columns: 1fr; }
-    .left-rail, .right-rail { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .center-stage { border-left: 0; border-right: 0; }
-    .kpi-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); position: static; }
-  }
-  @media (max-width: 860px) {
-    .left-rail, .right-rail, .stage-head, .flow-summary { grid-template-columns: 1fr; }
-    .date-map { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .stage-head h1 { font-size: 40px; }
-  }
-`

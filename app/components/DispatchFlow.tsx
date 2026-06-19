@@ -1,17 +1,15 @@
 'use client'
 
-import type { CSSProperties } from 'react'
-
 const steps = [
-  { key: 'request', label: '승객 호출', sub: '앱 호출', icon: '☎', color: '#F472B6' },
-  { key: 'callcard', label: '호출 정보 생성', sub: '콜카드 조건', icon: '▣', color: '#60A5FA' },
-  { key: 'search', label: '주변 기사 탐색', sub: '후보 기사군', icon: '⌖', color: '#34D399' },
-  { key: 'similarity', label: '유사도 계산', sub: '22D + H3', icon: '◎', color: '#A78BFA' },
-  { key: 'rank', label: '우선순위 정렬', sub: 'Top N 선정', icon: '◆', color: '#22D3EE' },
-  { key: 'send', label: '콜카드 발송', sub: '1순위 우선', icon: '✈', color: '#38BDF8' },
-  { key: 'accept', label: '기사 수락', sub: '응답 대기', icon: '✓', color: '#34D399' },
-  { key: 'dispatch', label: '배차 완료', sub: '승객 픽업 이동', icon: '🚕', color: '#FB923C' },
-  { key: 'complete', label: '운행 완료', sub: '데이터 적재', icon: '●', color: '#FBBF24' },
+  { key: 'request', label: '승객 호출', sub: '콜 발생', icon: '☎' },
+  { key: 'callcard', label: '콜카드 생성', sub: '지역·시간·요금·거리', icon: '▣' },
+  { key: 'search', label: '후보 기사 탐색', sub: '기존 배차 범위', icon: '◎' },
+  { key: 'similarity', label: '유사도 계산', sub: '22D + H3', icon: '◇' },
+  { key: 'rank', label: '우선발송 정렬', sub: 'Top N 선정', icon: '◆' },
+  { key: 'send', label: '콜카드 발송', sub: '1순위 먼저', icon: '➜' },
+  { key: 'accept', label: '기사 수락', sub: '응답 대기', icon: '✓' },
+  { key: 'dispatch', label: '배차 완료', sub: '승객 픽업', icon: '▰' },
+  { key: 'complete', label: '운행 완료', sub: '결과 적재', icon: '●' },
 ] as const
 
 type FlowKey = typeof steps[number]['key']
@@ -25,37 +23,39 @@ export function DispatchFlow({
 }) {
   const activeSet = new Set(active)
   return (
-    <section className={compact ? 'dispatch-flow compact' : 'dispatch-flow'} aria-label="전체 배차 흐름도">
-      <div className="flow-head">
-        <span>GLOBAL DISPATCH FLOW</span>
-        <b>콜 발생부터 운행 완료까지 한 줄로 보는 AI 우선배차 흐름</b>
-      </div>
-      <div className="flow-track">
-        {steps.map((step, index) => {
-          const isActive = activeSet.size === 0 || activeSet.has(step.key)
-          return (
-            <div key={step.key} className={isActive ? 'flow-step active' : 'flow-step'} style={{ '--tone': step.color } as CSSProperties}>
-              <div className="flow-icon">{step.icon}</div>
-              <strong>{step.label}</strong>
-              <em>{step.sub}</em>
-              {index < steps.length - 1 && <i className="arrow">→</i>}
-            </div>
-          )
-        })}
+    <section className={compact ? 'dispatch-flow compact' : 'dispatch-flow'} aria-label="전체 배차 흐름">
+      <div className="flow-inner">
+        <div className="flow-head">
+          <span>DISPATCH FLOW</span>
+          <b>콜수락율을 높이기 위한 후보 생성부터 우선발송까지</b>
+        </div>
+        <div className="flow-track">
+          {steps.map((step, index) => {
+            const isActive = activeSet.size === 0 || activeSet.has(step.key)
+            return (
+              <div key={step.key} className={isActive ? 'flow-step active' : 'flow-step'}>
+                <div className="flow-icon">{step.icon}</div>
+                <strong>{step.label}</strong>
+                <em>{step.sub}</em>
+                {index < steps.length - 1 && <i className="arrow">→</i>}
+              </div>
+            )
+          })}
+        </div>
       </div>
       <style jsx>{`
         .dispatch-flow {
-          margin: 0;
-          padding: 18px clamp(20px, 2.4vw, 40px);
-          border-bottom: 1px solid rgba(148,163,184,.18);
-          background:
-            radial-gradient(circle at 12% 10%, rgba(34,211,238,.12), transparent 26rem),
-            rgba(5,8,16,.86);
-          color: #F8FAFC;
+          border-bottom: 1px solid var(--line);
+          background: linear-gradient(180deg, var(--bg-1), rgba(255, 255, 255, 0.015));
         }
-        .dispatch-flow.compact {
-          padding-top: 14px;
-          padding-bottom: 14px;
+        .flow-inner {
+          max-width: var(--maxw);
+          margin: 0 auto;
+          padding: 16px clamp(16px, 2vw, 28px);
+        }
+        .dispatch-flow.compact .flow-inner {
+          padding-top: 12px;
+          padding-bottom: 12px;
         }
         .flow-head {
           display: flex;
@@ -65,14 +65,16 @@ export function DispatchFlow({
           margin-bottom: 14px;
         }
         .flow-head span {
-          color: #67E8F9;
-          font-size: 20px;
-          font-weight: 950;
+          color: var(--accent);
+          font-size: 12px;
+          font-weight: 800;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
         }
         .flow-head b {
-          color: #CBD5E1;
-          font-size: 20px;
-          font-weight: 850;
+          color: var(--ink-2);
+          font-size: 15px;
+          font-weight: 650;
           text-align: right;
         }
         .flow-track {
@@ -88,68 +90,88 @@ export function DispatchFlow({
           justify-items: center;
           align-content: start;
           gap: 6px;
-          opacity: .42;
-          filter: saturate(.65);
-          transition: opacity 180ms ease, transform 180ms ease, filter 180ms ease;
+          opacity: 0.34;
+          transition: opacity 160ms ease, transform 160ms ease;
         }
         .flow-step.active {
           opacity: 1;
-          filter: saturate(1.1);
         }
         .flow-step.active .flow-icon {
-          border-color: var(--tone);
-          background: color-mix(in srgb, var(--tone) 18%, #111827);
-          box-shadow: 0 0 22px color-mix(in srgb, var(--tone) 28%, transparent);
+          border-color: var(--accent-line);
+          background: var(--accent-soft);
+          color: var(--accent);
+          box-shadow: 0 0 22px rgba(56, 189, 248, 0.14);
+        }
+        .flow-step:hover {
+          transform: translateY(-2px);
         }
         .flow-icon {
-          width: 54px;
-          height: 54px;
+          width: 42px;
+          height: 42px;
           display: grid;
           place-items: center;
-          border: 1px solid rgba(148,163,184,.22);
-          border-radius: 18px;
-          background: rgba(15,23,42,.78);
-          font-size: 24px;
+          border: 1px solid var(--line);
+          border-radius: 13px;
+          background: var(--bg-2);
+          color: var(--ink-3);
+          font-size: 18px;
           line-height: 1;
         }
         .flow-step strong {
-          color: #F8FAFC;
-          font-size: 20px;
-          line-height: 1.15;
-          font-weight: 950;
+          color: var(--ink);
+          font-size: 14px;
+          line-height: 1.2;
+          font-weight: 800;
           text-align: center;
-          white-space: normal;
         }
         .flow-step em {
-          color: #94A3B8;
-          font-size: 20px;
-          line-height: 1.15;
+          color: var(--ink-3);
+          font-size: 12px;
+          line-height: 1.2;
           font-style: normal;
-          font-weight: 850;
+          font-weight: 550;
           text-align: center;
         }
         .arrow {
           position: absolute;
-          top: 15px;
-          right: -15px;
-          color: #64748B;
-          font-size: 22px;
+          top: 12px;
+          right: -12px;
+          color: var(--ink-4);
+          font-size: 15px;
           font-style: normal;
           z-index: 1;
         }
         @media (max-width: 1320px) {
           .flow-track {
             grid-template-columns: repeat(3, minmax(0, 1fr));
+            row-gap: 16px;
           }
-          .arrow { display: none; }
+          .arrow {
+            display: none;
+          }
         }
         @media (max-width: 720px) {
-          .flow-head { display: grid; }
-          .flow-head b { text-align: left; }
-          .flow-track { grid-template-columns: 1fr; }
-          .flow-step { justify-items: start; grid-template-columns: 54px 1fr; column-gap: 14px; }
-          .flow-step strong, .flow-step em { text-align: left; }
-          .flow-step em { grid-column: 2; }
+          .flow-head {
+            display: grid;
+          }
+          .flow-head b {
+            text-align: left;
+          }
+          .flow-track {
+            grid-template-columns: 1fr;
+          }
+          .flow-step {
+            justify-items: start;
+            grid-template-columns: 42px 1fr;
+            column-gap: 12px;
+          }
+          .flow-step strong,
+          .flow-step em {
+            text-align: left;
+          }
+          .flow-step em {
+            grid-column: 2;
+          }
         }
       `}</style>
     </section>

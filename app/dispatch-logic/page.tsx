@@ -19,7 +19,7 @@ const C = {
 } as const
 
 const sections = [
-  { id: 'overview', label: '개념', title: 'AI 우선배차 개념' },
+  { id: 'overview', label: '목표', title: '콜수락율 개선 목표' },
   { id: 'flow', label: 'FLOW', title: '라이브 배차 흐름' },
   { id: 'handoff', label: 'HANDOFF', title: '개발 전달 데이터' },
   { id: 'score', label: 'SCORE', title: '점수 구성' },
@@ -55,7 +55,7 @@ const dispatchInputs = [
   {
     title: '추천 출력',
     value: '우선발송 순서',
-    desc: '최종 추천점수, 성향 유사도, 공간 적합도, 신뢰도, fallback 기준을 분리해 반환합니다.',
+    desc: '우선발송 점수, 성향 유사도, 공간 적합도, 신뢰도, 미수락 시 처리 기준을 분리해 반환합니다.',
     color: C.orange,
   },
 ] as const
@@ -92,8 +92,8 @@ const flowSteps = [
     color: C.orange,
   },
   {
-    title: '우선발송과 fallback',
-    desc: '가장 잘 맞는 기사에게 먼저 보내고, 미수락·무응답·만료 시 기존 순차 또는 반경 확장 흐름으로 넘깁니다.',
+    title: '우선발송과 미수락 처리',
+    desc: '가장 잘 맞는 기사에게 먼저 보내고, 미수락·무응답 시 기존 순차 또는 반경 확장 흐름으로 넘깁니다.',
     output: '운영 안정성 보호',
     color: C.red,
   },
@@ -118,7 +118,7 @@ const handoffRows = [
   {
     name: '출력 데이터',
     value: 'Top N 후보 + 점수 구성요소',
-    desc: '최종 추천점수, 성향 유사도, 공간 적합도, 신뢰도, 시뮬레이션 값을 분리해 반환합니다.',
+    desc: '우선발송 점수, 성향 유사도, 공간 적합도, 신뢰도, 시뮬레이션 값을 분리해 반환합니다.',
   },
   {
     name: '검증 로그',
@@ -176,7 +176,7 @@ const policies = [
   '초기 적용 범위는 기존 후보 기사군 안에서 우선발송 순서만 AI로 정렬합니다.',
   '미수락이 반복되면 다음 유사도 후보로 넘길지, 일정 횟수 후 기존 순차 배차로 넘길지 결정합니다.',
   '실시간 기사 위치·온라인·공차 상태는 개발 배차 서버에서 받을지 별도 테이블로 받을지 정해야 합니다.',
-  '발송, 수락, 무응답, EXPIRED, 취소, 운행완료 이벤트를 저장해 기존 배차 대비 효과를 검증합니다.',
+  '발송, 수락, 무응답, 수락되지 않은 호출, 취소, 운행완료 이벤트를 저장해 기존 배차 대비 효과를 검증합니다.',
 ] as const
 
 export default function DispatchLogicPage() {
@@ -188,7 +188,7 @@ export default function DispatchLogicPage() {
         <aside className="side" aria-label="배차로직 문서 목차">
           <div className="side-head">
             <span>HANDOFF</span>
-            <strong>AI 우선배차 전달서</strong>
+            <strong>콜수락율 개선 배차 전달서</strong>
             <p>개발자가 구현할 영역과 운영에서 결정할 영역을 분리했습니다.</p>
           </div>
 
@@ -211,7 +211,7 @@ export default function DispatchLogicPage() {
           <section id="overview" className="hero section-block">
             <div className="hero-copy">
               <p className="kicker">AI DISPATCH HANDOFF</p>
-              <h1>콜카드 조건과 기사 운행패턴을 비교해 우선발송 순서를 정합니다</h1>
+              <h1>콜수락율을 높이기 위해 먼저 보낼 기사 순서를 정합니다</h1>
               <p className="lead">
                 이 페이지의 핵심은 단순합니다. 기존 배차 엔진을 교체하지 않고, 콜 발생 후 만들어진 후보 기사군 안에서
                 콜카드 원본 조건과 기사 누적 패턴을 비교해 먼저 보낼 기사 순서를 정합니다. 미수락이면 기존 순차·반경 확장

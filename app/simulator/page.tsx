@@ -84,19 +84,20 @@ type Ranked = {
   confidence: 'HIGH' | 'MEDIUM' | 'LOW'
 }
 
+// Palette mirrors app/globals.css :root — restrained dark, single accent.
 const C = {
-  body: '#050810',
-  panel: '#0A101D',
-  ink: '#F8FAFC',
-  sub: '#AAB7CB',
-  muted: '#70809A',
-  line: '#24324C',
-  cyan: '#22D3EE',
-  purple: '#8B5CF6',
-  green: '#10B981',
-  orange: '#FB923C',
-  yellow: '#F59E0B',
-  red: '#F43F5E',
+  body: '#0a0c10',
+  panel: '#11141b',
+  ink: '#e7ebf2',
+  sub: '#9aa6b8',
+  muted: '#6a7688',
+  line: 'rgba(255, 255, 255, 0.07)',
+  cyan: '#38bdf8',
+  purple: '#a78bfa',
+  green: '#3fb950',
+  orange: '#d98a4a',
+  yellow: '#d29922',
+  red: '#f85149',
 }
 
 const aspOptions = [
@@ -235,6 +236,12 @@ export default function SimulatorPage() {
   const [callcardLoadError, setCallcardLoadError] = useState<string | null>(null)
   const [showTop10, setShowTop10] = useState(false)
   const [selectedAxis, setSelectedAxis] = useState<number | null>(null)
+  const [simulatorMode, setSimulatorMode] = useState<'actual' | 'manual'>('actual')
+  const [manualPickupLat, setManualPickupLat] = useState(36.79778)
+  const [manualPickupLng, setManualPickupLng] = useState(127.13976)
+  const [manualDestinationLat, setManualDestinationLat] = useState(36.77324)
+  const [manualDestinationLng, setManualDestinationLng] = useState(127.12915)
+  const [searchRadiusKm, setSearchRadiusKm] = useState(2)
 
   const applyCallcardInput = useCallback((callcard: SimulatorCallcardRow | null) => {
     if (!callcard) return
@@ -248,6 +255,7 @@ export default function SimulatorPage() {
   }, [])
 
   const selectCallcard = useCallback((callcardId: string) => {
+    setSimulatorMode('actual')
     setSelectedCallcardId(callcardId)
     applyCallcardInput(callcards.find((row) => row.callcard_id === callcardId) ?? null)
   }, [applyCallcardInput, callcards])
@@ -316,9 +324,32 @@ export default function SimulatorPage() {
     eta_distance: eta,
   }), [hour, weekday, distance, fare, paid, surge, eta])
 
+  const manualCallcard = useMemo<SimulatorCallcardRow>(() => ({
+    callcard_id: 'MANUAL-CALLCARD',
+    asp_id: aspId,
+    call_date: '직접 입력',
+    passenger_lat: manualPickupLat,
+    passenger_lng: manualPickupLng,
+    dest_lat: manualDestinationLat,
+    dest_lng: manualDestinationLng,
+    passenger_addr: '지도/좌표 직접 입력 출발지',
+    dest_addr: '지도/좌표 직접 입력 도착지',
+    s_hexagon: null,
+    d_hexagon: null,
+    hour_slot: hour,
+    weekday,
+    expected_distance: distance,
+    expected_fare: fare,
+    eta_distance: eta,
+    is_paid: paid,
+    is_surge: surge,
+    product_type: surge ? '탄력' : '일반',
+  }), [aspId, manualPickupLat, manualPickupLng, manualDestinationLat, manualDestinationLng, hour, weekday, distance, fare, eta, paid, surge])
+
   const callVector = useMemo(() => callToVector(callInput), [callInput])
   const callBundle = useMemo(() => vectorToDisplayAxisBundle(callVector), [callVector])
-  const selectedCallcard = callcards.find((row) => row.callcard_id === selectedCallcardId) ?? callcards[0] ?? null
+  const selectedActualCallcard = callcards.find((row) => row.callcard_id === selectedCallcardId) ?? callcards[0] ?? null
+  const selectedCallcard = simulatorMode === 'manual' ? manualCallcard : selectedActualCallcard
   const adaptedLocation = useMemo(() => (
     selectedCallcard ? adaptCallcardLocation(selectedCallcard) : null
   ), [selectedCallcard])
@@ -410,15 +441,15 @@ export default function SimulatorPage() {
         <Kpi label="조회 상태" value={statusLabel} tone={statusLabel === '정상' ? C.green : C.yellow} />
         <Kpi label="실제 콜카드" value={`${callcards.length.toLocaleString()}건`} tone={C.cyan} />
         <Kpi label="후보 기사" value={`${drivers.length.toLocaleString()}명`} tone={C.green} />
-        <Kpi label="최고 추천점수" value={selected ? `${Math.round(selected.finalScore)}점` : '-'} tone={C.purple} />
-        <Kpi label="정렬 기준" value="최종점수" tone={C.orange} />
+        <Kpi label="최고 우선발송 점수" value={selected ? `${Math.round(selected.finalScore)}점` : '-'} tone={C.purple} />
+        <Kpi label="정렬 기준" value="먼저 보낼 순서" tone={C.orange} />
       </section>
 
       <section className="sim-grid">
         <aside className="panel call-panel">
           <SectionEyebrow>CALLCARD INPUT</SectionEyebrow>
           <h1>콜 조건을 바꾸면 기사 후보군이 다시 정렬됩니다</h1>
-          <p className="intro">실제 콜카드를 선택하거나 조건을 조정해 22D 성향 유사도와 H3 공간 적합도를 함께 확인합니다.</p>
+          <p className="intro">콜수락율을 높이기 위해 실제 콜카드를 선택하거나 조건을 직접 입력하고, 누적 기사 운행패턴에서 먼저 보내볼 기사 순서를 확인합니다.</p>
 
           <label className="field wide">
             <span>지역</span>
@@ -427,12 +458,21 @@ export default function SimulatorPage() {
             </select>
           </label>
 
+          <div className="mode-switch" role="group" aria-label="시뮬레이터 입력 방식">
+            <button type="button" className={simulatorMode === 'actual' ? 'active' : ''} onClick={() => setSimulatorMode('actual')}>
+              실제 콜카드 선택
+            </button>
+            <button type="button" className={simulatorMode === 'manual' ? 'active' : ''} onClick={() => setSimulatorMode('manual')}>
+              직접 콜카드 만들기
+            </button>
+          </div>
+
           <label className="field wide">
             <span>실제 콜카드</span>
             <select
               value={selectedCallcardId}
               onChange={(event) => selectCallcard(event.target.value)}
-              disabled={callcardsLoading || callcards.length === 0}
+              disabled={simulatorMode === 'manual' || callcardsLoading || callcards.length === 0}
             >
               {callcards.length === 0 ? (
                 <option value="">{callcardsLoading ? '불러오는 중' : '콜카드 없음'}</option>
@@ -443,6 +483,21 @@ export default function SimulatorPage() {
               ))}
             </select>
           </label>
+
+          {simulatorMode === 'manual' && (
+            <section className="manual-fields" aria-label="직접 콜카드 조건 입력">
+              <div>
+                <strong>직접 입력 콜카드</strong>
+                <span>좌표를 넣으면 출발·도착 H3와 OD 키를 만들고, 누적 기사 운행패턴에서 먼저 보내볼 기사 10명을 다시 계산합니다.</span>
+              </div>
+              <div className="input-grid">
+                <NumberField label="출발 위도" value={manualPickupLat} onChange={setManualPickupLat} />
+                <NumberField label="출발 경도" value={manualPickupLng} onChange={setManualPickupLng} />
+                <NumberField label="도착 위도" value={manualDestinationLat} onChange={setManualDestinationLat} />
+                <NumberField label="도착 경도" value={manualDestinationLng} onChange={setManualDestinationLng} />
+              </div>
+            </section>
+          )}
 
           <CallcardSummary
             callcard={selectedCallcard}
@@ -461,7 +516,7 @@ export default function SimulatorPage() {
             destination={adaptedLocation?.route.destination}
             expectedDistanceMeters={distance}
             etaSeconds={eta}
-            title="콜카드 출발·도착 지도"
+            title={simulatorMode === 'manual' ? '직접 입력 출발·도착 지도' : '콜카드 출발·도착 지도'}
             compact
           />
 
@@ -483,6 +538,19 @@ export default function SimulatorPage() {
             <NumberField label="픽업 ETA" value={eta} onChange={setEta} suffix="초" />
           </div>
 
+          <label className="range-field">
+            <span>차량 탐색범위 <b>{searchRadiusKm}km</b></span>
+            <input
+              type="range"
+              min={1}
+              max={3}
+              step={1}
+              value={searchRadiusKm}
+              onChange={(event) => setSearchRadiusKm(Number(event.target.value))}
+            />
+            <em>실시간 기사 위치가 연결되기 전까지는 반경 확장 시나리오 표시용입니다.</em>
+          </label>
+
           <div className="toggle-row">
             <label><input type="checkbox" checked={paid} onChange={(event) => setPaid(event.target.checked)} /> 유료콜</label>
             <label><input type="checkbox" checked={surge} onChange={(event) => setSurge(event.target.checked)} /> 탄력/프리미엄</label>
@@ -495,8 +563,8 @@ export default function SimulatorPage() {
           <div className="stage-head">
             <div>
               <SectionEyebrow>AI DISPATCH SIMULATOR</SectionEyebrow>
-              <h2>{selected ? `우선발송 1순위 ${selected.driver.driver_id}` : '콜카드를 선택하면 기사군이 재정렬됩니다'}</h2>
-              <p>콜카드 원본 조건, 22D 성향 벡터, 출발·도착 H3 공간 적합도를 함께 비교해서 가장 먼저 보낼 기사 후보를 보여줍니다.</p>
+              <h2>{selected ? `먼저 보내볼 기사 ${selected.driver.driver_id}` : '콜카드를 선택하면 기사 순서가 다시 계산됩니다'}</h2>
+              <p>콜카드 조건과 기사 누적 운행패턴을 비교해 콜수락 가능성이 높은 기사부터 보여줍니다. 실제 배차에서는 미수락 시 기존 순차·반경 확장으로 넘깁니다.</p>
             </div>
             <div className="score-hero">
               <span>FINAL SCORE</span>
@@ -521,6 +589,7 @@ export default function SimulatorPage() {
             drivers={drivers.length}
             ranked={ranked.length}
             selected={selected}
+            simulatorMode={simulatorMode}
           />
           <MatchField
             ranked={ranked}
@@ -532,8 +601,8 @@ export default function SimulatorPage() {
           <div className="score-split">
             <ScoreTile label="성향 유사도" value={pct(selected?.similarityScore)} desc="콜카드 22D와 기사 22D 코사인 유사도" tone={C.purple} />
             <ScoreTile label="공간 적합도" value={pct(selected?.spatial.spatialScore)} desc="출발·도착 H3와 기사 선호 H3 비교" tone={C.green} />
-            <ScoreTile label="예상 수락률" value={pct(selected?.acceptanceProbability)} desc="실제 운영 검증 전 시뮬레이션 비교값" tone={C.yellow} />
-            <ScoreTile label="픽업거리/ETA" value={selected ? `${selected.simDistanceKm.toFixed(1)}km · ${selected.simEtaMin}분` : '-'} desc="기사 위치가 없어 데모용 가상 위치 사용" tone={C.orange} />
+            <ScoreTile label="수락 가능성 참고값" value={pct(selected?.acceptanceProbability)} desc="실제 운영 검증 전 시뮬레이션 비교값" tone={C.yellow} />
+            <ScoreTile label="거리/ETA 시뮬레이션" value={selected ? `${selected.simDistanceKm.toFixed(1)}km · ${selected.simEtaMin}분` : '-'} desc="기사 실시간 위치가 없어 데모용 가상 위치 사용" tone={C.orange} />
           </div>
 
           <p className="lead">{selected?.lead ?? '콜카드와 기사 벡터를 불러오면 추천 근거가 표시됩니다.'}</p>
@@ -552,7 +621,7 @@ export default function SimulatorPage() {
         <aside className="panel driver-panel">
           <SectionEyebrow>RECOMMENDATION</SectionEyebrow>
           <h2>최종 추천 랭킹</h2>
-          <p className="intro">Top 4는 우선발송 후보, Top 10은 검증용 전체 후보입니다.</p>
+          <p className="intro">상위 4명은 먼저 보내볼 후보, 10명 전체는 검증용 후보군입니다.</p>
 
           <div className="rank-list">
             {ranked.length === 0 ? (
@@ -576,13 +645,18 @@ export default function SimulatorPage() {
 
           {ranked.length > 4 && (
             <button type="button" className="show-all" onClick={() => setShowTop10((value) => !value)}>
-              {showTop10 ? 'Top 4만 보기' : `Top 10 전체 보기 (${ranked.length}명)`}
+              {showTop10 ? '상위 4명만 보기' : `후보 10명 전체 보기 (${ranked.length}명)`}
             </button>
           )}
 
           <DriverCard selected={selected} />
           <DispatchPreview selected={selected} callcard={selectedCallcard} distance={distance} fare={fare} eta={eta} />
-          <RadiusCard ranked={ranked} selectedId={selectedDriverId} onSelect={setSelectedDriverId} />
+          <RadiusCard
+            ranked={ranked}
+            selectedId={selectedDriverId}
+            onSelect={setSelectedDriverId}
+            baseRadiusKm={searchRadiusKm}
+          />
         </aside>
       </section>
 
@@ -613,21 +687,26 @@ function Kpi({ label, value, tone }: { label: string; value: string; tone: strin
       <style jsx>{`
         .kpi {
           min-width: 0;
-          border-right: 1px solid ${C.line};
-          padding: 18px 22px;
+          border: 1px solid ${C.line};
+          border-radius: 12px;
+          background: var(--bg-1);
+          padding: 14px 16px;
           display: grid;
-          gap: 4px;
+          gap: 3px;
         }
         .kpi span {
           color: ${C.muted};
-          font-size: 20px;
-          font-weight: 900;
+          font-size: 11px;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: .08em;
         }
         .kpi b {
-          font-size: clamp(28px, 2.4vw, 44px);
-          line-height: 1;
-          font-weight: 950;
+          font-size: clamp(18px, 1.6vw, 24px);
+          line-height: 1.1;
+          font-weight: 700;
           white-space: nowrap;
+          font-variant-numeric: tabular-nums;
         }
       `}</style>
     </div>
@@ -774,7 +853,7 @@ function ReadinessCard({
       ? { tone: C.red, title: '데이터 조회 오류', body: driverError ?? callcardError ?? '알 수 없는 조회 오류입니다.' }
       : callcards === 0 || drivers === 0
         ? { tone: C.red, title: '추천 준비 부족', body: `콜카드 ${callcards.toLocaleString()}건 · 기사 ${drivers.toLocaleString()}명입니다.` }
-        : { tone: C.green, title: '시뮬레이션 가능', body: `${callcards.toLocaleString()}개 콜카드와 ${drivers.toLocaleString()}명 기사 벡터로 ${ranked.toLocaleString()}명 Top 후보를 계산했습니다.` }
+        : { tone: C.green, title: '시뮬레이션 가능', body: `${callcards.toLocaleString()}개 콜카드와 ${drivers.toLocaleString()}명 기사 벡터로 ${ranked.toLocaleString()}명 후보 순서를 계산했습니다.` }
   return (
     <div className="ready" style={{ borderColor: `${state.tone}66`, background: `${state.tone}14` }}>
       <b style={{ color: state.tone }}>{state.title}</b>
@@ -787,7 +866,7 @@ function WinnerSpotlight({ selected, callcard }: { selected?: Ranked; callcard: 
   return (
     <section className="winner-spotlight">
       <div className="winner-copy">
-        <span>우선발송 후보</span>
+        <span>먼저 보낼 기사 후보</span>
         <h3>{selected?.driver.driver_id ?? '후보 계산 대기'}</h3>
         <p>선택된 콜카드와 누적 기사 패턴을 비교해, 지금 먼저 발송할 기사와 점수 근거를 한 화면에서 확인합니다.</p>
       </div>
@@ -806,17 +885,19 @@ function DispatchStory({
   drivers,
   ranked,
   selected,
+  simulatorMode,
 }: {
   callcards: number
   drivers: number
   ranked: number
   selected?: Ranked
+  simulatorMode: 'actual' | 'manual'
 }) {
   const steps = [
-    { label: '01', title: '콜카드 원본 조건', value: `${callcards.toLocaleString()}건`, desc: '주소, 좌표, H3, 요금, 거리, 시간 조건을 읽습니다.' },
+    { label: '01', title: simulatorMode === 'manual' ? '직접 입력 콜 조건' : '콜카드 원본 조건', value: simulatorMode === 'manual' ? '수동' : `${callcards.toLocaleString()}건`, desc: simulatorMode === 'manual' ? '지역, 요일, 시간, 출발·도착 좌표, 거리, 요금 조건을 즉시 벡터화합니다.' : '주소, 좌표, H3, 요금, 거리, 시간 조건을 읽습니다.' },
     { label: '02', title: '기사 운행패턴', value: `${drivers.toLocaleString()}명`, desc: '누적 운행 이력에서 기사별 22D 성향을 비교합니다.' },
     { label: '03', title: '공간 적합도', value: pct(selected?.spatial.spatialScore), desc: '출발 H3와 도착 H3가 기사 선호 H3와 가까운지 봅니다.' },
-    { label: '04', title: '우선발송 순위', value: `${ranked.toLocaleString()}명`, desc: '최종점수 순서로 먼저 보낼 후보를 정렬합니다.' },
+    { label: '04', title: '먼저 보낼 기사 순서', value: `${ranked.toLocaleString()}명`, desc: '우선발송 점수 순서로 후보를 정렬합니다.' },
   ]
   return (
     <div className="dispatch-story" aria-label="시뮬레이션 계산 흐름">
@@ -972,8 +1053,8 @@ function RadarCard({
             </g>
           )
         })}
-        <polygon points={polygonPoints(callAxis, 145)} fill="rgba(34,211,238,.16)" stroke={C.cyan} strokeWidth="4" />
-        <polygon points={polygonPoints(driverAxis, 145)} fill="rgba(251,146,60,.24)" stroke={C.orange} strokeWidth="4" />
+        <polygon points={polygonPoints(callAxis, 145)} fill="rgba(56,189,248,.16)" stroke={C.cyan} strokeWidth="4" />
+        <polygon points={polygonPoints(driverAxis, 145)} fill="rgba(217,138,74,.24)" stroke={C.orange} strokeWidth="4" />
       </svg>
       <div className="radar-legend"><span><i className="call" />콜카드</span><span><i className="driver" />기사</span><span>축 클릭: 22팩터 드릴다운</span></div>
     </div>
@@ -1023,7 +1104,7 @@ function DriverCard({ selected }: { selected?: Ranked }) {
         <strong>{grade(selected.finalScore)}</strong>
       </div>
       <div className="metric-grid">
-        <Metric label="최종점수" value={`${Math.round(selected.finalScore)}점`} />
+        <Metric label="우선발송 점수" value={`${Math.round(selected.finalScore)}점`} />
         <Metric label="성향 유사도" value={pct(selected.similarityScore)} />
         <Metric label="공간 적합도" value={pct(selected.spatial.spatialScore)} />
         <Metric label="신뢰도" value={pct(selected.reliability * 100)} />
@@ -1052,15 +1133,17 @@ function RadiusCard({
   ranked,
   selectedId,
   onSelect,
+  baseRadiusKm,
 }: {
   ranked: Ranked[]
   selectedId: string
   onSelect: (id: string) => void
+  baseRadiusKm: number
 }) {
   const tiers = [
-    { label: '1차 반경', radius: 2.5 },
-    { label: '2차 반경', radius: 5 },
-    { label: '3차 반경', radius: 8 },
+    { label: '1차 반경', radius: baseRadiusKm },
+    { label: '2차 반경', radius: baseRadiusKm + 1 },
+    { label: '3차 반경', radius: baseRadiusKm + 2 },
   ].map((tier) => ({
     ...tier,
     candidates: ranked.filter((row) => row.simDistanceKm <= tier.radius),
@@ -1150,48 +1233,46 @@ const pageCss = `
     min-height: 100vh;
     color: ${C.ink};
     background:
-      radial-gradient(circle at 50% 0%, rgba(34,211,238,.14), transparent 28%),
-      linear-gradient(180deg, #050810 0%, #070B15 100%);
-    font-family: Pretendard, "Apple SD Gothic Neo", "Malgun Gothic", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    font-size: 20px;
+      radial-gradient(820px 320px at 50% -8%, rgba(56,189,248,.06), transparent 62%),
+      ${C.body};
+    font-size: var(--fs-base);
   }
   .kpi-row {
-    position: sticky;
-    top: 84px;
-    z-index: 80;
+    max-width: var(--maxw);
+    margin: 0 auto;
+    padding: 14px clamp(16px, 2vw, 28px) 0;
     display: grid;
     grid-template-columns: repeat(5, minmax(0, 1fr));
-    border-bottom: 1px solid ${C.line};
-    background: rgba(5,8,16,.92);
-    backdrop-filter: blur(16px);
+    gap: 12px;
   }
   .sim-grid {
+    max-width: var(--maxw);
+    margin: 0 auto;
     display: grid;
     grid-template-columns: minmax(330px, 0.9fr) minmax(560px, 1.8fr) minmax(360px, 1fr);
-    gap: 20px;
-    padding: 20px;
+    gap: 14px;
+    padding: 14px clamp(16px, 2vw, 28px) 56px;
     align-items: start;
   }
   .panel {
     min-width: 0;
     border: 1px solid ${C.line};
-    border-radius: 28px;
-    background: linear-gradient(180deg, rgba(14,22,39,.96), rgba(7,12,24,.96));
-    box-shadow: 0 26px 80px rgba(0,0,0,.32), inset 0 1px 0 rgba(255,255,255,.05);
-    padding: 22px;
+    border-radius: 14px;
+    background: var(--bg-1);
+    padding: clamp(16px, 1.6vw, 22px);
   }
   .call-panel,
   .driver-panel {
     position: sticky;
-    top: 190px;
-    max-height: calc(100vh - 198px);
+    top: 76px;
+    max-height: calc(100vh - 92px);
     overflow: auto;
   }
   .eyebrow {
     color: ${C.cyan};
-    font-size: 20px;
+    font-size: 13px;
     line-height: 1;
-    font-weight: 950;
+    font-weight: 700;
     letter-spacing: 0;
     margin-bottom: 12px;
   }
@@ -1199,21 +1280,102 @@ const pageCss = `
     margin: 0;
   }
   h1 {
-    font-size: clamp(34px, 2.7vw, 54px);
-    line-height: 1.08;
-    font-weight: 950;
+    font-size: clamp(22px, 2vw, 30px);
+    line-height: 1.18;
+    font-weight: 700;
   }
   h2 {
-    font-size: clamp(32px, 2.4vw, 50px);
-    line-height: 1.06;
-    font-weight: 950;
+    font-size: clamp(18px, 1.7vw, 24px);
+    line-height: 1.2;
+    font-weight: 700;
   }
   .intro,
   .stage-head p {
     color: ${C.sub};
-    font-size: 21px;
+    font-size: 13.5px;
     line-height: 1.45;
     margin-top: 12px;
+  }
+  .mode-switch {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-top: 18px;
+    padding: 8px;
+    border: 1px solid rgba(148,163,184,.22);
+    border-radius: 10px;
+    background: rgba(5,8,16,.58);
+  }
+  .mode-switch button {
+    min-height: 56px;
+    border: 1px solid transparent;
+    border-radius: 14px;
+    color: ${C.sub};
+    background: transparent;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .mode-switch button.active {
+    color: ${C.ink};
+    border-color: rgba(56,189,248,.44);
+    background: linear-gradient(135deg, rgba(56,189,248,.18), rgba(167,139,250,.12));
+    box-shadow: 0 0 22px rgba(56,189,248,.12);
+  }
+  .manual-fields {
+    margin-top: 18px;
+    border: 1px solid rgba(56,189,248,.28);
+    border-radius: 10px;
+    background: radial-gradient(circle at 20% 10%, rgba(56,189,248,.14), transparent 18rem), rgba(56,189,248,.045);
+    padding: 18px;
+  }
+  .manual-fields strong {
+    display: block;
+    color: ${C.cyan};
+    font-size: 15px;
+    line-height: 1.18;
+    font-weight: 700;
+  }
+  .manual-fields span {
+    display: block;
+    margin-top: 8px;
+    color: ${C.sub};
+    font-size: 13px;
+    line-height: 1.38;
+    font-weight: 500;
+  }
+  .range-field {
+    display: grid;
+    gap: 12px;
+    margin-top: 18px;
+    border: 1px solid rgba(148,163,184,.20);
+    border-radius: 10px;
+    background: rgba(255,255,255,.035);
+    padding: 16px;
+  }
+  .range-field > span {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    color: ${C.sub};
+    font-size: 13px;
+    font-weight: 700;
+  }
+  .range-field b {
+    color: ${C.cyan};
+    font-size: 17px;
+  }
+  .range-field input {
+    width: 100%;
+    accent-color: ${C.cyan};
+  }
+  .range-field em {
+    color: ${C.muted};
+    font-size: 11.5px;
+    line-height: 1.35;
+    font-style: normal;
+    font-weight: 500;
   }
   .field {
     display: grid;
@@ -1229,8 +1391,8 @@ const pageCss = `
   .od span,
   .metric span {
     color: ${C.muted};
-    font-size: 20px;
-    font-weight: 900;
+    font-size: 13px;
+    font-weight: 600;
   }
   select,
   input[type="number"] {
@@ -1238,12 +1400,12 @@ const pageCss = `
     min-width: 0;
     min-height: 56px;
     border: 1px solid ${C.line};
-    border-radius: 16px;
+    border-radius: 8px;
     color: ${C.ink};
     background: #08101F;
     padding: 0 16px;
-    font-size: 20px;
-    font-weight: 850;
+    font-size: 13px;
+    font-weight: 500;
   }
   .number-wrap {
     position: relative;
@@ -1254,9 +1416,9 @@ const pageCss = `
     top: 50%;
     transform: translateY(-50%);
     color: ${C.muted};
-    font-size: 20px;
+    font-size: 13px;
     font-style: normal;
-    font-weight: 900;
+    font-weight: 600;
   }
   .input-logic {
     display: grid;
@@ -1264,20 +1426,20 @@ const pageCss = `
     margin-top: 18px;
     padding: 18px;
     border: 1px solid rgba(34, 211, 238, 0.34);
-    border-radius: 18px;
+    border-radius: 10px;
     background: linear-gradient(135deg, rgba(34, 211, 238, 0.11), rgba(16, 185, 129, 0.08));
   }
   .input-logic strong {
     color: ${C.cyan};
-    font-size: 24px;
+    font-size: 15px;
     line-height: 1.15;
-    font-weight: 950;
+    font-weight: 700;
   }
   .input-logic span {
     color: ${C.sub};
-    font-size: 20px;
+    font-size: 13px;
     line-height: 1.42;
-    font-weight: 750;
+    font-weight: 400;
   }
   .input-grid {
     display: grid;
@@ -1296,20 +1458,20 @@ const pageCss = `
     align-items: center;
     gap: 12px;
     border: 1px solid ${C.line};
-    border-radius: 16px;
+    border-radius: 8px;
     background: rgba(255,255,255,.03);
     padding: 0 16px;
-    font-size: 21px;
-    font-weight: 900;
+    font-size: 13.5px;
+    font-weight: 600;
   }
   .call-card,
   .driver-card,
   .radius-card,
   .axis-box,
   .sub-card {
-    border: 1px solid rgba(34,211,238,.20);
-    border-radius: 22px;
-    background: rgba(34,211,238,.045);
+    border: 1px solid rgba(56,189,248,.20);
+    border-radius: 10px;
+    background: rgba(56,189,248,.045);
     padding: 18px;
     margin-top: 18px;
   }
@@ -1319,8 +1481,8 @@ const pageCss = `
   }
   .call-top b {
     color: ${C.ink};
-    font-size: 25px;
-    font-weight: 950;
+    font-size: 15px;
+    font-weight: 700;
     overflow-wrap: anywhere;
   }
   .call-facts,
@@ -1334,7 +1496,7 @@ const pageCss = `
   .metric {
     min-width: 0;
     border: 1px solid rgba(255,255,255,.08);
-    border-radius: 16px;
+    border-radius: 8px;
     background: rgba(4,8,18,.55);
     padding: 14px;
     display: grid;
@@ -1347,8 +1509,8 @@ const pageCss = `
   .fact b,
   .metric b {
     color: ${C.ink};
-    font-size: 21px;
-    font-weight: 950;
+    font-size: 13.5px;
+    font-weight: 700;
     overflow-wrap: anywhere;
   }
   .mono b {
@@ -1357,7 +1519,7 @@ const pageCss = `
   .od {
     margin-top: 12px;
     border: 1px solid rgba(255,255,255,.08);
-    border-radius: 16px;
+    border-radius: 8px;
     background: rgba(4,8,18,.55);
     padding: 14px;
     display: grid;
@@ -1365,13 +1527,13 @@ const pageCss = `
   }
   .od b {
     font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-    font-size: 20px;
+    font-size: 13px;
     overflow-wrap: anywhere;
   }
   .diag {
     margin-top: 12px;
     color: ${C.sub};
-    font-size: 20px;
+    font-size: 13px;
     line-height: 1.45;
   }
   .warn {
@@ -1379,13 +1541,13 @@ const pageCss = `
     border: 1px solid ${C.yellow};
     border-radius: 14px;
     color: ${C.yellow};
-    background: rgba(245,158,11,.08);
+    background: rgba(210,153,34,.08);
     padding: 12px;
-    font-size: 20px;
-    font-weight: 900;
+    font-size: 13px;
+    font-weight: 600;
   }
   .axis-box h3 {
-    font-size: 24px;
+    font-size: 15px;
     margin-bottom: 12px;
   }
   .axis-row,
@@ -1399,8 +1561,8 @@ const pageCss = `
   .axis-row span,
   .compare span {
     color: ${C.sub};
-    font-size: 20px;
-    font-weight: 900;
+    font-size: 13px;
+    font-weight: 600;
   }
   .axis-row i,
   .compare i {
@@ -1417,7 +1579,7 @@ const pageCss = `
   }
   .axis-row b,
   .compare b {
-    font-size: 20px;
+    font-size: 13px;
     text-align: right;
   }
   .stage-head {
@@ -1428,9 +1590,9 @@ const pageCss = `
   }
   .score-hero {
     min-width: 150px;
-    border: 1px solid rgba(139,92,246,.42);
-    border-radius: 24px;
-    background: rgba(139,92,246,.12);
+    border: 1px solid rgba(167,139,250,.42);
+    border-radius: 12px;
+    background: rgba(167,139,250,.12);
     padding: 18px;
     text-align: center;
   }
@@ -1438,31 +1600,31 @@ const pageCss = `
   .score-hero em {
     display: block;
     color: ${C.sub};
-    font-size: 20px;
+    font-size: 13px;
     font-style: normal;
-    font-weight: 950;
+    font-weight: 700;
   }
   .score-hero b {
     display: block;
     color: ${C.cyan};
-    font-size: clamp(54px, 5vw, 88px);
+    font-size: clamp(34px, 3.4vw, 50px);
     line-height: .95;
-    font-weight: 950;
+    font-weight: 700;
   }
   .ready {
     margin-top: 18px;
     border: 1px solid;
-    border-radius: 18px;
+    border-radius: 10px;
     padding: 16px 18px;
     display: grid;
     gap: 5px;
   }
   .ready b {
-    font-size: 22px;
+    font-size: 14px;
   }
   .ready span {
     color: ${C.sub};
-    font-size: 20px;
+    font-size: 13px;
     line-height: 1.4;
   }
   .winner-spotlight {
@@ -1471,62 +1633,67 @@ const pageCss = `
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 18px;
     align-items: stretch;
-    border: 1px solid rgba(34,211,238,.35);
-    border-radius: 28px;
+    border: 1px solid rgba(56,189,248,.35);
+    border-radius: 12px;
     background:
-      radial-gradient(circle at 12% 20%, rgba(34,211,238,.22), transparent 34%),
-      linear-gradient(135deg, rgba(34,211,238,.12), rgba(139,92,246,.12));
+      radial-gradient(circle at 12% 20%, rgba(56,189,248,.22), transparent 34%),
+      linear-gradient(135deg, rgba(56,189,248,.12), rgba(167,139,250,.12));
     padding: 22px;
   }
   .winner-copy span,
   .story-step span,
   .phone-top span {
     color: ${C.cyan};
-    font-size: 20px;
-    font-weight: 950;
+    font-size: 13px;
+    font-weight: 700;
   }
   .winner-copy h3 {
     margin-top: 8px;
-    font-size: clamp(34px, 3.2vw, 58px);
-    line-height: 1;
-    font-weight: 950;
+    font-size: clamp(22px, 2.2vw, 32px);
+    line-height: 1.1;
+    font-weight: 700;
     overflow-wrap: anywhere;
   }
   .winner-copy p {
     margin-top: 10px;
     color: ${C.sub};
-    font-size: 22px;
+    font-size: 14px;
     line-height: 1.42;
-    font-weight: 800;
+    font-weight: 500;
   }
   .winner-metrics {
-    min-width: 420px;
+    min-width: 240px;
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 12px;
+  }
+  .winner-copy b,
+  .winner-copy h3 {
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
   .winner-metrics div,
   .story-step,
   .phone-card {
     min-width: 0;
     border: 1px solid rgba(255,255,255,.10);
-    border-radius: 20px;
+    border-radius: 10px;
     background: rgba(5,8,16,.58);
     padding: 16px;
   }
   .winner-metrics span {
     display: block;
     color: ${C.muted};
-    font-size: 19px;
-    font-weight: 950;
+    font-size: 12px;
+    font-weight: 700;
   }
   .winner-metrics b {
     display: block;
     margin-top: 4px;
     color: ${C.ink};
-    font-size: 34px;
+    font-size: 23px;
     line-height: 1.05;
-    font-weight: 950;
+    font-weight: 700;
     overflow-wrap: anywhere;
   }
   .dispatch-story {
@@ -1547,34 +1714,34 @@ const pageCss = `
     width: 92px;
     height: 92px;
     border-radius: 999px;
-    background: rgba(34,211,238,.10);
+    background: rgba(56,189,248,.10);
   }
   .story-step strong {
     display: block;
     margin-top: 10px;
-    font-size: 22px;
+    font-size: 14px;
     line-height: 1.2;
   }
   .story-step b {
     display: block;
     margin-top: 12px;
     color: ${C.ink};
-    font-size: 34px;
+    font-size: 23px;
     line-height: 1;
   }
   .story-step p {
     margin-top: 10px;
     color: ${C.sub};
-    font-size: 19px;
+    font-size: 12px;
     line-height: 1.35;
-    font-weight: 800;
+    font-weight: 500;
   }
   .dispatch-preview {
     margin-top: 18px;
   }
   .phone-card {
     background:
-      radial-gradient(circle at 80% 10%, rgba(16,185,129,.22), transparent 36%),
+      radial-gradient(circle at 80% 10%, rgba(63,185,80,.22), transparent 36%),
       rgba(5,8,16,.72);
   }
   .phone-top {
@@ -1586,7 +1753,7 @@ const pageCss = `
   }
   .phone-top b {
     color: ${C.green};
-    font-size: 34px;
+    font-size: 23px;
   }
   .phone-card strong,
   .phone-card em {
@@ -1594,16 +1761,16 @@ const pageCss = `
     overflow-wrap: anywhere;
   }
   .phone-card strong {
-    font-size: 24px;
+    font-size: 15px;
     line-height: 1.25;
   }
   .phone-card em {
     margin-top: 8px;
     color: ${C.sub};
-    font-size: 21px;
+    font-size: 13.5px;
     line-height: 1.3;
     font-style: normal;
-    font-weight: 850;
+    font-weight: 500;
   }
   .phone-facts {
     display: grid;
@@ -1616,16 +1783,16 @@ const pageCss = `
     background: rgba(255,255,255,.06);
     padding: 12px;
     color: ${C.ink};
-    font-size: 20px;
-    font-weight: 950;
+    font-size: 13px;
+    font-weight: 700;
     text-align: center;
   }
   .phone-card p {
     margin-top: 14px;
     color: ${C.yellow};
-    font-size: 19px;
+    font-size: 12px;
     line-height: 1.35;
-    font-weight: 850;
+    font-weight: 500;
   }
   .phone-actions {
     display: grid;
@@ -1635,24 +1802,24 @@ const pageCss = `
   }
   .phone-actions button {
     min-height: 54px;
-    border: 1px solid rgba(34,211,238,.35);
-    border-radius: 16px;
+    border: 1px solid rgba(56,189,248,.35);
+    border-radius: 8px;
     color: ${C.ink};
-    background: rgba(34,211,238,.12);
-    font-size: 21px;
-    font-weight: 950;
+    background: rgba(56,189,248,.12);
+    font-size: 13.5px;
+    font-weight: 700;
   }
   .match-field {
     position: relative;
     height: clamp(440px, 48vh, 640px);
     margin-top: 20px;
-    border: 1px solid rgba(34,211,238,.22);
-    border-radius: 30px;
+    border: 1px solid rgba(56,189,248,.22);
+    border-radius: 12px;
     overflow: hidden;
     background:
       linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px),
       linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px),
-      radial-gradient(circle at center, rgba(34,211,238,.18), transparent 28%),
+      radial-gradient(circle at center, rgba(56,189,248,.18), transparent 28%),
       rgba(4,8,18,.58);
     background-size: 42px 42px, 42px 42px, auto, auto;
   }
@@ -1670,25 +1837,25 @@ const pageCss = `
     height: 160px;
     transform: translate(-50%, -50%);
     border: 2px solid ${C.cyan};
-    border-radius: 28px;
-    background: rgba(34,211,238,.18);
+    border-radius: 12px;
+    background: rgba(56,189,248,.18);
     display: grid;
     place-items: center;
     align-content: center;
-    box-shadow: 0 0 70px rgba(34,211,238,.25);
+    box-shadow: 0 0 70px rgba(56,189,248,.25);
   }
   .call-node span,
   .call-node em {
     color: #9DEFFF;
-    font-size: 20px;
+    font-size: 13px;
     font-style: normal;
-    font-weight: 950;
+    font-weight: 700;
   }
   .call-node b {
     color: ${C.ink};
-    font-size: 58px;
+    font-size: 33px;
     line-height: 1;
-    font-weight: 950;
+    font-weight: 700;
   }
   .driver-node {
     position: absolute;
@@ -1696,7 +1863,7 @@ const pageCss = `
     height: 84px;
     transform: translate(-50%, -50%);
     border: 2px solid ${C.line};
-    border-radius: 22px;
+    border-radius: 10px;
     color: ${C.ink};
     background: rgba(12,18,35,.88);
     display: grid;
@@ -1706,23 +1873,23 @@ const pageCss = `
   }
   .driver-node.active {
     border-color: ${C.cyan};
-    background: rgba(34,211,238,.18);
-    box-shadow: 0 0 32px rgba(34,211,238,.3);
+    background: rgba(56,189,248,.18);
+    box-shadow: 0 0 32px rgba(56,189,248,.3);
   }
   .driver-node span {
     color: ${C.green};
-    font-size: 26px;
-    font-weight: 950;
+    font-size: 16px;
+    font-weight: 700;
   }
   .driver-node b {
-    font-size: 22px;
+    font-size: 14px;
     line-height: 1;
   }
   .driver-node em {
     color: ${C.muted};
-    font-size: 18px;
+    font-size: 11.5px;
     font-style: normal;
-    font-weight: 900;
+    font-weight: 600;
   }
   .score-split,
   .lower-grid {
@@ -1734,36 +1901,36 @@ const pageCss = `
   .score-tile {
     min-width: 0;
     border: 1px solid;
-    border-radius: 20px;
+    border-radius: 10px;
     padding: 16px;
   }
   .score-tile span {
-    font-size: 20px;
-    font-weight: 950;
+    font-size: 13px;
+    font-weight: 700;
   }
   .score-tile b {
     display: block;
     margin-top: 8px;
     color: ${C.ink};
-    font-size: 34px;
-    font-weight: 950;
+    font-size: 23px;
+    font-weight: 700;
   }
   .score-tile p {
     margin-top: 6px;
     color: ${C.sub};
-    font-size: 20px;
+    font-size: 13px;
     line-height: 1.35;
   }
   .lead {
     margin-top: 18px;
-    border: 1px solid rgba(16,185,129,.32);
-    border-radius: 20px;
-    background: rgba(16,185,129,.09);
+    border: 1px solid rgba(63,185,80,.32);
+    border-radius: 10px;
+    background: rgba(63,185,80,.09);
     color: #BDF7D7;
     padding: 18px;
-    font-size: 22px;
+    font-size: 14px;
     line-height: 1.45;
-    font-weight: 850;
+    font-weight: 500;
   }
   .lower-grid {
     grid-template-columns: minmax(360px, 1.1fr) minmax(300px, .9fr);
@@ -1776,12 +1943,12 @@ const pageCss = `
     margin-bottom: 14px;
   }
   .card-head b {
-    font-size: 25px;
+    font-size: 15px;
   }
   .card-head span {
     color: ${C.yellow};
-    font-size: 20px;
-    font-weight: 900;
+    font-size: 13px;
+    font-weight: 600;
   }
   .radar {
     width: 100%;
@@ -1791,16 +1958,16 @@ const pageCss = `
     cursor: pointer;
   }
   .axis-label text {
-    font-size: 18px;
-    font-weight: 900;
+    font-size: 11.5px;
+    font-weight: 600;
   }
   .radar-legend {
     display: flex;
     gap: 14px;
     flex-wrap: wrap;
     color: ${C.sub};
-    font-size: 20px;
-    font-weight: 900;
+    font-size: 13px;
+    font-weight: 600;
   }
   .radar-legend i {
     display: inline-block;
@@ -1828,8 +1995,8 @@ const pageCss = `
   }
   .why-row span {
     color: ${C.sub};
-    font-size: 20px;
-    font-weight: 900;
+    font-size: 13px;
+    font-weight: 600;
   }
   .why-row i {
     height: 20px;
@@ -1850,7 +2017,7 @@ const pageCss = `
   }
   .why-row b {
     text-align: right;
-    font-size: 21px;
+    font-size: 13.5px;
   }
   .rank-list {
     display: grid;
@@ -1861,7 +2028,7 @@ const pageCss = `
     width: 100%;
     min-width: 0;
     border: 1px solid ${C.line};
-    border-radius: 18px;
+    border-radius: 10px;
     color: ${C.ink};
     background: rgba(255,255,255,.025);
     padding: 14px;
@@ -1874,18 +2041,18 @@ const pageCss = `
   }
   .rank.active {
     border-color: ${C.orange};
-    background: rgba(251,146,60,.10);
+    background: rgba(217,138,74,.10);
     box-shadow: 0 0 0 1px ${C.orange};
   }
   .rank-no {
     width: 58px;
     height: 58px;
-    border-radius: 18px;
+    border-radius: 10px;
     display: grid;
     place-items: center;
     background: linear-gradient(135deg, ${C.orange}, #C2410C);
-    font-size: 22px;
-    font-weight: 950;
+    font-size: 14px;
+    font-weight: 700;
   }
   .rank-main {
     min-width: 0;
@@ -1896,31 +2063,31 @@ const pageCss = `
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 22px;
+    font-size: 14px;
   }
   .rank-main em {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     color: ${C.muted};
-    font-size: 20px;
+    font-size: 13px;
     font-style: normal;
-    font-weight: 850;
+    font-weight: 500;
   }
   .rank strong {
     color: ${C.cyan};
-    font-size: 40px;
+    font-size: 27px;
   }
   .show-all {
     width: 100%;
     min-height: 58px;
     margin-top: 14px;
-    border: 1px solid rgba(34,211,238,.36);
-    border-radius: 18px;
+    border: 1px solid rgba(56,189,248,.36);
+    border-radius: 10px;
     color: ${C.cyan};
-    background: rgba(34,211,238,.08);
-    font-size: 21px;
-    font-weight: 950;
+    background: rgba(56,189,248,.08);
+    font-size: 13.5px;
+    font-weight: 700;
     cursor: pointer;
   }
   .driver-hero {
@@ -1931,13 +2098,13 @@ const pageCss = `
   }
   .driver-hero span {
     color: ${C.green};
-    font-size: 20px;
-    font-weight: 950;
+    font-size: 13px;
+    font-weight: 700;
   }
   .driver-hero b {
     display: block;
     margin-top: 5px;
-    font-size: 26px;
+    font-size: 16px;
     overflow-wrap: anywhere;
   }
   .driver-hero strong {
@@ -1945,17 +2112,17 @@ const pageCss = `
     height: 82px;
     display: grid;
     place-items: center;
-    border-radius: 24px;
+    border-radius: 12px;
     color: ${C.green};
-    background: rgba(16,185,129,.15);
-    border: 1px solid rgba(16,185,129,.4);
-    font-size: 46px;
+    background: rgba(63,185,80,.15);
+    border: 1px solid rgba(63,185,80,.4);
+    font-size: 29px;
   }
   .tier {
     width: 100%;
     min-height: 78px;
     border: 1px solid ${C.line};
-    border-radius: 18px;
+    border-radius: 10px;
     color: ${C.ink};
     background: rgba(255,255,255,.025);
     padding: 14px;
@@ -1968,7 +2135,7 @@ const pageCss = `
   }
   .tier.active {
     border-color: ${C.cyan};
-    background: rgba(34,211,238,.08);
+    background: rgba(56,189,248,.08);
   }
   .tier:disabled {
     cursor: not-allowed;
@@ -1976,27 +2143,27 @@ const pageCss = `
   }
   .tier span {
     color: ${C.sub};
-    font-size: 20px;
-    font-weight: 950;
+    font-size: 13px;
+    font-weight: 700;
   }
   .tier b {
     color: ${C.cyan};
-    font-size: 24px;
+    font-size: 15px;
   }
   .tier em {
     grid-column: 1 / -1;
     color: ${C.muted};
-    font-size: 20px;
+    font-size: 13px;
     font-style: normal;
-    font-weight: 850;
+    font-weight: 500;
     overflow-wrap: anywhere;
   }
   .empty {
     border: 1px dashed ${C.line};
-    border-radius: 18px;
+    border-radius: 10px;
     padding: 18px;
     color: ${C.sub};
-    font-size: 21px;
+    font-size: 13.5px;
     line-height: 1.4;
   }
   .drawer-backdrop {
@@ -2012,8 +2179,8 @@ const pageCss = `
     width: min(920px, 100%);
     max-height: 88vh;
     overflow: auto;
-    border: 1px solid rgba(34,211,238,.35);
-    border-radius: 28px;
+    border: 1px solid rgba(56,189,248,.35);
+    border-radius: 12px;
     background: #08101F;
     padding: 24px;
     box-shadow: 0 30px 100px rgba(0,0,0,.55);
@@ -2022,12 +2189,12 @@ const pageCss = `
     float: right;
     min-height: 50px;
     border: 1px solid ${C.line};
-    border-radius: 16px;
+    border-radius: 8px;
     color: ${C.ink};
     background: rgba(255,255,255,.05);
     padding: 0 18px;
-    font-size: 20px;
-    font-weight: 950;
+    font-size: 13px;
+    font-weight: 700;
     cursor: pointer;
   }
   .drawer h2 {
@@ -2036,7 +2203,7 @@ const pageCss = `
   .drawer p {
     margin-top: 10px;
     color: ${C.sub};
-    font-size: 21px;
+    font-size: 13.5px;
   }
   .factor-table {
     display: grid;
@@ -2045,7 +2212,7 @@ const pageCss = `
   }
   .factor-row {
     border: 1px solid ${C.line};
-    border-radius: 18px;
+    border-radius: 10px;
     background: rgba(255,255,255,.025);
     padding: 14px;
     display: grid;
@@ -2055,12 +2222,12 @@ const pageCss = `
   }
   .factor-row b {
     display: block;
-    font-size: 22px;
+    font-size: 14px;
   }
   .factor-row span {
     color: ${C.muted};
-    font-size: 20px;
-    font-weight: 850;
+    font-size: 13px;
+    font-weight: 500;
   }
   @media (max-width: 1320px) {
     .sim-grid {
@@ -2070,6 +2237,16 @@ const pageCss = `
       grid-column: 1 / -1;
       position: static;
       max-height: none;
+    }
+    .winner-spotlight {
+      grid-template-columns: 1fr;
+    }
+    .winner-metrics {
+      min-width: 0;
+    }
+    .dispatch-story,
+    .score-split {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
     }
   }
   @media (max-width: 980px) {
@@ -2098,14 +2275,14 @@ const pageCss = `
   }
   @media (max-width: 640px) {
     .sim-page {
-      font-size: 20px;
+      font-size: 13px;
     }
     .sim-grid {
       padding: 14px;
     }
     .panel {
       padding: 18px;
-      border-radius: 22px;
+      border-radius: 10px;
     }
     .input-grid,
     .call-facts,

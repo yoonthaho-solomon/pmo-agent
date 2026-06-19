@@ -1,18 +1,19 @@
 'use client'
 
 import Link from 'next/link'
-import type { CSSProperties, ReactNode } from 'react'
+import type { ReactNode } from 'react'
 
 const navItems = [
-  { label: '데이터 현황', href: '/ingest', tone: '#10B981' },
-  { label: '임베딩 팩터', href: '/vectors', tone: '#22D3EE' },
-  { label: '매칭 시뮬레이터', href: '/simulator', tone: '#8B5CF6' },
+  { label: '적재 현황', href: '/ingest' },
+  { label: '임베딩 팩터', href: '/vectors' },
+  { label: '매칭 시뮬레이터', href: '/simulator' },
+  { label: '배차 로직', href: '/dispatch-logic' },
 ] as const
 
 export function PrimaryNav({
   active,
   title = 'KONAMOBILITY',
-  subtitle = 'AI Dispatch Workbench',
+  subtitle = 'AI DISPATCH',
   rightSlot,
 }: {
   active: string
@@ -21,176 +22,160 @@ export function PrimaryNav({
   rightSlot?: ReactNode
 }) {
   return (
-    <header className="primary-nav">
-      <Link href="/ingest" className="brand" aria-label="데이터 현황으로 이동">
-        <span className="mark">KM</span>
-        <span className="brand-text">
-          <b>{title}</b>
-          <em>{subtitle}</em>
-        </span>
-      </Link>
+    <header className="nav">
+      <div className="inner">
+        <Link href="/ingest" className="brand" aria-label="적재 현황으로 이동">
+          <span className="mark" aria-hidden>
+            KM
+          </span>
+          <span className="brandText">
+            <b>{title}</b>
+            <em>{subtitle}</em>
+          </span>
+        </Link>
 
-      <nav aria-label="주요 화면">
-        {navItems.map((item) => {
-          const isActive = item.href === active
-          return (
+        <nav aria-label="주요 화면">
+          {navItems.map((item) => (
             <Link
               key={item.href}
               href={item.href}
-              className={isActive ? 'active' : ''}
-              style={{ '--tone': item.tone } as CSSProperties}
+              className={item.href === active ? 'tab on' : 'tab'}
+              aria-current={item.href === active ? 'page' : undefined}
             >
               {item.label}
             </Link>
-          )
-        })}
-      </nav>
+          ))}
+        </nav>
 
-      <div className="right-slot">{rightSlot}</div>
+        <div className="right">{rightSlot}</div>
+      </div>
 
       <style jsx>{`
-        .primary-nav {
+        .nav {
           position: sticky;
           top: 0;
           z-index: 140;
-          min-height: 84px;
+          border-bottom: 1px solid var(--line);
+          background: color-mix(in srgb, var(--bg-0) 86%, transparent);
+          backdrop-filter: blur(16px) saturate(145%);
+        }
+        .inner {
+          max-width: var(--maxw);
+          margin: 0 auto;
+          min-height: var(--nav-h);
+          padding: 10px clamp(16px, 2vw, 28px);
           display: grid;
-          grid-template-columns: minmax(300px, 1fr) auto minmax(260px, 1fr);
+          grid-template-columns: minmax(220px, 1fr) auto minmax(220px, 1fr);
           align-items: center;
-          gap: 20px;
-          padding: 0 clamp(20px, 2.4vw, 40px);
-          border-bottom: 1px solid rgba(103,232,249,.24);
-          background: linear-gradient(90deg, rgba(4,7,16,.98), rgba(10,16,32,.96), rgba(4,7,16,.98));
-          backdrop-filter: blur(18px);
-          box-shadow: 0 22px 70px rgba(0,0,0,.38), inset 0 -1px 0 rgba(255,255,255,.04);
+          gap: 18px;
         }
         .brand {
           min-width: 0;
           display: inline-flex;
           align-items: center;
-          gap: 14px;
-          color: #F5F7FB;
-          text-decoration: none;
+          gap: 12px;
+          justify-self: start;
         }
         .mark {
-          width: 48px;
-          height: 48px;
-          border-radius: 17px;
+          width: 34px;
+          height: 34px;
+          flex: 0 0 auto;
+          border-radius: 10px;
           display: grid;
           place-items: center;
-          color: #06101B;
-          background: linear-gradient(135deg, #22D3EE, #8B5CF6);
-          font-size: 20px;
-          font-weight: 950;
-          box-shadow: 0 0 30px rgba(34,211,238,.32);
+          font-size: 13px;
+          font-weight: 800;
+          letter-spacing: 0.02em;
+          color: var(--accent);
+          background: var(--accent-soft);
+          border: 1px solid var(--accent-line);
+          box-shadow: 0 0 22px rgba(56, 189, 248, 0.12);
         }
-        .brand-text {
+        .brandText {
           min-width: 0;
           display: grid;
-          gap: 3px;
+          gap: 2px;
+          line-height: 1.08;
         }
-        .brand-text b {
-          color: #F5F7FB;
-          font-size: 26px;
-          line-height: 1.05;
-          font-weight: 950;
+        .brandText b {
+          font-size: 17px;
+          font-weight: 850;
+          letter-spacing: -0.02em;
+          color: var(--ink);
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
         }
-        .brand-text em {
-          color: #67E8F9;
-          font-size: 18px;
-          line-height: 1.15;
+        .brandText em {
+          font-size: 11px;
           font-style: normal;
-          font-weight: 900;
+          font-weight: 700;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          color: var(--accent);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
         nav {
-          display: grid;
-          grid-template-columns: repeat(3, minmax(150px, 1fr));
-          gap: 12px;
           justify-self: center;
+          display: inline-flex;
+          gap: 4px;
+          padding: 4px;
+          border: 1px solid var(--line);
+          border-radius: 16px;
+          background: rgba(255, 255, 255, 0.03);
         }
-        nav a {
-          height: 54px;
-          min-width: 160px;
-          display: grid;
+        .tab {
+          display: inline-grid;
           place-items: center;
-          border: 1px solid #22314F;
-          border-radius: 18px;
-          color: #AAB7CB;
-          background: linear-gradient(180deg, rgba(22,32,58,.82), rgba(10,15,29,.82));
-          text-decoration: none;
-          font-size: 20px;
-          font-weight: 950;
-          letter-spacing: 0;
-          transition: transform 160ms ease, border-color 160ms ease, background 160ms ease, color 160ms ease, box-shadow 160ms ease;
+          height: 40px;
+          padding: 0 18px;
+          border-radius: 12px;
+          font-size: 15px;
+          font-weight: 750;
+          letter-spacing: -0.02em;
+          color: var(--ink-3);
+          white-space: nowrap;
+          transition: color 140ms ease, background 140ms ease, box-shadow 140ms ease, transform 140ms ease;
         }
-        nav a:hover,
-        nav a.active {
+        .tab:hover {
+          color: var(--ink);
+          background: rgba(255, 255, 255, 0.05);
           transform: translateY(-1px);
-          color: #F5F7FB;
-          border-color: var(--tone);
-          background: linear-gradient(180deg, color-mix(in srgb, var(--tone) 26%, rgba(22,32,58,.9)), rgba(8,13,26,.92));
-          box-shadow: 0 0 32px color-mix(in srgb, var(--tone) 28%, transparent);
         }
-        .right-slot {
+        .tab.on {
+          color: var(--accent);
+          background: var(--accent-soft);
+          box-shadow: inset 0 0 0 1px var(--accent-line), 0 0 24px rgba(56, 189, 248, 0.12);
+        }
+        .right {
           justify-self: end;
-          display: flex;
+          display: inline-flex;
           align-items: center;
-          justify-content: flex-end;
-          gap: 10px;
+          gap: 8px;
           min-width: 0;
         }
-        .right-slot :global(button) {
-          min-height: 52px;
-          padding: 0 24px;
-          border: 0;
-          border-radius: 16px;
-          color: #06101B;
-          background: linear-gradient(135deg, #67E8F9, #8B5CF6);
-          box-shadow: 0 18px 42px rgba(34,211,238,.24);
-          font-size: 20px;
-          font-weight: 950;
-          cursor: pointer;
-          transition: transform 160ms ease, filter 160ms ease;
-        }
-        .right-slot :global(button:active) {
-          transform: scale(.96);
-        }
-        .right-slot :global(button:disabled) {
-          opacity: .55;
-          cursor: wait;
-        }
-        .right-slot :global(a),
-        .right-slot :global(span) {
-          min-height: 46px;
-          border-radius: 16px;
-          font-size: 18px;
-          font-weight: 950;
-        }
-        @media (max-width: 1180px) {
-          .primary-nav {
-            grid-template-columns: 1fr;
-            align-items: stretch;
-            padding-top: 14px;
-            padding-bottom: 14px;
+        @media (max-width: 1080px) {
+          .inner {
+            grid-template-columns: 1fr auto;
+            grid-auto-rows: auto;
+            gap: 10px;
           }
           nav {
+            grid-column: 1 / -1;
             justify-self: stretch;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
+            justify-content: space-between;
+            overflow-x: auto;
           }
-          nav a {
-            min-width: 0;
+          .tab {
+            flex: 1;
+            min-width: max-content;
+            padding: 0 14px;
           }
-          .right-slot {
-            justify-self: stretch;
-            justify-content: flex-start;
-          }
-        }
-        @media (max-width: 720px) {
-          nav {
-            grid-template-columns: 1fr;
+          .right {
+            grid-row: 1;
+            grid-column: 2;
           }
         }
       `}</style>
