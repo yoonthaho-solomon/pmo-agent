@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import Link from 'next/link'
 import type { CSSProperties, ReactNode } from 'react'
@@ -11,7 +11,7 @@ const navItems = [
 
 export function PrimaryNav({
   active,
-  title = 'Happycall PMO',
+  title = 'KONAMOBILITY',
   subtitle = 'AI Dispatch Workbench',
   rightSlot,
 }: {
@@ -23,7 +23,7 @@ export function PrimaryNav({
   return (
     <header className="primary-nav">
       <Link href="/ingest" className="brand" aria-label="데이터 현황으로 이동">
-        <span className="mark">PM</span>
+        <span className="mark">KM</span>
         <span className="brand-text">
           <b>{title}</b>
           <em>{subtitle}</em>
@@ -80,7 +80,7 @@ export function PrimaryNav({
           place-items: center;
           color: #06101B;
           background: linear-gradient(135deg, #22D3EE, #8B5CF6);
-          font-size: 17px;
+          font-size: 20px;
           font-weight: 950;
           box-shadow: 0 0 30px rgba(34,211,238,.32);
         }
@@ -91,7 +91,7 @@ export function PrimaryNav({
         }
         .brand-text b {
           color: #F5F7FB;
-          font-size: clamp(21px, 1.35vw, 27px);
+          font-size: 26px;
           line-height: 1.05;
           font-weight: 950;
           white-space: nowrap;
@@ -100,7 +100,7 @@ export function PrimaryNav({
         }
         .brand-text em {
           color: #67E8F9;
-          font-size: clamp(14px, .95vw, 17px);
+          font-size: 18px;
           line-height: 1.15;
           font-style: normal;
           font-weight: 900;
@@ -121,7 +121,7 @@ export function PrimaryNav({
           color: #AAB7CB;
           background: linear-gradient(180deg, rgba(22,32,58,.82), rgba(10,15,29,.82));
           text-decoration: none;
-          font-size: clamp(18px, 1.05vw, 22px);
+          font-size: 20px;
           font-weight: 950;
           letter-spacing: 0;
           transition: transform 160ms ease, border-color 160ms ease, background 160ms ease, color 160ms ease, box-shadow 160ms ease;
@@ -150,7 +150,7 @@ export function PrimaryNav({
           color: #06101B;
           background: linear-gradient(135deg, #67E8F9, #8B5CF6);
           box-shadow: 0 18px 42px rgba(34,211,238,.24);
-          font-size: clamp(17px, 1vw, 20px);
+          font-size: 20px;
           font-weight: 950;
           cursor: pointer;
           transition: transform 160ms ease, filter 160ms ease;
@@ -166,7 +166,7 @@ export function PrimaryNav({
         .right-slot :global(span) {
           min-height: 46px;
           border-radius: 16px;
-          font-size: clamp(14px, .9vw, 16px);
+          font-size: 18px;
           font-weight: 950;
         }
         @media (max-width: 1180px) {

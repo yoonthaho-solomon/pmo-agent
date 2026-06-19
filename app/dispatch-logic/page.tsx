@@ -182,7 +182,7 @@ const policies = [
 export default function DispatchLogicPage() {
   return (
     <main className="page">
-      <PrimaryNav active="/dispatch-logic" title="Happycall PMO" subtitle="AI Dispatch Handoff" />
+      <PrimaryNav active="/dispatch-logic" title="KONAMOBILITY" subtitle="AI Dispatch Handoff" />
 
       <div className="shell">
         <aside className="side" aria-label="배차로직 문서 목차">

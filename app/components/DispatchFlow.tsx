@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import type { CSSProperties } from 'react'
 
@@ -66,7 +66,7 @@ export function DispatchFlow({
         }
         .flow-head span {
           color: #67E8F9;
-          font-size: 17px;
+          font-size: 20px;
           font-weight: 950;
         }
         .flow-head b {
@@ -109,12 +109,12 @@ export function DispatchFlow({
           border: 1px solid rgba(148,163,184,.22);
           border-radius: 18px;
           background: rgba(15,23,42,.78);
-          font-size: 23px;
+          font-size: 24px;
           line-height: 1;
         }
         .flow-step strong {
           color: #F8FAFC;
-          font-size: 18px;
+          font-size: 20px;
           line-height: 1.15;
           font-weight: 950;
           text-align: center;
@@ -122,7 +122,7 @@ export function DispatchFlow({
         }
         .flow-step em {
           color: #94A3B8;
-          font-size: 15px;
+          font-size: 20px;
           line-height: 1.15;
           font-style: normal;
           font-weight: 850;

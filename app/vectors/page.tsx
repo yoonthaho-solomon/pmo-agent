@@ -2,6 +2,7 @@
 
 import { DispatchFlow } from '@/app/components/DispatchFlow'
 import { PrimaryNav } from '@/app/components/PrimaryNav'
+import { RouteMapPreview } from '@/app/components/RouteMapPreview'
 import { createClient } from '@supabase/supabase-js'
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import {
@@ -45,6 +46,8 @@ type DriverRow = DriverVectorRow & {
   asp_id: number
   data_days: number | null
   reliability: number | null
+  pref_s_hexagons?: string[] | null
+  pref_d_hexagons?: string[] | null
 }
 
 type RankedDriver = {
@@ -70,6 +73,26 @@ const C = {
 
 const weekdayLabels = ['월', '화', '수', '목', '금', '토', '일']
 
+const spatialPurpose = [
+  {
+    title: '승객 출발지',
+    value: 'passenger_addr · s_hexagon',
+    desc: '콜이 시작되는 주소와 출발 H3입니다. 기사 선호 출발 H3와 비교해 출발지 적합도를 계산합니다.',
+    color: C.cyan,
+  },
+  {
+    title: '승객 도착지',
+    value: 'dest_addr · d_hexagon',
+    desc: '콜이 끝나는 주소와 도착 H3입니다. 기사 선호 도착 H3와 비교해 목적지 적합도를 계산합니다.',
+    color: C.green,
+  },
+  {
+    title: 'OD 경로 키',
+    value: 's_hexagon → d_hexagon',
+    desc: '출발 H3와 도착 H3를 묶은 경로 키입니다. 향후 권역·OD 패턴과 다음 콜 효율 분석의 기준이 됩니다.',
+    color: C.orange,
+  },
+] as const
 const factorPurpose = [
   {
     title: '시간대',
@@ -247,7 +270,7 @@ export default function VectorsPage() {
     <main className="page">
       <PrimaryNav
         active="/vectors"
-        title="Happycall PMO"
+        title="KONAMOBILITY"
         subtitle="콜카드·기사 팩터리스트"
         rightSlot={<><Pill color={C.green}>실데이터</Pill><Pill color={C.cyan}>22D COSINE</Pill></>}
       />
@@ -290,6 +313,31 @@ export default function VectorsPage() {
           </div>
         </section>
 
+        <RouteMapPreview
+          pickup={selectedCallLocation?.route.pickup}
+          destination={selectedCallLocation?.route.destination}
+          expectedDistanceMeters={selectedCall?.expected_distance}
+          etaSeconds={selectedCall?.eta_distance}
+          title="콜카드 출발·도착 공간 프리뷰"
+        />
+
+        <section className="spatial-purpose">
+          <SectionTitle label="SPATIAL FACTORS" title="출발지·도착지는 22D 밖의 별도 핵심 팩터" />
+          <div className="spatial-grid">
+            {spatialPurpose.map((item) => (
+              <article key={item.title} style={{ '--tone': item.color } as CSSProperties}>
+                <span>{item.title}</span>
+                <b>{item.value}</b>
+                <p>{item.desc}</p>
+              </article>
+            ))}
+          </div>
+          <div className="driver-h3-note">
+            <span>선택 기사 공간 선호</span>
+            <b>출발 선호 H3 {selectedMatch?.driver.pref_s_hexagons?.length ?? 0}개 · 도착 선호 H3 {selectedMatch?.driver.pref_d_hexagons?.length ?? 0}개</b>
+            <p>최종 추천점수는 22D 성향 유사도에 이 출발·도착 H3 적합도를 별도로 더해 계산합니다.</p>
+          </div>
+        </section>
         <section className="core-model" aria-label="팩터 계산 핵심 흐름">
           {coreModelCards.map((item) => (
             <article key={item.step} style={{ '--tone': item.color } as CSSProperties}>

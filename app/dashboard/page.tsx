@@ -130,7 +130,7 @@ function TopBar() {
           PM
         </span>
         <span style={{ fontSize: 16, fontWeight: 950 }}>
-          Happycall PMO <span style={{ color: C.cyan }}>AI Dispatch</span>
+          KONAMOBILITY <span style={{ color: C.cyan }}>AI Dispatch</span>
         </span>
       </Link>
       <nav style={{ display: 'flex', justifyContent: 'center', gap: 10 }}>

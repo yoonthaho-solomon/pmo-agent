@@ -146,7 +146,7 @@ export default function IngestPage() {
     <main className="page">
       <PrimaryNav
         active="/ingest"
-        title="Happycall PMO"
+        title="KONAMOBILITY"
         subtitle="Data Status"
         rightSlot={<><Pill color={C.green}>READ ONLY</Pill><Pill color={C.cyan}>SUPABASE</Pill></>}
       />
@@ -363,7 +363,7 @@ function OutputStack({ items }: { items: [string, string, string][] }) {
 
 function Pill({ children, color }: { children: ReactNode; color: string }) {
   return (
-    <span style={{ color, border: `1px solid ${color}66`, background: `${color}18`, borderRadius: 12, padding: '10px 14px', fontSize: 16, fontWeight: 900 }}>
+    <span style={{ color, border: `1px solid ${color}66`, background: `${color}18`, borderRadius: 12, padding: '10px 14px', fontSize: 18, fontWeight: 900 }}>
       {children}
     </span>
   )
@@ -380,7 +380,7 @@ const pageCss = `
       ${C.bg};
     background-size: 72px 72px, 72px 72px, auto, auto;
     font-family: Pretendard, "Apple SD Gothic Neo", "Malgun Gothic", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    font-size: 20px;
+    font-size: var(--pmo-fs-label);
   }
   .kpi-strip {
     position: sticky;
@@ -402,11 +402,11 @@ const pageCss = `
   }
   .kpi span {
     color: ${C.sub};
-    font-size: 20px;
+    font-size: var(--pmo-fs-label);
     font-weight: 950;
   }
   .kpi b {
-    font-size: clamp(32px, 2.35vw, 48px);
+    font-size: var(--pmo-fs-metric);
     line-height: 1;
     font-weight: 950;
     text-shadow: 0 0 14px rgba(34,211,238,.16);
@@ -417,7 +417,7 @@ const pageCss = `
   .kpi p {
     margin: 0;
     color: ${C.sub};
-    font-size: 20px;
+    font-size: var(--pmo-fs-label);
     line-height: 1.2;
     font-weight: 800;
     white-space: nowrap;
@@ -454,13 +454,13 @@ const pageCss = `
   .panel-title span,
   .stage-head span {
     color: ${C.cyan};
-    font-size: 19px;
+    font-size: var(--pmo-fs-label);
     font-weight: 950;
   }
   .panel-title h2 {
     margin: 0;
     color: ${C.ink};
-    font-size: 31px;
+    font-size: var(--pmo-fs-section);
     line-height: 1.08;
   }
   .stage-head {
@@ -472,7 +472,7 @@ const pageCss = `
   .stage-head h1 {
     max-width: 980px;
     margin: 8px 0 0;
-    font-size: clamp(44px, 3.2vw, 66px);
+    font-size: var(--pmo-fs-hero);
     line-height: 1.04;
     letter-spacing: 0;
   }
@@ -488,7 +488,7 @@ const pageCss = `
   }
   .status-orb span {
     color: ${C.sub};
-    font-size: 20px;
+    font-size: var(--pmo-fs-label);
     font-weight: 950;
   }
   .status-orb b {
@@ -509,7 +509,7 @@ const pageCss = `
     color: ${C.sub};
     background: rgba(15,23,42,.76);
     padding: 12px 20px;
-    font-size: 20px;
+    font-size: var(--pmo-fs-label);
     font-weight: 950;
     cursor: pointer;
     transition: transform 150ms ease, border-color 150ms ease, background 150ms ease;
@@ -547,18 +547,18 @@ const pageCss = `
   }
   .date-cell span {
     color: ${C.ink};
-    font-size: 24px;
+    font-size: var(--pmo-fs-body-lg);
     font-weight: 950;
   }
   .date-cell b {
     color: ${C.ink};
-    font-size: 26px;
+    font-size: var(--pmo-fs-body-lg);
     line-height: 1;
     overflow-wrap: anywhere;
   }
   .date-cell em {
     color: var(--tone);
-    font-size: 18px;
+    font-size: var(--pmo-fs-caption);
     font-style: normal;
     font-weight: 950;
   }
@@ -571,7 +571,7 @@ const pageCss = `
     border-radius: 24px;
     color: ${C.yellow};
     background: rgba(245,158,11,.08);
-    font-size: 24px;
+    font-size: var(--pmo-fs-body-lg);
     font-weight: 900;
   }
   .flow-summary {
@@ -589,18 +589,18 @@ const pageCss = `
   }
   .flow-card span {
     color: var(--tone);
-    font-size: 18px;
+    font-size: var(--pmo-fs-caption);
     font-weight: 950;
   }
   .flow-card b {
     display: block;
     margin-top: 8px;
-    font-size: 21px;
+    font-size: var(--pmo-fs-body);
   }
   .flow-card strong {
     display: block;
     margin-top: 8px;
-    font-size: 30px;
+    font-size: var(--pmo-fs-section);
     line-height: 1;
   }
   .issue-list {
@@ -621,17 +621,17 @@ const pageCss = `
     color: var(--tone, ${C.yellow});
     background: color-mix(in srgb, var(--tone, ${C.yellow}) 14%, transparent);
     padding: 4px 10px;
-    font-size: 16px;
+    font-size: var(--pmo-fs-caption);
     font-weight: 950;
   }
   .issue-card b {
-    font-size: 24px;
+    font-size: var(--pmo-fs-body-lg);
     line-height: 1.15;
   }
   .issue-card p {
     margin: 0;
     color: ${C.sub};
-    font-size: 19px;
+    font-size: var(--pmo-fs-label);
     line-height: 1.35;
     font-weight: 800;
   }
@@ -650,12 +650,12 @@ const pageCss = `
   .source-card span,
   .note-card span {
     color: var(--tone, ${C.orange});
-    font-size: 18px;
+    font-size: var(--pmo-fs-caption);
     font-weight: 950;
   }
   .source-card h3 {
     margin: 2px 0 0;
-    font-size: 30px;
+    font-size: var(--pmo-fs-section);
     line-height: 1;
   }
   .source-card p {
@@ -665,13 +665,13 @@ const pageCss = `
   }
   .source-card em {
     color: ${C.muted};
-    font-size: 17px;
+    font-size: var(--pmo-fs-caption);
     font-style: normal;
     font-weight: 900;
   }
   .source-card b {
     color: ${C.ink};
-    font-size: 21px;
+    font-size: var(--pmo-fs-body);
     line-height: 1.25;
     overflow-wrap: anywhere;
   }
@@ -694,11 +694,11 @@ const pageCss = `
     color: ${C.ink};
   }
   .mode-list b {
-    font-size: 21px;
+    font-size: var(--pmo-fs-body);
   }
   .mode-list span {
     color: ${C.muted};
-    font-size: 17px;
+    font-size: var(--pmo-fs-caption);
     font-weight: 850;
   }
   .output-stack {
@@ -717,18 +717,18 @@ const pageCss = `
   }
   .output-stack span {
     color: ${C.sub};
-    font-size: 19px;
+    font-size: var(--pmo-fs-label);
     font-weight: 900;
   }
   .output-stack b {
     color: var(--tone);
-    font-size: 25px;
+    font-size: var(--pmo-fs-body-lg);
     line-height: 1;
   }
   .note-card p {
     margin: 0;
     color: ${C.sub};
-    font-size: 20px;
+    font-size: var(--pmo-fs-label);
     line-height: 1.45;
     font-weight: 780;
   }
@@ -741,6 +741,6 @@ const pageCss = `
   @media (max-width: 860px) {
     .left-rail, .right-rail, .stage-head, .flow-summary { grid-template-columns: 1fr; }
     .date-map { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .stage-head h1 { font-size: 38px; }
+    .stage-head h1 { font-size: 40px; }
   }
 `

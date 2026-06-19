@@ -2,6 +2,7 @@
 
 import { DispatchFlow } from '@/app/components/DispatchFlow'
 import { PrimaryNav } from '@/app/components/PrimaryNav'
+import { RouteMapPreview } from '@/app/components/RouteMapPreview'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createClient } from '@supabase/supabase-js'
 import {
@@ -398,7 +399,7 @@ export default function SimulatorPage() {
     <main className="sim-page">
       <PrimaryNav
         active="/simulator"
-        title="Happycall PMO"
+        title="KONAMOBILITY"
         subtitle="콜카드 ↔ 기사 매칭 시뮬레이터"
         rightSlot={<button type="button" onClick={runSimulation} disabled={running}>{running ? '재정렬 중' : '시뮬레이션 실행'}</button>}
       />
@@ -453,6 +454,15 @@ export default function SimulatorPage() {
             eta={eta}
             hour={hour}
             weekday={weekday}
+          />
+
+          <RouteMapPreview
+            pickup={adaptedLocation?.route.pickup}
+            destination={adaptedLocation?.route.destination}
+            expectedDistanceMeters={distance}
+            etaSeconds={eta}
+            title="콜카드 출발·도착 지도"
+            compact
           />
 
           <div className="input-logic">
