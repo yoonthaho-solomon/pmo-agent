@@ -33,10 +33,37 @@ const heroMetrics = [
   { label: 'Fallback', value: '기존 순차', note: '미수락 시 운영 안정성 보호', color: C.orange },
 ] as const
 
+const dispatchInputs = [
+  {
+    title: '콜카드 원본 조건',
+    value: '출발·도착·요금·거리·ETA',
+    desc: '승객 출발지/도착지 주소와 H3, 예상거리, 예상요금, 승객 탑승 ETA, 호출 시간과 상품 조건을 받습니다.',
+    color: C.cyan,
+  },
+  {
+    title: '기존 후보 기사군',
+    value: '현재 배차 엔진 유지',
+    desc: '온라인, 공차, 반경, 상태 필터 등 실제 운영 후보 생성은 기존 배차 서버의 판단을 우선합니다.',
+    color: C.green,
+  },
+  {
+    title: '기사 누적 패턴',
+    value: 'driver_mbti 22D',
+    desc: '기사별 시간대, 요일, 거리, 요금, 상품 성향과 선호 출발·도착 H3를 조회합니다.',
+    color: C.purple,
+  },
+  {
+    title: '추천 출력',
+    value: '우선발송 순서',
+    desc: '최종 추천점수, 성향 유사도, 공간 적합도, 신뢰도, fallback 기준을 분리해 반환합니다.',
+    color: C.orange,
+  },
+] as const
+
 const flowSteps = [
   {
     title: '콜카드 수신',
-    desc: 'call_id, asp_id, 요청 시각, 출발·도착 좌표, 예상거리, 예상요금, 유료콜 여부, ETA 조건을 받습니다.',
+    desc: 'call_id, asp_id, 요청 시각, 출발·도착 주소와 H3, 예상거리, 예상요금, 유료콜 여부, ETA 조건을 받습니다.',
     output: '원천 콜카드',
     color: C.cyan,
   },
@@ -184,11 +211,11 @@ export default function DispatchLogicPage() {
           <section id="overview" className="hero section-block">
             <div className="hero-copy">
               <p className="kicker">AI DISPATCH HANDOFF</p>
-              <h1>후보 기사군 안에서 가장 잘 받을 기사에게 먼저 보냅니다</h1>
+              <h1>콜카드 조건과 기사 운행패턴을 비교해 우선발송 순서를 정합니다</h1>
               <p className="lead">
                 이 페이지의 핵심은 단순합니다. 기존 배차 엔진을 교체하지 않고, 콜 발생 후 만들어진 후보 기사군 안에서
-                콜카드 22D와 기사 누적 22D를 비교해 우선발송 순서를 정합니다. 미수락이면 기존 순차·반경 확장 흐름으로
-                안전하게 돌아갑니다.
+                콜카드 원본 조건과 기사 누적 패턴을 비교해 먼저 보낼 기사 순서를 정합니다. 미수락이면 기존 순차·반경 확장
+                흐름으로 안전하게 돌아갑니다.
               </p>
             </div>
 
@@ -198,6 +225,23 @@ export default function DispatchLogicPage() {
                   <span>{item.label}</span>
                   <strong>{item.value}</strong>
                   <p>{item.note}</p>
+                </article>
+              ))}
+            </div>
+          </section>
+
+          <section className="section-block input-contract">
+            <SectionHeader
+              label="INPUT · OUTPUT"
+              title="개발자가 연결해야 할 핵심 계약"
+              desc="복잡한 모델보다 먼저, 어떤 데이터를 받아 어떤 순서로 후보를 내보낼지 고정합니다."
+            />
+            <div className="contract-grid">
+              {dispatchInputs.map((item) => (
+                <article key={item.title} style={{ '--tone': item.color } as CSSProperties}>
+                  <span>{item.title}</span>
+                  <strong>{item.value}</strong>
+                  <p>{item.desc}</p>
                 </article>
               ))}
             </div>
@@ -432,6 +476,41 @@ const pageCss = `
     display: grid;
     gap: 14px;
   }
+  .contract-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 14px;
+  }
+  .contract-grid article {
+    min-width: 0;
+    min-height: 230px;
+    display: grid;
+    align-content: start;
+    gap: 12px;
+    padding: 22px;
+    border: 1px solid color-mix(in srgb, var(--tone) 42%, transparent);
+    border-radius: 10px;
+    background: linear-gradient(145deg, color-mix(in srgb, var(--tone) 11%, transparent), rgba(15, 23, 42, 0.64));
+  }
+  .contract-grid span {
+    color: var(--tone);
+    font-size: 20px;
+    font-weight: 950;
+  }
+  .contract-grid strong {
+    color: ${C.ink};
+    font-size: 31px;
+    line-height: 1.08;
+    font-weight: 950;
+    overflow-wrap: anywhere;
+  }
+  .contract-grid p {
+    margin: 0;
+    color: ${C.sub};
+    font-size: 20px;
+    line-height: 1.42;
+    font-weight: 700;
+  }
   .hero-metric,
   .handoff-card,
   .score-card,
@@ -642,6 +721,7 @@ const pageCss = `
       grid-template-columns: 1fr;
     }
     .metric-grid,
+    .contract-grid,
     .score-grid,
     .reference-grid {
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -660,6 +740,7 @@ const pageCss = `
     }
     .side-nav,
     .metric-grid,
+    .contract-grid,
     .score-grid,
     .reference-grid,
     .handoff-grid {
