@@ -1,5 +1,6 @@
 'use client'
 
+import { DispatchFlow } from '@/app/components/DispatchFlow'
 import { PrimaryNav } from '@/app/components/PrimaryNav'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createClient } from '@supabase/supabase-js'
@@ -401,6 +402,8 @@ export default function SimulatorPage() {
         subtitle="콜카드 ↔ 기사 매칭 시뮬레이터"
         rightSlot={<button type="button" onClick={runSimulation} disabled={running}>{running ? '재정렬 중' : '시뮬레이션 실행'}</button>}
       />
+
+      <DispatchFlow active={['search', 'similarity', 'rank', 'send', 'accept']} />
 
       <section className="kpi-row" aria-label="시뮬레이터 상태">
         <Kpi label="조회 상태" value={statusLabel} tone={statusLabel === '정상' ? C.green : C.yellow} />
@@ -1144,7 +1147,7 @@ const pageCss = `
   }
   .kpi-row {
     position: sticky;
-    top: 76px;
+    top: 84px;
     z-index: 80;
     display: grid;
     grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -1170,7 +1173,7 @@ const pageCss = `
   .call-panel,
   .driver-panel {
     position: sticky;
-    top: 178px;
+    top: 190px;
     max-height: calc(100vh - 198px);
     overflow: auto;
   }

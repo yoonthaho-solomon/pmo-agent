@@ -1,5 +1,6 @@
 'use client'
 
+import { DispatchFlow } from '@/app/components/DispatchFlow'
 import { PrimaryNav } from '@/app/components/PrimaryNav'
 import { createClient } from '@supabase/supabase-js'
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
@@ -250,6 +251,8 @@ export default function VectorsPage() {
         subtitle="콜카드·기사 팩터리스트"
         rightSlot={<><Pill color={C.green}>실데이터</Pill><Pill color={C.cyan}>22D COSINE</Pill></>}
       />
+
+      <DispatchFlow active={['callcard', 'similarity']} />
 
       <section className="top-rail" aria-label="팩터리스트 핵심 지표">
         <RailMetric label="콜카드" value={selectedCall ? '1건 선택' : loading ? '조회 중' : '없음'} meta={`${calls.length.toLocaleString('ko-KR')}건 후보`} color={C.cyan} />

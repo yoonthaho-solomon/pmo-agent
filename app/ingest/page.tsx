@@ -1,5 +1,6 @@
-﻿'use client'
+'use client'
 
+import { DispatchFlow } from '@/app/components/DispatchFlow'
 import { PrimaryNav } from '@/app/components/PrimaryNav'
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
 
@@ -141,6 +142,8 @@ export default function IngestPage() {
         subtitle="Data Readiness"
         rightSlot={<><Pill color={C.green}>READ ONLY</Pill><Pill color={C.cyan}>SUPABASE</Pill></>}
       />
+
+      <DispatchFlow active={['request', 'callcard']} />
 
       <section className="top-rail" aria-label="데이터 적재 핵심 지표">
         <RailMetric label="호출데이터" value={shortRange(callcards)} meta={`${fmt(callcards?.count)}건 · 콜카드 원천`} color={C.green} />

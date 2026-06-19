@@ -1,19 +1,18 @@
-'use client'
+﻿'use client'
 
 import Link from 'next/link'
 import type { CSSProperties, ReactNode } from 'react'
 
 const navItems = [
-  { label: '적재현황', href: '/ingest', tone: '#10B981' },
-  { label: '팩터리스트', href: '/vectors', tone: '#22D3EE' },
-  { label: '시뮬레이터', href: '/simulator', tone: '#8B5CF6' },
-  { label: '배차로직', href: '/dispatch-logic', tone: '#FB923C' },
+  { label: '데이터 현황', href: '/ingest', tone: '#10B981' },
+  { label: '임베딩 팩터', href: '/vectors', tone: '#22D3EE' },
+  { label: '매칭 시뮬레이터', href: '/simulator', tone: '#8B5CF6' },
 ] as const
 
 export function PrimaryNav({
   active,
   title = 'Happycall PMO',
-  subtitle = 'AI 우선배차',
+  subtitle = 'AI Dispatch Workbench',
   rightSlot,
 }: {
   active: string
@@ -23,7 +22,7 @@ export function PrimaryNav({
 }) {
   return (
     <header className="primary-nav">
-      <Link href="/ingest" className="brand" aria-label="적재현황으로 이동">
+      <Link href="/ingest" className="brand" aria-label="데이터 현황으로 이동">
         <span className="mark">PM</span>
         <span className="brand-text">
           <b>{title}</b>
@@ -53,15 +52,15 @@ export function PrimaryNav({
         .primary-nav {
           position: sticky;
           top: 0;
-          z-index: 120;
-          min-height: 76px;
+          z-index: 140;
+          min-height: 84px;
           display: grid;
-          grid-template-columns: minmax(280px, 1fr) auto minmax(240px, 1fr);
+          grid-template-columns: minmax(300px, 1fr) auto minmax(260px, 1fr);
           align-items: center;
-          gap: 18px;
-          padding: 0 clamp(18px, 2.4vw, 36px);
+          gap: 20px;
+          padding: 0 clamp(20px, 2.4vw, 40px);
           border-bottom: 1px solid rgba(103,232,249,.24);
-          background: linear-gradient(90deg, rgba(4,7,16,.96), rgba(10,16,32,.94), rgba(4,7,16,.96));
+          background: linear-gradient(90deg, rgba(4,7,16,.98), rgba(10,16,32,.96), rgba(4,7,16,.98));
           backdrop-filter: blur(18px);
           box-shadow: 0 22px 70px rgba(0,0,0,.38), inset 0 -1px 0 rgba(255,255,255,.04);
         }
@@ -69,30 +68,30 @@ export function PrimaryNav({
           min-width: 0;
           display: inline-flex;
           align-items: center;
-          gap: 12px;
+          gap: 14px;
           color: #F5F7FB;
           text-decoration: none;
         }
         .mark {
-          width: 44px;
-          height: 44px;
-          border-radius: 16px;
+          width: 48px;
+          height: 48px;
+          border-radius: 17px;
           display: grid;
           place-items: center;
           color: #06101B;
           background: linear-gradient(135deg, #22D3EE, #8B5CF6);
-          font-size: 16px;
+          font-size: 17px;
           font-weight: 950;
-          box-shadow: 0 0 26px rgba(34,211,238,.28);
+          box-shadow: 0 0 30px rgba(34,211,238,.32);
         }
         .brand-text {
           min-width: 0;
           display: grid;
-          gap: 2px;
+          gap: 3px;
         }
         .brand-text b {
           color: #F5F7FB;
-          font-size: clamp(18px, 1.25vw, 22px);
+          font-size: clamp(21px, 1.35vw, 27px);
           line-height: 1.05;
           font-weight: 950;
           white-space: nowrap;
@@ -100,32 +99,32 @@ export function PrimaryNav({
           text-overflow: ellipsis;
         }
         .brand-text em {
-          color: #22D3EE;
-          font-size: clamp(13px, .9vw, 15px);
+          color: #67E8F9;
+          font-size: clamp(14px, .95vw, 17px);
           line-height: 1.15;
           font-style: normal;
           font-weight: 900;
         }
         nav {
           display: grid;
-          grid-template-columns: repeat(4, minmax(118px, 1fr));
-          gap: 10px;
+          grid-template-columns: repeat(3, minmax(150px, 1fr));
+          gap: 12px;
           justify-self: center;
         }
         nav a {
-          height: 50px;
-          min-width: 132px;
+          height: 54px;
+          min-width: 160px;
           display: grid;
           place-items: center;
           border: 1px solid #22314F;
-          border-radius: 16px;
+          border-radius: 18px;
           color: #AAB7CB;
           background: linear-gradient(180deg, rgba(22,32,58,.82), rgba(10,15,29,.82));
           text-decoration: none;
-          font-size: clamp(16px, 1vw, 19px);
+          font-size: clamp(18px, 1.05vw, 22px);
           font-weight: 950;
           letter-spacing: 0;
-          transition: transform 160ms ease, border-color 160ms ease, background 160ms ease, color 160ms ease;
+          transition: transform 160ms ease, border-color 160ms ease, background 160ms ease, color 160ms ease, box-shadow 160ms ease;
         }
         nav a:hover,
         nav a.active {
@@ -133,7 +132,7 @@ export function PrimaryNav({
           color: #F5F7FB;
           border-color: var(--tone);
           background: linear-gradient(180deg, color-mix(in srgb, var(--tone) 26%, rgba(22,32,58,.9)), rgba(8,13,26,.92));
-          box-shadow: 0 0 28px color-mix(in srgb, var(--tone) 28%, transparent);
+          box-shadow: 0 0 32px color-mix(in srgb, var(--tone) 28%, transparent);
         }
         .right-slot {
           justify-self: end;
@@ -144,16 +143,20 @@ export function PrimaryNav({
           min-width: 0;
         }
         .right-slot :global(button) {
-          min-height: 50px;
-          padding: 0 22px;
+          min-height: 52px;
+          padding: 0 24px;
           border: 0;
-          border-radius: 14px;
+          border-radius: 16px;
           color: #06101B;
           background: linear-gradient(135deg, #67E8F9, #8B5CF6);
           box-shadow: 0 18px 42px rgba(34,211,238,.24);
-          font-size: clamp(16px, 1vw, 19px);
+          font-size: clamp(17px, 1vw, 20px);
           font-weight: 950;
           cursor: pointer;
+          transition: transform 160ms ease, filter 160ms ease;
+        }
+        .right-slot :global(button:active) {
+          transform: scale(.96);
         }
         .right-slot :global(button:disabled) {
           opacity: .55;
@@ -161,12 +164,12 @@ export function PrimaryNav({
         }
         .right-slot :global(a),
         .right-slot :global(span) {
-          min-height: 44px;
+          min-height: 46px;
           border-radius: 16px;
-          font-size: clamp(13px, .9vw, 15px);
+          font-size: clamp(14px, .9vw, 16px);
           font-weight: 950;
         }
-        @media (max-width: 1120px) {
+        @media (max-width: 1180px) {
           .primary-nav {
             grid-template-columns: 1fr;
             align-items: stretch;
@@ -175,7 +178,7 @@ export function PrimaryNav({
           }
           nav {
             justify-self: stretch;
-            grid-template-columns: repeat(4, minmax(0, 1fr));
+            grid-template-columns: repeat(3, minmax(0, 1fr));
           }
           nav a {
             min-width: 0;
@@ -185,9 +188,9 @@ export function PrimaryNav({
             justify-content: flex-start;
           }
         }
-        @media (max-width: 680px) {
+        @media (max-width: 720px) {
           nav {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
+            grid-template-columns: 1fr;
           }
         }
       `}</style>
