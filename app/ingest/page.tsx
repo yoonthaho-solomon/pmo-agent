@@ -129,9 +129,8 @@ export default function IngestPage() {
     [dateRows],
   )
 
-  const readyCount = [callcards, driverLogs, driverVectors, matching].filter(isReady).length
   const coreReady = Boolean(isReady(callcards) && isReady(driverLogs) && isReady(driverVectors))
-  const headline = loading ? '확인 중' : coreReady ? '데이터 준비됨' : '확인 필요'
+  const headline = loading ? '확인 중' : coreReady ? '임베딩 생성' : '확인 필요'
   const headlineTone = loading ? C.cyan : coreReady ? C.green : C.yellow
 
   return (
@@ -154,22 +153,27 @@ export default function IngestPage() {
         <section className="hero-card">
           <div className="hero-copy">
             <p className="eyebrow">INGEST TO EMBEDDING</p>
-            <h1>호출과 운행 데이터를 22D 매칭 재료로 만들었습니다</h1>
+            <h1>호출데이터와 앱미터데이터 적재 현황</h1>
             <p className="lead">
-              호출데이터는 콜카드 조건과 기사 반응 로그의 원천이고, 앱미터데이터는 지역 택시 흐름을 보는 보조 기준입니다.
-              이 데이터로 콜카드 팩터와 기사 운행패턴 팩터를 만들고, 22D 코사인 유사도 검증까지 연결합니다.
+              호출데이터는 콜카드 조건과 기사 반응 패턴을 만드는 핵심 원천입니다.
+              앱미터데이터는 지역 택시 흐름을 보는 보조 기준이며, 적재된 데이터는 22D 벡터와 코사인 유사도 검증으로 이어집니다.
             </p>
           </div>
           <div className="readiness" style={{ '--tone': headlineTone } as CSSProperties}>
-            <span>준비 판정</span>
+            <span>생성 상태</span>
             <strong>{headline}</strong>
-            <p>{statusError ?? '콜카드 팩터, 기사 로그, 기사 벡터, 매칭 계산의 핵심 연결을 확인합니다.'}</p>
-            <div className="ready-ring"><b>{readyCount}</b><em>/4</em></div>
+            <p>{statusError ?? '콜카드 팩터, 기사 로그, 기사 22D 벡터가 생성되어 매칭 검증에 사용할 수 있는지 확인합니다.'}</p>
+            <div className="ready-list">
+              <i>콜카드 팩터</i>
+              <i>기사 로그</i>
+              <i>기사 22D 벡터</i>
+              <i>매칭 계산</i>
+            </div>
           </div>
         </section>
 
         <section className="flow-card">
-          <SectionTitle label="CORE FLOW" title="적재 데이터가 매칭 재료가 되는 흐름" />
+          <SectionTitle label="CORE FLOW" title="적재 데이터가 매칭 검증으로 이어지는 흐름" />
           <div className="flow-steps">
             <FlowStep no="01" title="호출데이터 적재" body="콜 조건, 기사 ID, 차량 ID, 상태값, 좌표, 예상거리·요금·ETA를 읽습니다." color={C.green} />
             <FlowStep no="02" title="콜카드·기사 로그 생성" body="콜카드는 요청 조건 팩터가 되고, 수락·취소·만료 결과는 기사 반응 로그가 됩니다." color={C.cyan} />
@@ -340,31 +344,26 @@ export default function IngestPage() {
           font-weight: 650;
         }
 
-        .ready-ring {
-          position: absolute;
-          right: 24px;
-          bottom: 24px;
-          width: 94px;
-          height: 94px;
+        .ready-list {
           display: grid;
-          place-items: center;
-          border: 1px solid color-mix(in srgb, var(--tone) 52%, transparent);
-          border-radius: 50%;
-          background: rgba(5, 8, 16, 0.54);
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 8px;
+          margin-top: 12px;
         }
 
-        .ready-ring b {
-          color: var(--tone);
-          font-size: 38px;
-          line-height: 1;
-        }
-
-        .ready-ring em {
-          margin-top: -24px;
-          color: ${C.sub};
-          font-size: 18px;
+        .ready-list i {
+          min-height: 42px;
+          display: grid;
+          place-items: center start;
+          padding: 0 12px;
+          border: 1px solid color-mix(in srgb, var(--tone) 38%, transparent);
+          border-radius: 8px;
+          color: ${C.ink};
+          background: rgba(5, 8, 16, 0.42);
+          font-size: 16px;
+          line-height: 1.2;
           font-style: normal;
-          font-weight: 800;
+          font-weight: 900;
         }
 
         .data-grid {
