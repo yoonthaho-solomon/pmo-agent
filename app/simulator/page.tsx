@@ -47,6 +47,8 @@ type SimulatorCallcardRow = CallcardLocationRow & {
   weekday?: number | null
   expected_distance?: number | null
   expected_fare?: number | null
+  passenger_addr?: string | null
+  dest_addr?: string | null
   is_paid?: boolean | null
   eta_distance?: number | null
   is_surge?: boolean | null
@@ -109,6 +111,8 @@ const CALLCARD_LOCATION_COLS = [
   'passenger_lng',
   'dest_lat',
   'dest_lng',
+  'passenger_addr',
+  'dest_addr',
   's_hexagon',
   'd_hexagon',
   'hour_slot',
@@ -676,14 +680,17 @@ function CallcardSummary({
         <b>{callcard?.callcard_id ?? '수동 시뮬레이션'}</b>
       </div>
       <div className="call-facts">
+        <Fact label="승객 출발지" value={callcard?.passenger_addr ?? '주소 정보 없음'} />
+        <Fact label="승객 도착지" value={callcard?.dest_addr ?? '주소 정보 없음'} />
+        <Fact label="출발 H3" value={route?.pickup.h3Res7 ?? '정보 없음'} mono />
+        <Fact label="도착 H3" value={route?.destination.h3Res7 ?? '정보 없음'} mono />
         <Fact label="시간" value={`${hour}시 ${weekdays[weekday] ?? '-'}`} />
-        <Fact label="거리" value={formatKm(distance)} />
-        <Fact label="요금" value={formatFare(fare)} />
+        <Fact label="예상거리" value={formatKm(distance)} />
+        <Fact label="예상요금" value={formatFare(fare)} />
+        <Fact label="승객 탑승 ETA" value={`${eta}초`} />
         <Fact label="콜유형" value={`${paid ? '유료콜' : '무료콜'}${surge ? ' · 탄력' : ''}`} />
         <Fact label="출발 좌표" value={formatCoord(route?.pickup.lat, route?.pickup.lng)} />
         <Fact label="도착 좌표" value={formatCoord(route?.destination.lat, route?.destination.lng)} />
-        <Fact label="출발 H3" value={route?.pickup.h3Res7 ?? '정보 없음'} mono />
-        <Fact label="도착 H3" value={route?.destination.h3Res7 ?? '정보 없음'} mono />
       </div>
       <div className="od">
         <span>OD 경로 키</span>
@@ -1225,6 +1232,10 @@ const pageCss = `
     padding: 14px;
     display: grid;
     gap: 6px;
+  }
+  .call-facts .fact:nth-child(1),
+  .call-facts .fact:nth-child(2) {
+    grid-column: 1 / -1;
   }
   .fact b,
   .metric b {
