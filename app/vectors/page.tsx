@@ -103,6 +103,30 @@ const factorPurpose = [
   },
 ] as const
 
+const coreModelCards = [
+  {
+    step: '01',
+    title: '콜카드 팩터',
+    value: '현재 요청 조건',
+    desc: '시간대, 요일, 거리, 요금, 상품, ETA 조건을 22개 점수로 변환합니다.',
+    color: C.cyan,
+  },
+  {
+    step: '02',
+    title: '기사 팩터',
+    value: '누적 운행패턴',
+    desc: 'driver_mbti에 저장된 기사별 반응·운행 성향을 같은 22개 점수로 읽습니다.',
+    color: C.green,
+  },
+  {
+    step: '03',
+    title: '유사도 계산',
+    value: '22D 코사인',
+    desc: '두 벡터의 방향이 얼마나 비슷한지 계산하고, 화면에서는 5축으로 요약합니다.',
+    color: C.purple,
+  },
+] as const
+
 function pct(n: number | null | undefined) {
   return n == null || Number.isNaN(n) ? '-' : `${Math.round(n * 100)}%`
 }
@@ -242,6 +266,19 @@ export default function VectorsPage() {
             <strong>{loading ? '확인 중' : loadError ? '오류' : '정상'}</strong>
             <p>{loadError ?? `${calls.length.toLocaleString('ko-KR')}개 콜카드와 ${drivers.length.toLocaleString('ko-KR')}명 기사 벡터를 비교할 수 있습니다.`}</p>
           </div>
+        </section>
+
+        <section className="core-model" aria-label="팩터 계산 핵심 흐름">
+          {coreModelCards.map((item) => (
+            <article key={item.step} style={{ '--tone': item.color } as CSSProperties}>
+              <span>{item.step}</span>
+              <div>
+                <h2>{item.title}</h2>
+                <strong>{item.value}</strong>
+                <p>{item.desc}</p>
+              </div>
+            </article>
+          ))}
         </section>
 
         <section className="factor-purpose">
@@ -535,6 +572,7 @@ const pageCss = `
   .profile-panel,
   .comparison-stage,
   .formula-card,
+  .core-model article,
   .factor-purpose article {
     border: 1px solid ${C.line};
     border-radius: 10px;
@@ -596,6 +634,51 @@ const pageCss = `
     display: grid;
     grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 14px;
+  }
+  .core-model {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+  }
+  .core-model article {
+    display: grid;
+    grid-template-columns: 70px minmax(0, 1fr);
+    gap: 18px;
+    align-items: start;
+    padding: 24px;
+    border-color: color-mix(in srgb, var(--tone) 42%, transparent);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--tone) 12%, transparent), rgba(15, 23, 42, 0.72));
+  }
+  .core-model span {
+    width: 64px;
+    height: 64px;
+    display: grid;
+    place-items: center;
+    border-radius: 18px;
+    color: var(--tone);
+    background: rgba(5, 8, 16, 0.72);
+    border: 1px solid color-mix(in srgb, var(--tone) 48%, transparent);
+    font-size: 24px;
+    font-weight: 950;
+  }
+  .core-model h2 {
+    font-size: 28px;
+    line-height: 1.1;
+  }
+  .core-model strong {
+    display: block;
+    margin-top: 8px;
+    color: var(--tone);
+    font-size: 34px;
+    line-height: 1.05;
+    font-weight: 950;
+  }
+  .core-model p {
+    margin-top: 10px;
+    color: ${C.sub};
+    font-size: 20px;
+    line-height: 1.42;
+    font-weight: 700;
   }
   .factor-purpose article {
     padding: 22px;

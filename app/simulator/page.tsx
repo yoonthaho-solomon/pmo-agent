@@ -448,6 +448,11 @@ export default function SimulatorPage() {
             weekday={weekday}
           />
 
+          <div className="input-logic">
+            <strong>입력값 조정 가능</strong>
+            <span>아래 조건을 바꾸면 콜카드 22D 벡터가 즉시 바뀌고, 기사 Top 후보도 다시 계산됩니다.</span>
+          </div>
+
           <div className="input-grid">
             <NumberField label="시간" value={hour} min={0} max={23} onChange={setHour} suffix="시" />
             <label className="field">
@@ -1138,6 +1143,27 @@ const pageCss = `
     font-size: 20px;
     font-style: normal;
     font-weight: 900;
+  }
+  .input-logic {
+    display: grid;
+    gap: 8px;
+    margin-top: 18px;
+    padding: 18px;
+    border: 1px solid rgba(34, 211, 238, 0.34);
+    border-radius: 18px;
+    background: linear-gradient(135deg, rgba(34, 211, 238, 0.11), rgba(16, 185, 129, 0.08));
+  }
+  .input-logic strong {
+    color: ${C.cyan};
+    font-size: 24px;
+    line-height: 1.15;
+    font-weight: 950;
+  }
+  .input-logic span {
+    color: ${C.sub};
+    font-size: 20px;
+    line-height: 1.42;
+    font-weight: 750;
   }
   .input-grid {
     display: grid;
