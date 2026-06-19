@@ -15,13 +15,14 @@ import {
   getDisplayAxisFactors,
   vectorToDisplayAxisBundle,
 } from '@/lib/matching-display-axis'
+import { adaptCallcardLocation, type CallcardLocationRow } from '@/lib/callcard-location-adapter'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'https://example.supabase.co',
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? 'preview-build-key',
 )
 
-type CallRow = {
+type CallRow = CallcardLocationRow & {
   callcard_id: string
   asp_id: number
   call_date: string
@@ -29,9 +30,12 @@ type CallRow = {
   weekday: number
   expected_distance: number
   expected_fare: number
+  passenger_addr?: string | null
+  dest_addr?: string | null
   is_paid: boolean
   is_surge: boolean
   eta_distance: number | null
+  call_fee?: number | null
   product_type: string | null
 }
 
@@ -179,7 +183,7 @@ export default function VectorsPage() {
       const [callRes, driverRes] = await Promise.all([
         supabase
           .from('callcard_mbti')
-          .select('callcard_id,asp_id,call_date,hour_slot,weekday,expected_distance,expected_fare,is_paid,is_surge,eta_distance,product_type')
+          .select('callcard_id,asp_id,call_date,hour_slot,weekday,expected_distance,expected_fare,passenger_addr,dest_addr,passenger_lat,passenger_lng,dest_lat,dest_lng,s_hexagon,d_hexagon,is_paid,is_surge,eta_distance,call_fee,product_type')
           .order('call_date', { ascending: false })
           .limit(80),
         supabase
@@ -204,6 +208,9 @@ export default function VectorsPage() {
 
   const selectedCall = calls.find((row) => row.callcard_id === selectedCallId) ?? calls[0]
   const callVector = useMemo(() => (selectedCall ? callToVector(selectedCall) : []), [selectedCall])
+  const selectedCallLocation = useMemo(() => (
+    selectedCall ? adaptCallcardLocation(selectedCall) : null
+  ), [selectedCall])
 
   const ranked = useMemo<RankedDriver[]>(() => {
     if (!selectedCall || !callVector.length) return []
@@ -255,16 +262,28 @@ export default function VectorsPage() {
         <section className="hero-card">
           <div>
             <p className="eyebrow">VECTOR FACTOR LIST</p>
-            <h1>콜카드 조건과 기사 운행패턴을 같은 22개 팩터로 비교합니다</h1>
+            <h1>콜카드 원본 조건을 먼저 보고, 22D는 계산값으로 확인합니다</h1>
             <p className="lead">
-              콜카드는 현재 요청 조건을 22D로 만들고, 기사는 누적 운행패턴을 22D로 저장합니다.
-              두 벡터의 방향이 얼마나 비슷한지 코사인 유사도로 계산하고, 화면에서는 5축으로 요약해 설명합니다.
+              승객의 출발지, 도착지, 예상거리, 예상요금, ETA가 실제 콜카드의 핵심입니다.
+              22D 벡터는 이 조건 중 시간대·요일·거리·요금·상품 성향을 비교하기 위한 파생 계산값입니다.
             </p>
           </div>
           <div className="status-card" style={{ '--tone': loadError ? C.red : loading ? C.yellow : C.green } as CSSProperties}>
             <span>조회 상태</span>
             <strong>{loading ? '확인 중' : loadError ? '오류' : '정상'}</strong>
             <p>{loadError ?? `${calls.length.toLocaleString('ko-KR')}개 콜카드와 ${drivers.length.toLocaleString('ko-KR')}명 기사 벡터를 비교할 수 있습니다.`}</p>
+          </div>
+        </section>
+
+        <section className="raw-call">
+          <SectionTitle label="CALLCARD SOURCE" title="콜카드 원본 핵심 조건" />
+          <div className="raw-grid">
+            <RawFact title="승객 출발지" value={selectedCall?.passenger_addr ?? '주소 정보 없음'} sub={selectedCallLocation?.route.pickup.h3Res7 ?? '출발 H3 없음'} color={C.cyan} />
+            <RawFact title="승객 도착지" value={selectedCall?.dest_addr ?? '주소 정보 없음'} sub={selectedCallLocation?.route.destination.h3Res7 ?? '도착 H3 없음'} color={C.green} />
+            <RawFact title="예상 운행거리" value={meters(selectedCall?.expected_distance)} sub="22D 거리 구간으로 변환" color={C.orange} />
+            <RawFact title="예상요금" value={money(selectedCall?.expected_fare)} sub="22D 요금 구간으로 변환" color={C.yellow} />
+            <RawFact title="승객 탑승 ETA" value={selectedCall?.eta_distance == null ? '-' : `${Math.round(selectedCall.eta_distance)}초`} sub="픽업 접근성 보조값" color={C.purple} />
+            <RawFact title="OD 경로 키" value={selectedCallLocation?.route.originDestinationKey ?? 'OD 정보 없음'} sub="22D가 아닌 공간 적합도 기준" color={C.red} mono />
           </div>
         </section>
 
@@ -407,6 +426,28 @@ function SectionTitle({ label, title }: { label: string; title: string }) {
       <span>{label}</span>
       <h2>{title}</h2>
     </div>
+  )
+}
+
+function RawFact({
+  title,
+  value,
+  sub,
+  color,
+  mono = false,
+}: {
+  title: string
+  value: string
+  sub: string
+  color: string
+  mono?: boolean
+}) {
+  return (
+    <article className="raw-fact" style={{ '--tone': color } as CSSProperties}>
+      <span>{title}</span>
+      <strong className={mono ? 'mono' : ''}>{value}</strong>
+      <p>{sub}</p>
+    </article>
   )
 }
 
@@ -569,6 +610,7 @@ const pageCss = `
     gap: 22px;
   }
   .hero-card,
+  .raw-call,
   .profile-panel,
   .comparison-stage,
   .formula-card,
@@ -634,6 +676,49 @@ const pageCss = `
     display: grid;
     grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 14px;
+  }
+  .raw-call {
+    padding: 26px;
+  }
+  .raw-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+  }
+  .raw-fact {
+    min-width: 0;
+    min-height: 160px;
+    display: grid;
+    align-content: start;
+    gap: 10px;
+    padding: 20px;
+    border: 1px solid color-mix(in srgb, var(--tone) 42%, transparent);
+    border-radius: 10px;
+    background: linear-gradient(145deg, color-mix(in srgb, var(--tone) 10%, transparent), rgba(15, 23, 42, 0.62));
+  }
+  .raw-fact span {
+    color: var(--tone);
+    font-size: 20px;
+    line-height: 1.15;
+    font-weight: 950;
+  }
+  .raw-fact strong {
+    min-width: 0;
+    color: ${C.ink};
+    font-size: 27px;
+    line-height: 1.18;
+    font-weight: 950;
+    overflow-wrap: anywhere;
+  }
+  .raw-fact strong.mono {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    font-size: 21px;
+  }
+  .raw-fact p {
+    color: ${C.sub};
+    font-size: 19px;
+    line-height: 1.35;
+    font-weight: 720;
   }
   .core-model {
     display: grid;
@@ -1041,6 +1126,9 @@ const pageCss = `
     .factor-purpose {
       grid-template-columns: repeat(3, minmax(0, 1fr));
     }
+    .raw-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
     .main-grid {
       grid-template-columns: 1fr 1fr;
     }
@@ -1060,6 +1148,9 @@ const pageCss = `
       grid-template-columns: 1fr;
     }
     .factor-purpose {
+      grid-template-columns: 1fr;
+    }
+    .raw-grid {
       grid-template-columns: 1fr;
     }
     .matrix {
