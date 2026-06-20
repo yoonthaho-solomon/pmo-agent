@@ -3,6 +3,7 @@
 import type { ScenarioPointInput } from '@/lib/adapters/matching'
 import type { MatchingCallcardModel, MatchingCandidateModel } from '@/lib/matching-studio-model'
 import { estimateTaxiFare, VERIFIED_TAXI_FARE_POLICIES } from '@/lib/taxi-fare-estimator'
+import type { ScenarioStatus } from './useMatchingStudio'
 import { RouteSummaryPanel } from './RouteSummaryPanel'
 import { SpatialStage } from './SpatialStage'
 import { useGoogleMap } from './useGoogleMap'
@@ -18,6 +19,13 @@ function pointFromCallcard(location: MatchingCallcardModel['route']['pickup'], l
   }
 }
 
+function dirtyPreviewNotice(status: ScenarioStatus) {
+  if (status === 'dirty') return '경로 미리보기 · 시나리오 매칭 미적용'
+  if (status === 'calculating') return '시나리오 Top 10 계산 중'
+  if (status === 'error') return '시나리오 계산 오류 · 이전 결과 미표시'
+  return null
+}
+
 export function GoogleSpatialStage({
   callcard,
   selectedCandidate,
@@ -25,6 +33,7 @@ export function GoogleSpatialStage({
   scenarioOrigin,
   scenarioDestination,
   scenarioMode,
+  scenarioStatus,
 }: {
   callcard: MatchingCallcardModel | null
   selectedCandidate: MatchingCandidateModel | null
@@ -32,17 +41,28 @@ export function GoogleSpatialStage({
   scenarioOrigin: ScenarioPointInput | null
   scenarioDestination: ScenarioPointInput | null
   scenarioMode: boolean
+  scenarioStatus: ScenarioStatus
 }) {
-  const origin = scenarioOrigin ?? (callcard ? pointFromCallcard(callcard.route.pickup, callcard.passengerAddress) : null)
-  const destination = scenarioDestination ?? (callcard ? pointFromCallcard(callcard.route.destination, callcard.destinationAddress) : null)
-  const routeState = useRouteSummary(origin, destination)
-  const { containerRef, state: mapLoadState } = useGoogleMap({ callcard, candidate: selectedCandidate, route: routeState.route })
+  const originalOrigin = callcard ? pointFromCallcard(callcard.route.pickup, callcard.passengerAddress) : null
+  const originalDestination = callcard ? pointFromCallcard(callcard.route.destination, callcard.destinationAddress) : null
+  const effectiveOrigin = scenarioOrigin ?? originalOrigin
+  const effectiveDestination = scenarioDestination ?? originalDestination
+  const routeState = useRouteSummary(effectiveOrigin, effectiveDestination)
+  const activeMatchingCallcard = scenarioStatus === 'dirty' || scenarioStatus === 'calculating' || scenarioStatus === 'error' ? null : callcard
+  const { containerRef, state: mapLoadState } = useGoogleMap({
+    effectiveOrigin,
+    effectiveDestination,
+    activeMatchingCallcard,
+    candidate: activeMatchingCallcard ? selectedCandidate : null,
+    route: routeState.route,
+  })
   const fare = estimateTaxiFare(routeState.route, callcard?.aspId, VERIFIED_TAXI_FARE_POLICIES)
+  const notice = dirtyPreviewNotice(scenarioStatus)
 
   if (mapLoadState === 'missing_config' || mapLoadState === 'load_error' || mapLoadState === 'unsupported_webgl') {
     return (
       <div className={styles.googleFallback}>
-        <SpatialStage callcard={callcard} selectedCandidate={selectedCandidate} candidates={candidates} />
+        <SpatialStage callcard={callcard} selectedCandidate={activeMatchingCallcard ? selectedCandidate : null} candidates={activeMatchingCallcard ? candidates : []} />
         <div className={styles.mapConfigNotice}>
           <b>{mapLoadState === 'missing_config' ? 'Google 지도 설정 필요' : 'Google 지도 fallback'}</b>
           <span>지도 설정이 없거나 로드할 수 없어 Phase 4 공간 캔버스를 표시합니다. Top 10과 Evidence는 계속 사용할 수 있습니다.</span>
@@ -59,6 +79,7 @@ export function GoogleSpatialStage({
           <p className={styles.eyebrow}>GOOGLE SPATIAL MATCHING</p>
           <h1>출발·도착 경로와 기사 선호 H3를 함께 봅니다</h1>
           <p>{scenarioMode ? '시나리오 매칭: 선택 콜카드의 22D 성향 벡터는 유지하고, 출발지·도착지 H3만 바꿔 분석합니다.' : '원본 콜카드 매칭: 저장된 콜카드 벡터와 공간정보를 사용해 분석합니다.'}</p>
+          {notice ? <span className={styles.stageNotice}>{notice}</span> : null}
         </div>
       </div>
 

@@ -129,7 +129,6 @@ function completeDriverVectorRow(row: DriverMbtiRow): { vectorRow: DriverVectorR
     missing,
   }
 }
-
 function callcardModel(row: CallcardRow): MatchingCallcardModel | null {
   const id = cleanString(row.callcard_id)
   if (!id) return null
@@ -175,7 +174,6 @@ function callcardModel(row: CallcardRow): MatchingCallcardModel | null {
     vectorAvailable: vector.length === VECTOR_DIMENSIONS.length,
   }
 }
-
 function scenarioCallcardModel(row: CallcardRow, request: ScenarioMatchingRequest): MatchingCallcardModel | null {
   const base = callcardModel(row)
   if (!base) return null
@@ -435,10 +433,13 @@ function formula() {
 }
 
 function isValidScenarioPoint(point: ScenarioPointInput | null | undefined): point is ScenarioPointInput {
+  const label = point?.label?.trim() ?? ''
+  const placeId = point?.placeId?.trim() ?? ''
   return Boolean(
     point &&
-    typeof point.label === 'string' &&
-    point.label.trim() &&
+    label.length > 0 &&
+    label.length <= 240 &&
+    placeId.length <= 256 &&
     typeof point.lat === 'number' &&
     Number.isFinite(point.lat) &&
     point.lat >= -90 &&
@@ -450,8 +451,13 @@ function isValidScenarioPoint(point: ScenarioPointInput | null | undefined): poi
   )
 }
 
+function isValidScenarioCallcardId(value: string | null | undefined): value is string {
+  const normalized = value?.trim() ?? ''
+  return normalized.length > 0 && normalized.length <= 128
+}
+
 export async function calculateScenarioMatching(request: ScenarioMatchingRequest): Promise<ScenarioMatchingResponse> {
-  if (!request.callcardId?.trim() || !isValidScenarioPoint(request.origin) || !isValidScenarioPoint(request.destination)) {
+  if (!isValidScenarioCallcardId(request.callcardId) || !isValidScenarioPoint(request.origin) || !isValidScenarioPoint(request.destination)) {
     return { ok: false, state: 'invalid_input', message: '콜카드와 확정된 출발지·도착지가 필요합니다.' }
   }
 

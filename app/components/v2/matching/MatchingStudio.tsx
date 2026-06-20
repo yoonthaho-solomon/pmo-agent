@@ -26,11 +26,16 @@ export function MatchingStudio({ model }: { model: MatchingStudioModel }) {
           selectedCallcard={state.selectedCallcard}
           scenarioOrigin={state.scenarioOrigin}
           scenarioDestination={state.scenarioDestination}
+          scenarioOriginText={state.scenarioOriginText}
+          scenarioDestinationText={state.scenarioDestinationText}
+          scenarioStatus={state.scenarioStatus}
           scenarioError={state.scenarioError}
           onSelect={state.selectCallcard}
           onRun={state.runSimulation}
           onScenarioOrigin={state.setScenarioOrigin}
           onScenarioDestination={state.setScenarioDestination}
+          onScenarioOriginText={state.setScenarioOriginText}
+          onScenarioDestinationText={state.setScenarioDestinationText}
           onClearScenario={state.clearScenario}
           onSwapScenario={state.swapScenarioPoints}
           onRunScenario={state.runScenarioMatching}
@@ -44,20 +49,22 @@ export function MatchingStudio({ model }: { model: MatchingStudioModel }) {
             scenarioOrigin={state.scenarioOrigin}
             scenarioDestination={state.scenarioDestination}
             scenarioMode={state.scenarioMode}
+            scenarioStatus={state.scenarioStatus}
           />
           <StudioLegend />
-          {state.hasRun && !state.rankedCandidates.length ? (
+          {state.hasRun && !state.rankedCandidates.length && state.scenarioStatus !== 'dirty' && state.scenarioStatus !== 'calculating' ? (
             <div className={styles.softNotice}>비교 가능한 후보 기사가 없습니다. 벡터 또는 기사 선호 H3 데이터 상태를 확인해 주세요.</div>
           ) : null}
         </div>
         <CandidateDock
           candidates={state.rankedCandidates}
+          state={state.scenarioStatus}
           selectedId={state.selectedCandidate?.driver.id ?? ''}
           onSelect={state.selectCandidate}
         />
       </div>
       <EvidenceDrawer
-        open={state.showEvidence}
+        open={state.showEvidence && state.scenarioStatus !== 'dirty' && state.scenarioStatus !== 'calculating'}
         onToggle={state.setShowEvidence}
         callcard={state.selectedCallcard}
         candidate={state.selectedCandidate}

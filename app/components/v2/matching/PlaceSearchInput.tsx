@@ -11,7 +11,9 @@ export function PlaceSearchInput({
   label,
   placeholder,
   value,
+  text,
   center,
+  onTextChange,
   onSelect,
   onClear,
 }: {
@@ -19,11 +21,13 @@ export function PlaceSearchInput({
   label: string
   placeholder: string
   value: ScenarioPointInput | null
+  text: string
   center: { lat: number; lng: number } | null
+  onTextChange: (text: string) => void
   onSelect: (point: ScenarioPointInput) => void
   onClear: () => void
 }) {
-  const autocomplete = usePlaceAutocomplete(google, center)
+  const autocomplete = usePlaceAutocomplete(google, center, text, onTextChange)
 
   async function choose(index: number) {
     const suggestion = autocomplete.suggestions[index]
@@ -38,9 +42,15 @@ export function PlaceSearchInput({
     })
   }
 
+  function clearAll() {
+    autocomplete.clear()
+    onClear()
+  }
+
   function onKeyDown(event: KeyboardEvent<HTMLInputElement>) {
     if (event.key === 'Escape') {
-      autocomplete.clear()
+      event.preventDefault()
+      clearAll()
       return
     }
     if (!autocomplete.suggestions.length) return
@@ -75,11 +85,10 @@ export function PlaceSearchInput({
         <div className={styles.selectedPlace}>
           <b>{value.label}</b>
           <small>{value.lat.toFixed(5)}, {value.lng.toFixed(5)}</small>
-          <button type="button" onClick={() => {
-            autocomplete.clear()
-            onClear()
-          }}>초기화</button>
+          <button type="button" onClick={clearAll}>초기화</button>
         </div>
+      ) : text.trim() ? (
+        <div className={styles.placeStatus}>검색 결과에서 장소를 선택해야 계산할 수 있습니다.</div>
       ) : null}
       {autocomplete.state === 'searching' ? <div className={styles.placeStatus}>검색 중</div> : null}
       {autocomplete.state === 'empty' ? <div className={styles.placeStatus}>검색 결과 없음</div> : null}

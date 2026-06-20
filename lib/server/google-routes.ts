@@ -1,4 +1,4 @@
-import type { RouteApiResponse, RoutePoint, RouteSummary } from '@/lib/google-maps/route-types'
+﻿import type { RouteApiResponse, RoutePoint, RouteSummary } from '@/lib/google-maps/route-types'
 
 const ROUTES_ENDPOINT = 'https://routes.googleapis.com/directions/v2:computeRoutes'
 const ROUTES_FIELD_MASK = [
@@ -35,7 +35,8 @@ function isValidCoordinate(lat: unknown, lng: unknown): lat is number {
 }
 
 function pointToWaypoint(point: RoutePoint): { placeId: string } | { location: { latLng: { latitude: number; longitude: number } } } | null {
-  if (point.placeId?.trim()) return { placeId: point.placeId.trim() }
+  const placeId = point.placeId?.trim()
+  if (placeId && placeId.length <= 256) return { placeId }
   if (isValidCoordinate(point.lat, point.lng)) {
     return { location: { latLng: { latitude: point.lat, longitude: point.lng as number } } }
   }
@@ -51,7 +52,7 @@ export async function fetchGoogleRouteSummary(origin: RoutePoint, destination: R
   const originWaypoint = pointToWaypoint(origin)
   const destinationWaypoint = pointToWaypoint(destination)
   if (!originWaypoint || !destinationWaypoint) {
-    return { ok: false, state: 'invalid_input', message: '출발지와 도착지 좌표를 확정해 주세요.' }
+    return { ok: false, state: 'invalid_input', message: '출발지와 도착지 좌표를 확인해 주세요.' }
   }
 
   const controller = new AbortController()
@@ -108,7 +109,7 @@ export async function fetchGoogleRouteSummary(origin: RoutePoint, destination: R
     }
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') {
-      return { ok: false, state: 'timeout', message: 'Google Routes 경로 계산 시간이 초과됐습니다.' }
+      return { ok: false, state: 'timeout', message: 'Google Routes 경로 계산 시간이 초과되었습니다.' }
     }
     return { ok: false, state: 'error', message: 'Google Routes 경로 계산에 실패했습니다.' }
   } finally {

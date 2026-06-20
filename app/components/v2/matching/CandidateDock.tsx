@@ -4,15 +4,39 @@ import type { MatchingCandidateModel } from '@/lib/matching-studio-model'
 import { formatPercent, formatScore } from './formatters'
 import styles from './matchingStudio.module.css'
 
+export type CandidateDockState = 'original' | 'dirty' | 'calculating' | 'ready' | 'error'
+
 export function CandidateDock({
   candidates,
   selectedId,
+  state = 'original',
   onSelect,
 }: {
   candidates: MatchingCandidateModel[]
   selectedId: string
+  state?: CandidateDockState
   onSelect: (id: string) => void
 }) {
+  if (state === 'dirty') {
+    return (
+      <aside className={styles.candidateDock}>
+        <p className={styles.eyebrow}>CANDIDATE DOCK</p>
+        <h2>재계산 필요</h2>
+        <p className={styles.muted}>출발지 또는 도착지가 변경되었습니다. 시나리오 Top 10을 다시 계산해야 후보와 Evidence를 볼 수 있습니다.</p>
+      </aside>
+    )
+  }
+
+  if (state === 'calculating') {
+    return (
+      <aside className={styles.candidateDock}>
+        <p className={styles.eyebrow}>CANDIDATE DOCK</p>
+        <h2>후보 계산 중</h2>
+        <p className={styles.muted}>선택한 출발·도착 H3 기준으로 동일 ASP 기사군의 Top 10을 다시 계산하고 있습니다.</p>
+      </aside>
+    )
+  }
+
   if (!candidates.length) {
     return (
       <aside className={styles.candidateDock}>
@@ -28,7 +52,7 @@ export function CandidateDock({
       <div className={styles.dockHeader}>
         <div>
           <p className={styles.eyebrow}>CANDIDATE DOCK</p>
-          <h2>Top 10 분석 후보</h2>
+          <h2>{state === 'ready' ? '시나리오 Top 10' : 'Top 10 분석 후보'}</h2>
         </div>
         <span>{candidates.length}명</span>
       </div>

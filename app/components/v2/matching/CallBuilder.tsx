@@ -1,6 +1,7 @@
-﻿import type { ScenarioPointInput } from '@/lib/adapters/matching'
+import type { ScenarioPointInput } from '@/lib/adapters/matching'
 import type { GoogleMapsGlobal } from '@/lib/google-maps/client-loader'
 import type { MatchingCallcardModel } from '@/lib/matching-studio-model'
+import type { ScenarioStatus } from './useMatchingStudio'
 import { compactH3, formatCoordinate, formatFare, formatMeter } from './formatters'
 import { H3_SOURCE_LABELS } from './matchingMeta'
 import { PlaceSearchInput } from './PlaceSearchInput'
@@ -13,11 +14,16 @@ export function CallBuilder({
   selectedCallcard,
   scenarioOrigin,
   scenarioDestination,
+  scenarioOriginText,
+  scenarioDestinationText,
+  scenarioStatus,
   scenarioError,
   onSelect,
   onRun,
   onScenarioOrigin,
   onScenarioDestination,
+  onScenarioOriginText,
+  onScenarioDestinationText,
   onClearScenario,
   onSwapScenario,
   onRunScenario,
@@ -29,11 +35,16 @@ export function CallBuilder({
   selectedCallcard: MatchingCallcardModel | null
   scenarioOrigin: ScenarioPointInput | null
   scenarioDestination: ScenarioPointInput | null
+  scenarioOriginText: string
+  scenarioDestinationText: string
+  scenarioStatus: ScenarioStatus
   scenarioError: string | null
   onSelect: (id: string) => void
   onRun: () => void
   onScenarioOrigin: (point: ScenarioPointInput | null) => void
   onScenarioDestination: (point: ScenarioPointInput | null) => void
+  onScenarioOriginText: (text: string) => void
+  onScenarioDestinationText: (text: string) => void
   onClearScenario: () => void
   onSwapScenario: () => void
   onRunScenario: () => void
@@ -42,7 +53,8 @@ export function CallBuilder({
   const center = selectedCallcard?.route.pickup.lat != null && selectedCallcard.route.pickup.lng != null
     ? { lat: selectedCallcard.route.pickup.lat, lng: selectedCallcard.route.pickup.lng }
     : null
-  const hasScenario = scenarioOrigin != null || scenarioDestination != null
+  const hasScenarioInput = Boolean(scenarioOrigin || scenarioDestination || scenarioOriginText.trim() || scenarioDestinationText.trim())
+  const canRunScenario = Boolean(scenarioOrigin && scenarioDestination)
 
   return (
     <aside className={styles.callBuilder} aria-label="콜카드 입력 패널">
@@ -96,7 +108,9 @@ export function CallBuilder({
           label="출발지 검색"
           placeholder="예: 천안시청"
           value={scenarioOrigin}
+          text={scenarioOriginText}
           center={center}
+          onTextChange={onScenarioOriginText}
           onSelect={onScenarioOrigin}
           onClear={() => onScenarioOrigin(null)}
         />
@@ -105,7 +119,9 @@ export function CallBuilder({
           label="도착지 검색"
           placeholder="예: 천안역"
           value={scenarioDestination}
+          text={scenarioDestinationText}
           center={center}
+          onTextChange={onScenarioDestinationText}
           onSelect={onScenarioDestination}
           onClear={() => onScenarioDestination(null)}
         />
@@ -113,11 +129,13 @@ export function CallBuilder({
           <button type="button" onClick={onSwapScenario} disabled={!scenarioOrigin && !scenarioDestination}>맞바꾸기</button>
           <button type="button" onClick={onClearScenario}>원본 위치</button>
         </div>
+        {scenarioStatus === 'dirty' ? <p className={styles.formNotice}>시나리오 재계산이 필요합니다.</p> : null}
+        {hasScenarioInput && !canRunScenario ? <p className={styles.formNotice}>출발지와 도착지는 검색 결과에서 선택해야 계산할 수 있습니다.</p> : null}
         {scenarioError ? <p className={styles.formError}>{scenarioError}</p> : null}
       </div>
 
-      <button className={styles.primaryAction} type="button" disabled={!selectedCallcard || isPending} onClick={hasScenario ? onRunScenario : onRun}>
-        {isPending ? '후보 분석 중' : hasScenario ? '시나리오 Top 10 계산' : '원본 콜카드 Top 10 분석'}
+      <button className={styles.primaryAction} type="button" disabled={!selectedCallcard || isPending || (hasScenarioInput && !canRunScenario)} onClick={hasScenarioInput ? onRunScenario : onRun}>
+        {isPending ? '후보 분석 중' : hasScenarioInput ? '시나리오 Top 10 계산' : '원본 콜카드 Top 10 분석'}
       </button>
     </aside>
   )

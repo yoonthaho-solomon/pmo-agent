@@ -5,6 +5,8 @@ import { GoogleMapsOverlay } from '@deck.gl/google-maps'
 import { PathLayer, ScatterplotLayer } from '@deck.gl/layers'
 import { H3HexagonLayer } from '@deck.gl/geo-layers'
 import type { Color, Position } from '@deck.gl/core'
+import type { ScenarioPointInput } from '@/lib/adapters/matching'
+import { normalizeH3Cell } from '@/lib/h3-dispatch'
 import type { MatchingCallcardModel, MatchingCandidateModel } from '@/lib/matching-studio-model'
 import { loadGoogleMaps, type GoogleMapInstance } from '@/lib/google-maps/client-loader'
 import { decodeEncodedPolyline } from '@/lib/google-maps/polyline'
@@ -34,21 +36,33 @@ function routeBounds(route: RouteSummary | null) {
   }
 }
 
+function pushH3(data: H3LayerDatum[], seen: Set<string>, cell: string | null | undefined, type: H3LayerDatum['type']) {
+  const normalized = normalizeH3Cell(cell)
+  if (!normalized || seen.has(`${type}:${normalized}`)) return
+  seen.add(`${type}:${normalized}`)
+  data.push({ hexagon: normalized, type })
+}
+
 function h3Data(callcard: MatchingCallcardModel | null, candidate: MatchingCandidateModel | null): H3LayerDatum[] {
   const data: H3LayerDatum[] = []
-  if (callcard?.route.pickup.h3Res7) data.push({ hexagon: callcard.route.pickup.h3Res7, type: 'call-origin' })
-  if (callcard?.route.destination.h3Res7) data.push({ hexagon: callcard.route.destination.h3Res7, type: 'call-destination' })
-  for (const hexagon of candidate?.driver.prefOriginH3.slice(0, 12) ?? []) data.push({ hexagon, type: 'driver-origin' })
-  for (const hexagon of candidate?.driver.prefDestinationH3.slice(0, 12) ?? []) data.push({ hexagon, type: 'driver-destination' })
+  const seen = new Set<string>()
+  pushH3(data, seen, callcard?.route.pickup.h3Res7, 'call-origin')
+  pushH3(data, seen, callcard?.route.destination.h3Res7, 'call-destination')
+  for (const hexagon of candidate?.driver.prefOriginH3.slice(0, 10) ?? []) pushH3(data, seen, hexagon, 'driver-origin')
+  for (const hexagon of candidate?.driver.prefDestinationH3.slice(0, 10) ?? []) pushH3(data, seen, hexagon, 'driver-destination')
   return data
 }
 
 export function useGoogleMap({
-  callcard,
+  effectiveOrigin,
+  effectiveDestination,
+  activeMatchingCallcard,
   candidate,
   route,
 }: {
-  callcard: MatchingCallcardModel | null
+  effectiveOrigin: ScenarioPointInput | null
+  effectiveDestination: ScenarioPointInput | null
+  activeMatchingCallcard: MatchingCallcardModel | null
   candidate: MatchingCandidateModel | null
   route: RouteSummary | null
 }) {
@@ -66,6 +80,7 @@ export function useGoogleMap({
   useEffect(() => {
     if (configMissing) return
     if (!containerRef.current) return
+    if (mapRef.current && overlayRef.current) return
 
     if (!supportsWebGL()) {
       window.setTimeout(() => setState('unsupported_webgl'), 0)
@@ -75,9 +90,9 @@ export function useGoogleMap({
     let cancelled = false
     loadGoogleMaps()
       .then((google) => {
-        if (cancelled || !containerRef.current) return
-        const initialCenter = callcard?.route.pickup.lat != null && callcard.route.pickup.lng != null
-          ? { lat: callcard.route.pickup.lat, lng: callcard.route.pickup.lng }
+        if (cancelled || !containerRef.current || mapRef.current) return
+        const initialCenter = effectiveOrigin
+          ? { lat: effectiveOrigin.lat, lng: effectiveOrigin.lng }
           : { lat: 36.8151, lng: 127.1139 }
         const map = new google.maps.Map(containerRef.current, {
           center: initialCenter,
@@ -102,7 +117,7 @@ export function useGoogleMap({
       overlayRef.current = null
       mapRef.current = null
     }
-  }, [callcard?.route.pickup.lat, callcard?.route.pickup.lng, configMissing, mapId])
+  }, [configMissing, effectiveOrigin, mapId])
 
   useEffect(() => {
     const overlay = overlayRef.current
@@ -119,7 +134,7 @@ export function useGoogleMap({
     })
     const h3Layer = new H3HexagonLayer<H3LayerDatum>({
       id: 'km-v2-h3-layer',
-      data: h3Data(callcard, candidate),
+      data: h3Data(activeMatchingCallcard, candidate),
       getHexagon: (row) => row.hexagon,
       getFillColor: (row) => {
         if (row.type === 'call-origin') return [67, 214, 239, 80]
@@ -134,15 +149,15 @@ export function useGoogleMap({
       extruded: false,
     })
     const points: RoutePointDatum[] = []
-    if (callcard?.route.pickup.lat != null && callcard.route.pickup.lng != null) {
+    if (effectiveOrigin) {
       points.push({
-        position: [callcard.route.pickup.lng, callcard.route.pickup.lat] as Position,
+        position: [effectiveOrigin.lng, effectiveOrigin.lat] as Position,
         color: [67, 214, 239, 230] as Color,
       })
     }
-    if (callcard?.route.destination.lat != null && callcard.route.destination.lng != null) {
+    if (effectiveDestination) {
       points.push({
-        position: [callcard.route.destination.lng, callcard.route.destination.lat] as Position,
+        position: [effectiveDestination.lng, effectiveDestination.lat] as Position,
         color: [85, 214, 154, 230] as Color,
       })
     }
@@ -160,7 +175,7 @@ export function useGoogleMap({
     })
 
     overlay.setProps({ layers: [routeLayer, h3Layer, pointLayer] })
-  }, [callcard, candidate, routePath, state])
+  }, [activeMatchingCallcard, candidate, effectiveDestination, effectiveOrigin, routePath, state])
 
   useEffect(() => {
     if (state !== 'ready' || !mapRef.current) return
@@ -168,12 +183,11 @@ export function useGoogleMap({
       const bounds = routeBounds(route)
       if (bounds) {
         mapRef.current?.fitBounds(new google.maps.LatLngBounds(bounds.sw, bounds.ne))
-      } else if (callcard?.route.pickup.lat != null && callcard.route.pickup.lng != null) {
-        mapRef.current?.setCenter({ lat: callcard.route.pickup.lat, lng: callcard.route.pickup.lng })
+      } else if (effectiveOrigin) {
+        mapRef.current?.setCenter({ lat: effectiveOrigin.lat, lng: effectiveOrigin.lng })
       }
     }).catch(() => undefined)
-  }, [callcard?.route.pickup.lat, callcard?.route.pickup.lng, route, state])
+  }, [effectiveOrigin, route, state])
 
   return { containerRef, state }
 }
-

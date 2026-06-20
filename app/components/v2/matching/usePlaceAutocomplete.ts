@@ -6,8 +6,12 @@ import { createPlaceSessionToken, fetchPlaceSuggestions, resolvePlace, type Plac
 
 export type PlacesState = 'idle' | 'searching' | 'success' | 'empty' | 'error'
 
-export function usePlaceAutocomplete(google: GoogleMapsGlobal | null, center: { lat: number; lng: number } | null) {
-  const [query, setQueryState] = useState('')
+export function usePlaceAutocomplete(
+  google: GoogleMapsGlobal | null,
+  center: { lat: number; lng: number } | null,
+  query: string,
+  setQuery: (next: string) => void,
+) {
   const [state, setState] = useState<PlacesState>('idle')
   const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([])
   const [activeIndex, setActiveIndex] = useState(0)
@@ -24,9 +28,18 @@ export function usePlaceAutocomplete(google: GoogleMapsGlobal | null, center: { 
   }, [google])
 
   useEffect(() => {
-    if (!google || query.trim().length < 2) return
-
     const normalized = query.trim()
+    if (!google || normalized.length < 2) {
+      requestIdRef.current += 1
+      lastRequestRef.current = ''
+      const resetTimer = window.setTimeout(() => {
+        setSuggestions([])
+        setState('idle')
+        setActiveIndex(0)
+      }, 0)
+      return () => window.clearTimeout(resetTimer)
+    }
+
     const timer = window.setTimeout(async () => {
       if (lastRequestRef.current === normalized) return
       lastRequestRef.current = normalized
@@ -40,7 +53,7 @@ export function usePlaceAutocomplete(google: GoogleMapsGlobal | null, center: { 
           center,
           sessionToken: sessionTokenRef.current,
         })
-        if (requestId !== requestIdRef.current) return
+        if (requestId !== requestIdRef.current || normalized !== query.trim()) return
         setSuggestions(next)
         setActiveIndex(0)
         setState(next.length ? 'success' : 'empty')
@@ -57,12 +70,15 @@ export function usePlaceAutocomplete(google: GoogleMapsGlobal | null, center: { 
   async function selectSuggestion(suggestion: PlaceSuggestion): Promise<ResolvedPlace | null> {
     try {
       const place = await resolvePlace(suggestion)
+      const label = place.address ?? place.name
       setSelectedPlace(place)
-      setQueryState(place.address ?? place.name)
+      setQuery(label)
       setSuggestions([])
       setState('idle')
+      setActiveIndex(0)
       sessionTokenRef.current = google ? createPlaceSessionToken(google) : null
       lastRequestRef.current = ''
+      requestIdRef.current += 1
       return place
     } catch {
       setState('error')
@@ -71,7 +87,8 @@ export function usePlaceAutocomplete(google: GoogleMapsGlobal | null, center: { 
   }
 
   function clear() {
-    setQueryState('')
+    requestIdRef.current += 1
+    setQuery('')
     setSelectedPlace(null)
     setSuggestions([])
     setState('idle')
@@ -80,10 +97,19 @@ export function usePlaceAutocomplete(google: GoogleMapsGlobal | null, center: { 
     lastRequestRef.current = ''
   }
 
-  function setQuery(next: string) {
-    setQueryState(next)
+  function close() {
+    requestIdRef.current += 1
+    setSuggestions([])
+    setState('idle')
+    setActiveIndex(0)
+    lastRequestRef.current = ''
+  }
+
+  function updateQuery(next: string) {
+    setQuery(next)
     setSelectedPlace(null)
     if (next.trim().length < 2) {
+      requestIdRef.current += 1
       setSuggestions([])
       setState('idle')
       setActiveIndex(0)
@@ -93,7 +119,7 @@ export function usePlaceAutocomplete(google: GoogleMapsGlobal | null, center: { 
 
   return {
     query,
-    setQuery,
+    setQuery: updateQuery,
     canSearch,
     state,
     suggestions,
@@ -102,5 +128,6 @@ export function usePlaceAutocomplete(google: GoogleMapsGlobal | null, center: { 
     selectedPlace,
     selectSuggestion,
     clear,
+    close,
   }
 }
