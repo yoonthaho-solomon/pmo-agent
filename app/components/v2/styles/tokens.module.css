@@ -1,0 +1,33 @@
+.root {
+  color-scheme: dark;
+  --km-v2-bg-app: #061018;
+  --km-v2-bg-shell: #08131e;
+  --km-v2-bg-panel: #0c1925;
+  --km-v2-bg-panel-raised: #102130;
+  --km-v2-bg-interactive: #122738;
+  --km-v2-bg-hover: #162d40;
+  --km-v2-bg-selected: #153348;
+  --km-v2-border-subtle: rgba(145, 183, 207, 0.12);
+  --km-v2-border-default: rgba(145, 183, 207, 0.2);
+  --km-v2-border-strong: rgba(111, 211, 239, 0.42);
+  --km-v2-text-primary: #f3f7fa;
+  --km-v2-text-secondary: #a9bac6;
+  --km-v2-text-muted: #718795;
+  --km-v2-text-disabled: #4e626f;
+  --km-v2-cyan: #43d6ef;
+  --km-v2-violet: #9273f5;
+  --km-v2-green: #55d69a;
+  --km-v2-amber: #f2a640;
+  --km-v2-red: #f2645a;
+  --km-v2-blue: #4b8ef7;
+  --km-v2-radius-control: 6px;
+  --km-v2-radius-row: 6px;
+  --km-v2-radius-panel: 8px;
+  --km-v2-radius-floating: 10px;
+  --km-v2-header-height: 64px;
+  --km-v2-shadow-floating: 0 16px 48px rgba(0, 0, 0, 0.38);
+  --km-v2-motion-fast: 120ms;
+  --km-v2-motion-standard: 180ms;
+  --km-v2-motion-medium: 240ms;
+  --km-v2-ease-standard: cubic-bezier(.2, 0, 0, 1);
+}
