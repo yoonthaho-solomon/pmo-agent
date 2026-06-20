@@ -11,9 +11,9 @@ export function StudioStatus({ model, candidateCount }: { model: MatchingStudioM
         <small>최대 {formatNumber(model.limits.callcards)}건</small>
       </div>
       <div>
-        <span>기사 벡터 표본</span>
-        <strong>{formatNumber(model.drivers.length)}</strong>
-        <small>전체 {formatNumber(model.driverCount)}명 중 제한 조회</small>
+        <span>계산 기사 풀</span>
+        <strong>{formatNumber(model.driverCount)}</strong>
+        <small>동일 ASP 전체 계산 후 Top 후보만 전달</small>
       </div>
       <div>
         <span>추천 후보</span>
