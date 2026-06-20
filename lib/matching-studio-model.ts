@@ -1,4 +1,5 @@
 import { calculateSpatialScore, calculateV2FinalScore, type SpatialScoreResult } from '@/lib/h3-match-score'
+import { getH3GridDistance, normalizeH3Cell } from '@/lib/h3-dispatch'
 import { cosineSimilarity } from '@/lib/matching-vector'
 import type { AdaptCallcardLocationResult } from '@/lib/callcard-location-adapter'
 import type { VectorDimensionKey } from '@/lib/matching-vector'
@@ -42,6 +43,12 @@ export type MatchingCandidateModel = {
   finalScore: number
   similarityScore: number
   spatial: SpatialScoreResult
+  displayH3: {
+    cell: string | null
+    kind: 'origin_preference' | 'destination_preference' | 'none'
+    lat: number | null
+    lng: number | null
+  }
 }
 
 export type MatchingStudioModel = {
@@ -50,6 +57,7 @@ export type MatchingStudioModel = {
   source: 'service_role' | 'anon' | 'none'
   callcards: MatchingCallcardModel[]
   drivers: MatchingDriverModel[]
+  candidatesByCallcard: Record<string, MatchingCandidateModel[]>
   driverCount: number
   callcardCount: number
   limits: {
@@ -65,6 +73,29 @@ export type MatchingStudioModel = {
   }
 }
 
+function bestPreferenceCell(targetH3: string | null, preferredCells: string[]): string | null {
+  const target = normalizeH3Cell(targetH3)
+  if (!target) return null
+
+  let bestCell: string | null = null
+  let bestDistance: number | null = null
+
+  for (const cell of preferredCells) {
+    const normalized = normalizeH3Cell(cell)
+    if (!normalized) continue
+
+    const distance = getH3GridDistance(target, normalized)
+    if (distance == null) continue
+
+    if (bestDistance == null || distance < bestDistance) {
+      bestDistance = distance
+      bestCell = normalized
+    }
+  }
+
+  return bestCell
+}
+
 export function calculateMatchingCandidate(callcard: MatchingCallcardModel, driver: MatchingDriverModel): MatchingCandidateModel | null {
   if (!callcard.vectorAvailable || !driver.vectorAvailable) return null
 
@@ -75,12 +106,20 @@ export function calculateMatchingCandidate(callcard: MatchingCallcardModel, driv
     preferredOriginH3Cells: driver.prefOriginH3,
     preferredDestinationH3Cells: driver.prefDestinationH3,
   })
+  const destinationCell = bestPreferenceCell(callcard.route.destination.h3Res7, driver.prefDestinationH3)
+  const originCell = bestPreferenceCell(callcard.route.pickup.h3Res7, driver.prefOriginH3)
 
   return {
     driver,
     similarityScore,
     spatial,
     finalScore: calculateV2FinalScore(similarityScore, spatial.spatialScore),
+    displayH3: {
+      cell: destinationCell ?? originCell,
+      kind: destinationCell ? 'destination_preference' : originCell ? 'origin_preference' : 'none',
+      lat: null,
+      lng: null,
+    },
   }
 }
 

@@ -1,4 +1,5 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import { cellToLatLng } from 'h3-js'
 import { adaptCallcardLocation } from '@/lib/callcard-location-adapter'
 import { V2_MATCH_WEIGHTS } from '@/lib/h3-match-score'
 import {
@@ -9,6 +10,7 @@ import {
   type VectorDimensionKey,
 } from '@/lib/matching-vector'
 import type { MatchingCallcardModel, MatchingDriverModel, MatchingStudioModel, MatchingStudioStatus } from '@/lib/matching-studio-model'
+import { calculateMatchingCandidate, rankMatchingCandidates, type MatchingCandidateModel } from '@/lib/matching-studio-model'
 
 type DriverMbtiRow = Partial<Record<VectorDimensionKey, number | string | null>> & {
   driver_id?: string | null
@@ -42,7 +44,7 @@ type CallcardRow = {
 }
 
 const CALLCARD_LIMIT = 80
-const DRIVER_LIMIT = 1000
+const DRIVER_PAGE_SIZE = 1000
 const TOP_CANDIDATE_LIMIT = 10
 
 function nullableNumber(value: unknown): number | null {
@@ -176,11 +178,12 @@ function emptyModel(status: MatchingStudioStatus, message: string): MatchingStud
     source: 'none',
     callcards: [],
     drivers: [],
+    candidatesByCallcard: {},
     driverCount: 0,
     callcardCount: 0,
     limits: {
       callcards: CALLCARD_LIMIT,
-      drivers: DRIVER_LIMIT,
+      drivers: DRIVER_PAGE_SIZE,
       topCandidates: TOP_CANDIDATE_LIMIT,
     },
     formula: {
@@ -190,6 +193,73 @@ function emptyModel(status: MatchingStudioStatus, message: string): MatchingStud
       destinationSpatialWeight: V2_MATCH_WEIGHTS.destinationWithinSpatial,
     },
   }
+}
+
+function withH3Center(candidate: MatchingCandidateModel): MatchingCandidateModel {
+  if (!candidate.displayH3.cell) return candidate
+
+  try {
+    const [lat, lng] = cellToLatLng(candidate.displayH3.cell)
+    return {
+      ...candidate,
+      displayH3: {
+        ...candidate.displayH3,
+        lat,
+        lng,
+      },
+    }
+  } catch {
+    return candidate
+  }
+}
+
+async function fetchDriversByAsp(
+  supabase: SupabaseClient,
+  driverColumns: string,
+  aspId: number | null,
+): Promise<{ data: MatchingDriverModel[]; count: number; error: string | null }> {
+  const drivers: MatchingDriverModel[] = []
+  let from = 0
+  let totalCount = 0
+
+  while (true) {
+    let query = supabase
+      .from('driver_mbti')
+      .select(driverColumns, { count: from === 0 ? 'planned' : undefined })
+      .order('driver_id', { ascending: true })
+      .range(from, from + DRIVER_PAGE_SIZE - 1)
+
+    if (aspId != null) query = query.eq('asp_id', aspId)
+
+    const response = await query
+    if (response.error) {
+      return { data: drivers, count: totalCount || drivers.length, error: response.error.message }
+    }
+
+    if (from === 0) totalCount = response.count ?? 0
+
+    const rows = (response.data ?? [])
+      .map((row) => driverModel(row as unknown as DriverMbtiRow))
+      .filter((row): row is MatchingDriverModel => row != null)
+    drivers.push(...rows)
+
+    if ((response.data ?? []).length < DRIVER_PAGE_SIZE) break
+    from += DRIVER_PAGE_SIZE
+  }
+
+  return { data: drivers, count: totalCount || drivers.length, error: null }
+}
+
+function buildCandidatesForCallcard(
+  callcard: MatchingCallcardModel,
+  drivers: MatchingDriverModel[],
+): MatchingCandidateModel[] {
+  return rankMatchingCandidates(
+    drivers
+      .map((driver) => calculateMatchingCandidate(callcard, driver))
+      .filter((candidate): candidate is MatchingCandidateModel => candidate != null)
+      .map(withH3Center),
+  ).slice(0, TOP_CANDIDATE_LIMIT)
 }
 
 export async function getMatchingStudioModel(): Promise<MatchingStudioModel> {
@@ -210,48 +280,76 @@ export async function getMatchingStudioModel(): Promise<MatchingStudioModel> {
     ...VECTOR_DIMENSIONS.map((dimension) => dimension.key),
   ].join(',')
 
-  const [callcardsRes, driversRes] = await Promise.all([
-    supabase.from('callcard_mbti').select(callcardColumns, { count: 'planned' }).order('call_date', { ascending: false }).limit(CALLCARD_LIMIT),
-    supabase.from('driver_mbti').select(driverColumns, { count: 'planned' }).order('data_days', { ascending: false }).limit(DRIVER_LIMIT),
-  ])
+  const callcardsRes = await supabase
+    .from('callcard_mbti')
+    .select(callcardColumns, { count: 'planned' })
+    .order('call_date', { ascending: false })
+    .limit(CALLCARD_LIMIT)
 
-  if (callcardsRes.error && driversRes.error) {
-    return emptyModel('error', `Matching data query failed: ${callcardsRes.error.message}; ${driversRes.error.message}`)
+  if (callcardsRes.error) {
+    return emptyModel('error', 'Matching Studio could not load callcard rows.')
   }
 
   const callcards = (callcardsRes.data ?? [])
     .map((row) => callcardModel(row as unknown as CallcardRow))
     .filter((row): row is MatchingCallcardModel => row != null)
-  const drivers = (driversRes.data ?? [])
-    .map((row) => driverModel(row as unknown as DriverMbtiRow))
-    .filter((row): row is MatchingDriverModel => row != null)
 
-  if (!callcards.length || !drivers.length) {
+  if (!callcards.length) {
     return {
-      ...emptyModel('empty', 'Matching Studio needs at least one callcard and one driver vector.'),
+      ...emptyModel('empty', 'Matching Studio needs at least one callcard.'),
       callcards,
-      drivers,
       callcardCount: callcardsRes.count ?? callcards.length,
-      driverCount: driversRes.count ?? drivers.length,
+      source: source(),
+    }
+  }
+
+  const aspIds = [...new Set(callcards.map((callcard) => callcard.aspId).filter((aspId): aspId is number => aspId != null))]
+  const driverGroups = await Promise.all(aspIds.length ? aspIds.map((aspId) => fetchDriversByAsp(supabase, driverColumns, aspId)) : [fetchDriversByAsp(supabase, driverColumns, null)])
+  const driverError = driverGroups.find((group) => group.error)?.error ?? null
+  const driversByAsp = new Map<number | null, MatchingDriverModel[]>()
+  let driverCount = 0
+
+  for (const [index, group] of driverGroups.entries()) {
+    const aspId = aspIds.length ? aspIds[index] : null
+    driversByAsp.set(aspId, group.data)
+    driverCount += group.count
+  }
+
+  const candidatesByCallcard = Object.fromEntries(callcards.map((callcard) => {
+    const sameAspDrivers = driversByAsp.get(callcard.aspId) ?? driversByAsp.get(null) ?? []
+    return [callcard.id, buildCandidatesForCallcard(callcard, sameAspDrivers)]
+  }))
+  const topCandidateDrivers = new Map<string, MatchingDriverModel>()
+  for (const candidates of Object.values(candidatesByCallcard)) {
+    for (const candidate of candidates) topCandidateDrivers.set(candidate.driver.id, candidate.driver)
+  }
+  const drivers = [...topCandidateDrivers.values()]
+
+  if (!drivers.length) {
+    return {
+      ...emptyModel(driverError ? 'partial' : 'empty', driverError ? 'Driver vectors were unavailable. Callcards loaded, but candidate ranking could not be completed.' : 'Matching Studio needs driver vectors for the selected callcard region.'),
+      callcards,
+      candidatesByCallcard,
+      callcardCount: callcardsRes.count ?? callcards.length,
+      driverCount,
       source: source(),
     }
   }
 
   return {
-    status: callcardsRes.error || driversRes.error ? 'partial' : 'success',
-    message: callcardsRes.error
-      ? 'Callcard rows were unavailable. Driver vectors loaded, but matching cannot be fully evaluated.'
-      : driversRes.error
+    status: driverError ? 'partial' : 'success',
+    message: driverError
         ? 'Driver vectors were unavailable. Callcard rows loaded, but matching cannot be fully evaluated.'
         : 'Matching Studio loaded callcards and driver vectors from Supabase.',
     source: source(),
     callcards,
     drivers,
-    driverCount: driversRes.count ?? drivers.length,
+    candidatesByCallcard,
+    driverCount,
     callcardCount: callcardsRes.count ?? callcards.length,
     limits: {
       callcards: CALLCARD_LIMIT,
-      drivers: DRIVER_LIMIT,
+      drivers: DRIVER_PAGE_SIZE,
       topCandidates: TOP_CANDIDATE_LIMIT,
     },
     formula: {

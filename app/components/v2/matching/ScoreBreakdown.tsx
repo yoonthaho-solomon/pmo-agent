@@ -1,5 +1,5 @@
 import type { MatchingCandidateModel, MatchingStudioModel } from '@/lib/matching-studio-model'
-import { formatPercent, formatScore } from './formatters'
+import { formatPercent, formatRatioPercent, formatScore } from './formatters'
 import styles from './matchingStudio.module.css'
 
 export function ScoreBreakdown({
@@ -30,7 +30,7 @@ export function ScoreBreakdown({
         </div>
         <div>
           <span>데이터 신뢰도</span>
-          <strong>{formatPercent(candidate?.driver.reliability)}</strong>
+          <strong>{formatRatioPercent(candidate?.driver.reliability)}</strong>
           <small>{candidate?.driver.dataDays ?? '-'}일 누적 기사 패턴</small>
         </div>
       </div>
