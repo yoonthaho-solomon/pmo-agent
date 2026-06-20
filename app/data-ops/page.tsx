@@ -1,5 +1,5 @@
-import { WorkspacePlaceholder } from '@/app/components/v2/WorkspacePlaceholder'
+import { DataOpsWorkspace } from '@/app/components/v2/data-ops/DataOpsWorkspace'
 
 export default function DataOpsPage() {
-  return <WorkspacePlaceholder workspace="data-ops" />
+  return <DataOpsWorkspace />
 }
