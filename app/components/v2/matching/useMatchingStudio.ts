@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, useTransition } from 'react'
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import type { ScenarioMatchingResponse, ScenarioPointInput } from '@/lib/adapters/matching'
 import type { MatchingCallcardModel, MatchingCandidateModel, MatchingStudioModel } from '@/lib/matching-studio-model'
 
@@ -8,6 +8,11 @@ export type ScenarioStatus = 'original' | 'dirty' | 'calculating' | 'ready' | 'e
 
 function pointLabel(point: ScenarioPointInput | null): string {
   return point?.label ?? ''
+}
+
+function sameScenarioPoint(a: ScenarioPointInput | null, b: ScenarioPointInput | null): boolean {
+  if (!a || !b) return false
+  return a.lat === b.lat && a.lng === b.lng
 }
 
 export function useMatchingStudio(model: MatchingStudioModel) {
@@ -25,6 +30,29 @@ export function useMatchingStudio(model: MatchingStudioModel) {
   const [scenarioError, setScenarioError] = useState<string | null>(null)
   const [scenarioStatus, setScenarioStatus] = useState<ScenarioStatus>('original')
   const [isScenarioPending, setIsScenarioPending] = useState(false)
+  const scenarioRequestIdRef = useRef(0)
+  const scenarioAbortRef = useRef<AbortController | null>(null)
+  const latestScenarioRef = useRef({
+    callcardId: selectedCallcardId,
+    origin: scenarioOrigin,
+    destination: scenarioDestination,
+  })
+
+  useEffect(() => {
+    latestScenarioRef.current = {
+      callcardId: selectedCallcardId,
+      origin: scenarioOrigin,
+      destination: scenarioDestination,
+    }
+  }, [scenarioDestination, scenarioOrigin, selectedCallcardId])
+
+  useEffect(() => {
+    return () => {
+      scenarioRequestIdRef.current += 1
+      scenarioAbortRef.current?.abort()
+      scenarioAbortRef.current = null
+    }
+  }, [])
 
   const selectedCallcard = useMemo<MatchingCallcardModel | null>(
     () => model.callcards.find((callcard) => callcard.id === selectedCallcardId) ?? model.callcards[0] ?? null,
@@ -52,7 +80,7 @@ export function useMatchingStudio(model: MatchingStudioModel) {
 
   const rankedCandidates = useMemo<MatchingCandidateModel[]>(() => {
     if (!selectedCallcard || !hasRun) return []
-    if (scenarioStatus === 'dirty' || scenarioStatus === 'calculating') return []
+    if (scenarioStatus === 'dirty' || scenarioStatus === 'calculating' || scenarioStatus === 'error') return []
     if (scenarioStatus === 'ready' && scenarioCandidates) return scenarioCandidates
     return model.candidatesByCallcard[selectedCallcard.id] ?? []
   }, [hasRun, model.candidatesByCallcard, scenarioCandidates, scenarioStatus, selectedCallcard])
@@ -62,7 +90,15 @@ export function useMatchingStudio(model: MatchingStudioModel) {
     [rankedCandidates, selectedCandidateId],
   )
 
+  function abortScenarioRequest() {
+    scenarioRequestIdRef.current += 1
+    scenarioAbortRef.current?.abort()
+    scenarioAbortRef.current = null
+    setIsScenarioPending(false)
+  }
+
   function invalidateScenario(nextStatus: ScenarioStatus = 'dirty') {
+    abortScenarioRequest()
     setScenarioRoute(null)
     setScenarioCandidates(null)
     setSelectedCandidateId('')
@@ -87,6 +123,7 @@ export function useMatchingStudio(model: MatchingStudioModel) {
   }
 
   function clearScenario() {
+    abortScenarioRequest()
     setScenarioOriginState(null)
     setScenarioDestinationState(null)
     setScenarioOriginTextState('')
@@ -140,6 +177,25 @@ export function useMatchingStudio(model: MatchingStudioModel) {
       return
     }
 
+    scenarioAbortRef.current?.abort()
+    const requestId = scenarioRequestIdRef.current + 1
+    scenarioRequestIdRef.current = requestId
+    const controller = new AbortController()
+    scenarioAbortRef.current = controller
+    const requestCallcardId = selectedCallcard.id
+    const requestOrigin = scenarioOrigin
+    const requestDestination = scenarioDestination
+
+    const isCurrentRequest = () => {
+      const latest = latestScenarioRef.current
+      return (
+        scenarioRequestIdRef.current === requestId &&
+        latest.callcardId === requestCallcardId &&
+        sameScenarioPoint(latest.origin, requestOrigin) &&
+        sameScenarioPoint(latest.destination, requestDestination)
+      )
+    }
+
     setIsScenarioPending(true)
     setScenarioStatus('calculating')
     setScenarioError(null)
@@ -147,34 +203,46 @@ export function useMatchingStudio(model: MatchingStudioModel) {
     try {
       const response = await fetch('/api/matching-studio/scenario', {
         method: 'POST',
+        signal: controller.signal,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          callcardId: selectedCallcard.id,
-          origin: scenarioOrigin,
-          destination: scenarioDestination,
+          callcardId: requestCallcardId,
+          origin: requestOrigin,
+          destination: requestDestination,
         }),
       })
       const result = await response.json() as ScenarioMatchingResponse
+      if (!isCurrentRequest()) return
       if (!result.ok) {
         setScenarioError(result.message)
         setScenarioStatus('error')
         setScenarioRoute(null)
         setScenarioCandidates(null)
+        setSelectedCandidateId('')
+        setShowEvidence(false)
         return
       }
 
       setScenarioRoute(result.route)
       setScenarioCandidates(result.candidates)
       setSelectedCandidateId('')
+      setShowEvidence(false)
       setHasRun(true)
       setScenarioStatus('ready')
-    } catch {
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return
+      if (!isCurrentRequest()) return
       setScenarioError('시나리오 매칭 계산에 실패했습니다.')
       setScenarioStatus('error')
       setScenarioRoute(null)
       setScenarioCandidates(null)
+      setSelectedCandidateId('')
+      setShowEvidence(false)
     } finally {
-      setIsScenarioPending(false)
+      if (scenarioRequestIdRef.current === requestId) {
+        scenarioAbortRef.current = null
+        setIsScenarioPending(false)
+      }
     }
   }
 

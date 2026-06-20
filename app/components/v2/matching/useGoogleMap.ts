@@ -91,11 +91,8 @@ export function useGoogleMap({
     loadGoogleMaps()
       .then((google) => {
         if (cancelled || !containerRef.current || mapRef.current) return
-        const initialCenter = effectiveOrigin
-          ? { lat: effectiveOrigin.lat, lng: effectiveOrigin.lng }
-          : { lat: 36.8151, lng: 127.1139 }
         const map = new google.maps.Map(containerRef.current, {
-          center: initialCenter,
+          center: { lat: 36.8151, lng: 127.1139 },
           zoom: 12,
           mapId,
           mapTypeControl: false,
@@ -117,7 +114,7 @@ export function useGoogleMap({
       overlayRef.current = null
       mapRef.current = null
     }
-  }, [configMissing, effectiveOrigin, mapId])
+  }, [configMissing, mapId])
 
   useEffect(() => {
     const overlay = overlayRef.current

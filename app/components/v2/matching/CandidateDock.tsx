@@ -37,6 +37,16 @@ export function CandidateDock({
     )
   }
 
+  if (state === 'error') {
+    return (
+      <aside className={styles.candidateDock}>
+        <p className={styles.eyebrow}>CANDIDATE DOCK</p>
+        <h2>시나리오 계산 실패</h2>
+        <p className={styles.muted}>출발지·도착지 또는 서버 상태를 확인한 후 다시 계산해 주세요. 이전 후보와 Evidence는 표시하지 않습니다.</p>
+      </aside>
+    )
+  }
+
   if (!candidates.length) {
     return (
       <aside className={styles.candidateDock}>

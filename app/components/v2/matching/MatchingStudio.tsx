@@ -14,6 +14,7 @@ import styles from './matchingStudio.module.css'
 export function MatchingStudio({ model }: { model: MatchingStudioModel }) {
   const state = useMatchingStudio(model)
   const google = useGoogleMapsApi()
+  const canShowEvidence = state.scenarioStatus === 'original' || state.scenarioStatus === 'ready'
 
   return (
     <div className={styles.workspace}>
@@ -52,7 +53,7 @@ export function MatchingStudio({ model }: { model: MatchingStudioModel }) {
             scenarioStatus={state.scenarioStatus}
           />
           <StudioLegend />
-          {state.hasRun && !state.rankedCandidates.length && state.scenarioStatus !== 'dirty' && state.scenarioStatus !== 'calculating' ? (
+          {state.hasRun && !state.rankedCandidates.length && state.scenarioStatus === 'original' ? (
             <div className={styles.softNotice}>비교 가능한 후보 기사가 없습니다. 벡터 또는 기사 선호 H3 데이터 상태를 확인해 주세요.</div>
           ) : null}
         </div>
@@ -64,7 +65,7 @@ export function MatchingStudio({ model }: { model: MatchingStudioModel }) {
         />
       </div>
       <EvidenceDrawer
-        open={state.showEvidence && state.scenarioStatus !== 'dirty' && state.scenarioStatus !== 'calculating'}
+        open={state.showEvidence && canShowEvidence}
         onToggle={state.setShowEvidence}
         callcard={state.selectedCallcard}
         candidate={state.selectedCandidate}
