@@ -28,11 +28,11 @@ export function useDataOpsStatus() {
         if (!response.ok || json.error) {
           setQueryStatus('error')
           setErrorMessage(json.error ?? `Status API failed with ${response.status}`)
+        } else if (json.ok === false) {
+          setQueryStatus(json.source === 'none' ? 'error' : 'partial')
+          setErrorMessage(json.message)
         } else if (!json.callTables?.length && !json.meterTables?.length && !json.vectorTables?.length) {
           setQueryStatus('empty')
-        } else if (json.ok === false) {
-          setQueryStatus('partial')
-          setErrorMessage(json.message)
         } else {
           setQueryStatus('success')
         }

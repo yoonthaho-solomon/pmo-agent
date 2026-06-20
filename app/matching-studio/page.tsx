@@ -12,12 +12,12 @@ export default async function MatchingStudioPage() {
   return (
     <AppShell>
       {model.status === 'error' ? (
-        <MatchingRetryState title="Matching Studio Error" message="매칭 분석 데이터를 다시 불러오지 못했습니다." />
+        <MatchingRetryState title="Matching Studio Error" message={model.message || '매칭 분석 데이터를 다시 불러오지 못했습니다.'} />
       ) : null}
       {model.status === 'empty' ? <EmptyState message={model.message} /> : null}
       {model.status === 'partial' ? (
         <>
-          <MatchingRetryState title="Partial Data" message="일부 매칭 데이터만 준비되었습니다. 화면은 가능한 데이터 기준으로 표시합니다." />
+          <MatchingRetryState title="Partial Data" message={model.message || '일부 매칭 데이터만 준비되었습니다. 가능한 데이터 기준으로 표시합니다.'} />
           <MatchingStudio model={model} />
         </>
       ) : null}

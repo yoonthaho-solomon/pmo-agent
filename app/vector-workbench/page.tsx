@@ -11,11 +11,11 @@ export default async function VectorWorkbenchPage() {
 
   return (
     <AppShell>
-      {model.status === 'error' ? <VectorRetryState title="Error" message="벡터 데이터를 다시 불러오지 못했습니다." /> : null}
+      {model.status === 'error' ? <VectorRetryState title="Error" message={model.message || '벡터 데이터를 다시 불러오지 못했습니다.'} /> : null}
       {model.status === 'empty' ? <EmptyState message={model.message} /> : null}
       {model.status === 'partial' ? (
         <>
-          <VectorRetryState title="Partial" message="일부 벡터 원천을 불러오지 못했습니다. 다시 시도할 수 있습니다." />
+          <VectorRetryState title="Partial" message={model.message || '일부 벡터 원천만 준비되었습니다. 가능한 데이터 기준으로 표시합니다.'} />
           <VectorWorkbench model={model} />
         </>
       ) : null}
