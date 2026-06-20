@@ -54,6 +54,7 @@ export function VectorWorkbench({ model }: { model: VectorWorkbenchModel }) {
             onSort={state.setSortMode}
             onSelectFactor={state.setSelectedFactorKey}
             onSelectEntity={state.setSelectedEntityId}
+            onSelectCell={state.selectMatrixCell}
             onLoadMore={state.loadMore}
           />
           <div className={styles.bottomGrid}>
@@ -65,6 +66,8 @@ export function VectorWorkbench({ model }: { model: VectorWorkbenchModel }) {
               onXFactor={state.setXFactorKey}
               onYFactor={state.setYFactorKey}
               sampleLimit={model.relationshipSampleLimit}
+              selectedEntityId={state.selectedEntityId}
+              onSelectEntity={state.setSelectedEntityId}
             />
             <CosineLens
               entities={model.entities}

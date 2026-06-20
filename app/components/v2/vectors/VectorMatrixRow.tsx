@@ -12,23 +12,37 @@ export function VectorMatrixRow({
   selectedFactorKey,
   selected,
   onSelect,
+  onSelectCell,
 }: {
   entity: VectorEntityModel
   factors: VectorFactorModel[]
   selectedFactorKey: VectorDimensionKey
   selected: boolean
   onSelect: (id: string) => void
+  onSelectCell: (entityId: string, factorKey: VectorDimensionKey) => void
 }) {
   return (
-    <tr className={styles.matrixRow} data-selected={selected}>
+    <tr className={styles.matrixRow} data-selected={selected} aria-selected={selected}>
       <th scope="row" className={styles.entityCol}>
-        <button type="button" onClick={() => onSelect(entity.id)} data-selected={selected}>
+        <button
+          type="button"
+          onClick={() => onSelect(entity.id)}
+          data-selected={selected}
+          aria-label={`${entity.label} 행 선택`}
+        >
           <span>{entity.label}</span>
           <small>{entityTypeLabel(entity.type)} · {entity.aspId ?? '-'}</small>
         </button>
       </th>
       {factors.map((factor) => (
-        <VectorCell key={factor.key} value={entity.vector[factor.index]} factor={factor} selected={selectedFactorKey === factor.key} />
+        <VectorCell
+          key={factor.key}
+          value={entity.vector[factor.index]}
+          factor={factor}
+          selected={selectedFactorKey === factor.key}
+          entityLabel={entity.label}
+          onSelect={() => onSelectCell(entity.id, factor.key)}
+        />
       ))}
     </tr>
   )

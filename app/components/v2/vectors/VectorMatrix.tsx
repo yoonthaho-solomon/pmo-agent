@@ -23,6 +23,7 @@ export function VectorMatrix({
   onSort,
   onSelectFactor,
   onSelectEntity,
+  onSelectCell,
   onLoadMore,
 }: {
   factors: VectorFactorModel[]
@@ -40,6 +41,7 @@ export function VectorMatrix({
   onSort: (value: SortMode) => void
   onSelectFactor: (key: VectorDimensionKey) => void
   onSelectEntity: (id: string) => void
+  onSelectCell: (entityId: string, factorKey: VectorDimensionKey) => void
   onLoadMore: () => void
 }) {
   return (
@@ -83,6 +85,7 @@ export function VectorMatrix({
                 selectedFactorKey={selectedFactorKey}
                 selected={selectedEntityId === entity.id}
                 onSelect={onSelectEntity}
+                onSelectCell={onSelectCell}
               />
             ))}
           </tbody>

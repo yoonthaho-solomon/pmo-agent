@@ -273,6 +273,14 @@
   cursor: pointer;
 }
 
+.matrixTable thead th button:focus-visible,
+.matrixRow .entityCol button:focus-visible,
+.matrixFooter button:focus-visible,
+.scatter circle:focus-visible {
+  outline: 2px solid var(--km-v2-cyan);
+  outline-offset: -2px;
+}
+
 .matrixTable thead th[data-selected='true'] {
   background: rgba(67, 214, 239, 0.13);
   box-shadow: inset 0 -2px 0 var(--km-v2-cyan);
@@ -336,6 +344,7 @@
   text-align: center;
   color: var(--km-v2-text-primary);
   background: color-mix(in srgb, var(--km-v2-cyan) calc(var(--value) * 42%), rgba(8, 19, 30, 0.86));
+  cursor: pointer;
 }
 
 .vectorCell:focus-visible {
@@ -416,10 +425,17 @@
 .scatter circle {
   fill: var(--km-v2-violet);
   opacity: 0.76;
+  cursor: pointer;
 }
 
 .scatter circle[data-type='callcard'] {
   fill: var(--km-v2-cyan);
+}
+
+.scatter circle[data-selected='true'] {
+  opacity: 1;
+  stroke: var(--km-v2-orange);
+  stroke-width: 4;
 }
 
 .scatter text {
@@ -428,12 +444,28 @@
 }
 
 .mapNote,
+.mapSelection,
 .analysisNote,
+.selectionWarning,
 .empty,
 .descriptionBox p {
   color: var(--km-v2-text-secondary);
   font-size: 12px;
   line-height: 1.45;
+}
+
+.mapSelection,
+.selectionWarning {
+  margin: 8px 0 0;
+  color: var(--km-v2-orange);
+  font-weight: 850;
+}
+
+.mapSelection span {
+  display: block;
+  margin-top: 2px;
+  color: var(--km-v2-text-muted);
+  font-weight: 700;
 }
 
 .inspector {
@@ -609,6 +641,48 @@
 .legend i[data-level='mid'] { background: rgba(67, 214, 239, 0.34); }
 .legend i[data-level='high'] { background: rgba(67, 214, 239, 0.62); }
 .legend i[data-level='none'] { background: repeating-linear-gradient(135deg, rgba(145, 183, 207, 0.08), rgba(145, 183, 207, 0.08) 4px, transparent 4px, transparent 8px); }
+
+.retryState {
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--km-v2-border-default);
+  border-radius: var(--km-v2-radius-panel);
+  background: rgba(12, 25, 37, 0.88);
+}
+
+.retryState div {
+  display: grid;
+  gap: 4px;
+}
+
+.retryState strong {
+  color: var(--km-v2-text-primary);
+  font-size: 18px;
+}
+
+.retryState span {
+  color: var(--km-v2-text-secondary);
+  font-size: 14px;
+}
+
+.retryState button {
+  min-height: 38px;
+  padding: 0 16px;
+  color: var(--km-v2-cyan);
+  border: 1px solid var(--km-v2-border-strong);
+  border-radius: var(--km-v2-radius-control);
+  background: rgba(67, 214, 239, 0.08);
+  cursor: pointer;
+}
+
+.retryState button:disabled {
+  cursor: wait;
+  opacity: 0.58;
+}
 
 @media (max-width: 1180px) {
   .mainGrid {

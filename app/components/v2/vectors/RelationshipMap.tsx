@@ -13,6 +13,8 @@ export function RelationshipMap({
   onXFactor,
   onYFactor,
   sampleLimit,
+  selectedEntityId,
+  onSelectEntity,
 }: {
   entities: VectorEntityModel[]
   factors: VectorFactorModel[]
@@ -21,12 +23,21 @@ export function RelationshipMap({
   onXFactor: (key: VectorDimensionKey) => void
   onYFactor: (key: VectorDimensionKey) => void
   sampleLimit: number
+  selectedEntityId: string | null
+  onSelectEntity: (id: string) => void
 }) {
   const xFactor = factors.find((factor) => factor.key === xFactorKey) ?? factors[0]
   const yFactor = factors.find((factor) => factor.key === yFactorKey) ?? factors[1] ?? factors[0]
   const sample = entities
     .filter((entity) => xFactor && yFactor && entity.vector[xFactor.index] != null && entity.vector[yFactor.index] != null)
     .slice(0, sampleLimit)
+  const selectedEntity = entities.find((entity) => entity.id === selectedEntityId) ?? null
+  const selectedInSample = sample.some((entity) => entity.id === selectedEntityId)
+  const handlePointKeyDown = (event: React.KeyboardEvent<SVGCircleElement>, entityId: string) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return
+    event.preventDefault()
+    onSelectEntity(entityId)
+  }
 
   return (
     <section className={styles.relationship} aria-label="Relationship map">
@@ -62,13 +73,24 @@ export function RelationshipMap({
               cy={178 - y * 160}
               r={entity.type === 'driver' ? 4 : 5}
               data-type={entity.type}
+              data-selected={entity.id === selectedEntityId}
+              role="button"
+              tabIndex={0}
               aria-label={`${entity.label}: ${xFactor.label} ${numberValue(x, 2)}, ${yFactor.label} ${numberValue(y, 2)}`}
+              onClick={() => onSelectEntity(entity.id)}
+              onKeyDown={(event) => handlePointKeyDown(event, entity.id)}
             />
           )
         })}
         <text x="36" y="202">{xFactor.label}</text>
         <text x="8" y="22">{yFactor.label}</text>
       </svg>
+      {selectedEntity ? (
+        <p className={styles.mapSelection}>
+          선택 엔티티 {selectedEntity.label}
+          {!selectedInSample ? <span>현재 표본 또는 Matrix 표시 범위 밖일 수 있습니다.</span> : null}
+        </p>
+      ) : null}
       <p className={styles.mapNote}>차원축소가 아닌 선택한 두 22D 팩터의 실제 값 분포입니다. 표본은 현재 정렬 순서의 상위 {sampleLimit}개로 제한합니다.</p>
     </section>
   )

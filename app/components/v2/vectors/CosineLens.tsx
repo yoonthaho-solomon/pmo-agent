@@ -48,14 +48,15 @@ export function CosineLens({
   onCompareA: (id: string) => void
   onCompareB: (id: string) => void
 }) {
-  const score = cosine(compareA, compareB)
-  const diffs = factorDiffs(compareA, compareB, factors)
+  const sameEntitySelected = compareAId != null && compareAId === compareBId
+  const score = sameEntitySelected ? null : cosine(compareA, compareB)
+  const diffs = sameEntitySelected ? [] : factorDiffs(compareA, compareB, factors)
   const similar = [...diffs].filter((item) => item.diff != null).sort((a, b) => (a.diff ?? 0) - (b.diff ?? 0)).slice(0, 4)
   const different = [...diffs].filter((item) => item.diff != null).sort((a, b) => (b.diff ?? 0) - (a.diff ?? 0)).slice(0, 4)
   const groupScores = DISPLAY_AXES.map((axis) => {
     const av = compareA ? axis.indexes.map((index) => compareA.vector[index]) : []
     const bv = compareB ? axis.indexes.map((index) => compareB.vector[index]) : []
-    if (av.some((value) => value == null) || bv.some((value) => value == null)) return { name: axis.name, score: null }
+    if (sameEntitySelected || av.some((value) => value == null) || bv.some((value) => value == null)) return { name: axis.name, score: null }
     return { name: axis.name, score: cosineSimilarity(av as number[], bv as number[]) }
   })
 
@@ -69,9 +70,10 @@ export function CosineLens({
         <strong>{percentValue(score, 1)}</strong>
       </div>
       <div className={styles.selectorGrid}>
-        <EntitySelector id="compare-a" label="비교 대상 A" value={compareAId} entities={entities} onChange={onCompareA} />
-        <EntitySelector id="compare-b" label="비교 대상 B" value={compareBId} entities={entities} onChange={onCompareB} />
+        <EntitySelector id="compare-a" label="비교 대상 A" value={compareAId} entities={entities} disabledEntityId={compareBId} onChange={onCompareA} />
+        <EntitySelector id="compare-b" label="비교 대상 B" value={compareBId} entities={entities} disabledEntityId={compareAId} onChange={onCompareB} />
       </div>
+      {sameEntitySelected ? <p className={styles.selectionWarning}>서로 다른 두 엔티티를 선택하세요.</p> : null}
       <p className={styles.analysisNote}>이 값은 벡터 분석용 코사인 유사도이며 추천 순위나 배차 우선순위가 아닙니다.</p>
       <div className={styles.groupCompare}>
         {groupScores.map((item) => <div key={item.name}><span>{item.name}</span><b>{percentValue(item.score, 0)}</b></div>)}

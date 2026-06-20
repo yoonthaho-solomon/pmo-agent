@@ -87,6 +87,10 @@ export function useVectorWorkbench(model: VectorWorkbenchModel) {
     rowLimit,
     canLoadMore,
     loadMore: () => setRowLimit((current) => Math.min(current + 40, sortedEntities.length)),
+    selectMatrixCell: (entityId: string, factorKey: VectorDimensionKey) => {
+      setSelectedEntityId(entityId)
+      setSelectedFactorKey(factorKey)
+    },
     selectedEntity,
     selectedEntityId,
     setSelectedEntityId,
