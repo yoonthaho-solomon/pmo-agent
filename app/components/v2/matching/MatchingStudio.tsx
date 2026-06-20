@@ -4,36 +4,50 @@ import type { MatchingStudioModel } from '@/lib/matching-studio-model'
 import { CallBuilder } from './CallBuilder'
 import { CandidateDock } from './CandidateDock'
 import { EvidenceDrawer } from './EvidenceDrawer'
-import { SpatialStage } from './SpatialStage'
+import { GoogleSpatialStage } from './GoogleSpatialStage'
 import { StudioLegend } from './StudioLegend'
 import { StudioStatus } from './StudioStatus'
+import { useGoogleMapsApi } from './useGoogleMapsApi'
 import { useMatchingStudio } from './useMatchingStudio'
 import styles from './matchingStudio.module.css'
 
 export function MatchingStudio({ model }: { model: MatchingStudioModel }) {
   const state = useMatchingStudio(model)
+  const google = useGoogleMapsApi()
 
   return (
     <div className={styles.workspace}>
       <StudioStatus model={model} candidateCount={state.rankedCandidates.length} />
       <div className={styles.mainGrid}>
         <CallBuilder
+          google={google.google}
           callcards={model.callcards}
           selectedId={state.selectedCallcardId}
           selectedCallcard={state.selectedCallcard}
+          scenarioOrigin={state.scenarioOrigin}
+          scenarioDestination={state.scenarioDestination}
+          scenarioError={state.scenarioError}
           onSelect={state.selectCallcard}
           onRun={state.runSimulation}
+          onScenarioOrigin={state.setScenarioOrigin}
+          onScenarioDestination={state.setScenarioDestination}
+          onClearScenario={state.clearScenario}
+          onSwapScenario={state.swapScenarioPoints}
+          onRunScenario={state.runScenarioMatching}
           isPending={state.isPending}
         />
         <div className={styles.centerPane}>
-          <SpatialStage
+          <GoogleSpatialStage
             callcard={state.selectedCallcard}
             selectedCandidate={state.selectedCandidate}
             candidates={state.rankedCandidates}
+            scenarioOrigin={state.scenarioOrigin}
+            scenarioDestination={state.scenarioDestination}
+            scenarioMode={state.scenarioMode}
           />
           <StudioLegend />
           {state.hasRun && !state.rankedCandidates.length ? (
-            <div className={styles.softNotice}>비교 가능한 후보 기사가 없습니다. 벡터 또는 기사 선호 H3 데이터 상태를 확인하세요.</div>
+            <div className={styles.softNotice}>비교 가능한 후보 기사가 없습니다. 벡터 또는 기사 선호 H3 데이터 상태를 확인해 주세요.</div>
           ) : null}
         </div>
         <CandidateDock

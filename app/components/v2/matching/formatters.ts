@@ -1,4 +1,4 @@
-export function formatScore(value: number | null | undefined): string {
+﻿export function formatScore(value: number | null | undefined): string {
   if (value == null || !Number.isFinite(value)) return '-'
   return `${Math.round(value)}`
 }

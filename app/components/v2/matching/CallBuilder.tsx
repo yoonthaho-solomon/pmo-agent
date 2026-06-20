@@ -1,33 +1,59 @@
+﻿import type { ScenarioPointInput } from '@/lib/adapters/matching'
+import type { GoogleMapsGlobal } from '@/lib/google-maps/client-loader'
 import type { MatchingCallcardModel } from '@/lib/matching-studio-model'
 import { compactH3, formatCoordinate, formatFare, formatMeter } from './formatters'
 import { H3_SOURCE_LABELS } from './matchingMeta'
+import { PlaceSearchInput } from './PlaceSearchInput'
 import styles from './matchingStudio.module.css'
 
 export function CallBuilder({
+  google,
   callcards,
   selectedId,
   selectedCallcard,
+  scenarioOrigin,
+  scenarioDestination,
+  scenarioError,
   onSelect,
   onRun,
+  onScenarioOrigin,
+  onScenarioDestination,
+  onClearScenario,
+  onSwapScenario,
+  onRunScenario,
   isPending,
 }: {
+  google: GoogleMapsGlobal | null
   callcards: MatchingCallcardModel[]
   selectedId: string
   selectedCallcard: MatchingCallcardModel | null
+  scenarioOrigin: ScenarioPointInput | null
+  scenarioDestination: ScenarioPointInput | null
+  scenarioError: string | null
   onSelect: (id: string) => void
   onRun: () => void
+  onScenarioOrigin: (point: ScenarioPointInput | null) => void
+  onScenarioDestination: (point: ScenarioPointInput | null) => void
+  onClearScenario: () => void
+  onSwapScenario: () => void
+  onRunScenario: () => void
   isPending: boolean
 }) {
+  const center = selectedCallcard?.route.pickup.lat != null && selectedCallcard.route.pickup.lng != null
+    ? { lat: selectedCallcard.route.pickup.lat, lng: selectedCallcard.route.pickup.lng }
+    : null
+  const hasScenario = scenarioOrigin != null || scenarioDestination != null
+
   return (
     <aside className={styles.callBuilder} aria-label="콜카드 입력 패널">
       <div>
-        <p className={styles.eyebrow}>CALLCARD INPUT</p>
-        <h2>실제 콜카드 선택</h2>
-        <p className={styles.muted}>저장된 콜카드의 시간, 요금, 거리, 출발·도착 H3를 기준으로 후보 기사를 다시 정렬합니다.</p>
+        <p className={styles.eyebrow}>CALL BUILDER</p>
+        <h2>콜카드 위치 선택</h2>
+        <p className={styles.muted}>기존 콜카드의 22D 성향 벡터는 유지하고, 출발·도착 H3만 바꿔 시나리오 Top 10을 계산합니다.</p>
       </div>
 
       <label className={styles.field}>
-        <span>콜카드</span>
+        <span>기준 콜카드</span>
         <select value={selectedId} onChange={(event) => onSelect(event.target.value)} aria-label="분석할 콜카드 선택">
           {callcards.map((callcard) => (
             <option key={callcard.id} value={callcard.id}>
@@ -60,8 +86,38 @@ export function CallBuilder({
         <div className={styles.softNotice}>선택 가능한 콜카드가 없습니다.</div>
       )}
 
-      <button className={styles.primaryAction} type="button" disabled={!selectedCallcard || isPending} onClick={onRun}>
-        {isPending ? '후보 분석 중' : '후보 기사 Top 10 분석'}
+      <div className={styles.scenarioBox}>
+        <div>
+          <b>시나리오 매칭</b>
+          <small>주소를 바꾸면 기존 22D 벡터는 유지하고 H3 공간점수만 서버에서 다시 계산합니다.</small>
+        </div>
+        <PlaceSearchInput
+          google={google}
+          label="출발지 검색"
+          placeholder="예: 천안시청"
+          value={scenarioOrigin}
+          center={center}
+          onSelect={onScenarioOrigin}
+          onClear={() => onScenarioOrigin(null)}
+        />
+        <PlaceSearchInput
+          google={google}
+          label="도착지 검색"
+          placeholder="예: 천안역"
+          value={scenarioDestination}
+          center={center}
+          onSelect={onScenarioDestination}
+          onClear={() => onScenarioDestination(null)}
+        />
+        <div className={styles.scenarioActions}>
+          <button type="button" onClick={onSwapScenario} disabled={!scenarioOrigin && !scenarioDestination}>맞바꾸기</button>
+          <button type="button" onClick={onClearScenario}>원본 위치</button>
+        </div>
+        {scenarioError ? <p className={styles.formError}>{scenarioError}</p> : null}
+      </div>
+
+      <button className={styles.primaryAction} type="button" disabled={!selectedCallcard || isPending} onClick={hasScenario ? onRunScenario : onRun}>
+        {isPending ? '후보 분석 중' : hasScenario ? '시나리오 Top 10 계산' : '원본 콜카드 Top 10 분석'}
       </button>
     </aside>
   )

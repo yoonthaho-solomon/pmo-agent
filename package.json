@@ -14,6 +14,10 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.104.1",
+    "@deck.gl/core": "^9.3.4",
+    "@deck.gl/geo-layers": "^9.3.4",
+    "@deck.gl/google-maps": "^9.3.4",
+    "@deck.gl/layers": "^9.3.4",
     "@supabase/supabase-js": "^2.108.1",
     "h3-js": "^4.4.0",
     "next": "16.2.9",

@@ -1,4 +1,4 @@
-import type { VectorDimensionKey } from '@/lib/matching-vector'
+﻿import type { VectorDimensionKey } from '@/lib/matching-vector'
 
 export const AXIS_LABELS: Array<{
   label: string

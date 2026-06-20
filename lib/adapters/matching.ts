@@ -1,6 +1,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { cellToLatLng } from 'h3-js'
 import { adaptCallcardLocation } from '@/lib/callcard-location-adapter'
+import { buildMatchingRouteLocation } from '@/lib/h3-dispatch'
 import { V2_MATCH_WEIGHTS } from '@/lib/h3-match-score'
 import {
   callToVector,
@@ -42,6 +43,34 @@ type CallcardRow = {
   s_hexagon?: string | null
   d_hexagon?: string | null
 }
+
+export type ScenarioPointInput = {
+  placeId?: string
+  lat: number
+  lng: number
+  label: string
+}
+
+export type ScenarioMatchingRequest = {
+  callcardId: string
+  origin: ScenarioPointInput
+  destination: ScenarioPointInput
+}
+
+export type ScenarioMatchingResponse =
+  | {
+      ok: true
+      mode: 'scenario'
+      callcardId: string
+      route: MatchingCallcardModel['route']
+      candidates: MatchingCandidateModel[]
+      formula: MatchingStudioModel['formula']
+    }
+  | {
+      ok: false
+      state: 'invalid_input' | 'not_found' | 'error'
+      message: string
+    }
 
 const CALLCARD_LIMIT = 80
 const DRIVER_PAGE_SIZE = 1000
@@ -144,6 +173,41 @@ function callcardModel(row: CallcardRow): MatchingCallcardModel | null {
     diagnostics: adapted.diagnostics,
     vector,
     vectorAvailable: vector.length === VECTOR_DIMENSIONS.length,
+  }
+}
+
+function scenarioCallcardModel(row: CallcardRow, request: ScenarioMatchingRequest): MatchingCallcardModel | null {
+  const base = callcardModel(row)
+  if (!base) return null
+
+  const scenarioRoute = buildMatchingRouteLocation(
+    {
+      lat: request.origin.lat,
+      lng: request.origin.lng,
+      h3Res7: null,
+      roadAddress: request.origin.label,
+    },
+    {
+      lat: request.destination.lat,
+      lng: request.destination.lng,
+      h3Res7: null,
+      roadAddress: request.destination.label,
+    },
+  )
+
+  return {
+    ...base,
+    passengerAddress: request.origin.label,
+    destinationAddress: request.destination.label,
+    route: scenarioRoute,
+    diagnostics: {
+      pickupH3Source: scenarioRoute.pickup.h3Res7 ? 'COORDINATE' : 'NONE',
+      destinationH3Source: scenarioRoute.destination.h3Res7 ? 'COORDINATE' : 'NONE',
+      pickupH3Mismatch: false,
+      destinationH3Mismatch: false,
+      pickupCoordinateValid: scenarioRoute.pickup.h3Res7 != null,
+      destinationCoordinateValid: scenarioRoute.destination.h3Res7 != null,
+    },
   }
 }
 
@@ -358,5 +422,86 @@ export async function getMatchingStudioModel(): Promise<MatchingStudioModel> {
       originSpatialWeight: V2_MATCH_WEIGHTS.originWithinSpatial,
       destinationSpatialWeight: V2_MATCH_WEIGHTS.destinationWithinSpatial,
     },
+  }
+}
+
+function formula() {
+  return {
+    similarityWeight: V2_MATCH_WEIGHTS.similarity,
+    spatialWeight: V2_MATCH_WEIGHTS.spatial,
+    originSpatialWeight: V2_MATCH_WEIGHTS.originWithinSpatial,
+    destinationSpatialWeight: V2_MATCH_WEIGHTS.destinationWithinSpatial,
+  }
+}
+
+function isValidScenarioPoint(point: ScenarioPointInput | null | undefined): point is ScenarioPointInput {
+  return Boolean(
+    point &&
+    typeof point.label === 'string' &&
+    point.label.trim() &&
+    typeof point.lat === 'number' &&
+    Number.isFinite(point.lat) &&
+    point.lat >= -90 &&
+    point.lat <= 90 &&
+    typeof point.lng === 'number' &&
+    Number.isFinite(point.lng) &&
+    point.lng >= -180 &&
+    point.lng <= 180,
+  )
+}
+
+export async function calculateScenarioMatching(request: ScenarioMatchingRequest): Promise<ScenarioMatchingResponse> {
+  if (!request.callcardId?.trim() || !isValidScenarioPoint(request.origin) || !isValidScenarioPoint(request.destination)) {
+    return { ok: false, state: 'invalid_input', message: '콜카드와 확정된 출발지·도착지가 필요합니다.' }
+  }
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  if (!supabaseUrl || !supabaseKey) {
+    return { ok: false, state: 'error', message: '시나리오 매칭 서버 설정이 필요합니다.' }
+  }
+
+  const supabase = createClient(supabaseUrl, supabaseKey)
+  const callcardColumns = [
+    'callcard_id', 'asp_id', 'call_date', 'hour_slot', 'weekday', 'expected_distance', 'expected_fare',
+    'eta_distance', 'is_paid', 'is_surge', 'status_group', 'passenger_addr', 'dest_addr',
+    'passenger_lat', 'passenger_lng', 'dest_lat', 'dest_lng', 's_hexagon', 'd_hexagon',
+  ].join(',')
+  const driverColumns = [
+    'driver_id', 'asp_id', 'data_days', 'reliability', 'pref_s_hexagons', 'pref_d_hexagons',
+    ...VECTOR_DIMENSIONS.map((dimension) => dimension.key),
+  ].join(',')
+
+  const callcardRes = await supabase
+    .from('callcard_mbti')
+    .select(callcardColumns)
+    .eq('callcard_id', request.callcardId)
+    .limit(1)
+    .maybeSingle()
+
+  if (callcardRes.error) {
+    return { ok: false, state: 'error', message: '콜카드 조회에 실패했습니다.' }
+  }
+  if (!callcardRes.data) {
+    return { ok: false, state: 'not_found', message: '선택한 콜카드를 찾을 수 없습니다.' }
+  }
+
+  const callcard = scenarioCallcardModel(callcardRes.data as unknown as CallcardRow, request)
+  if (!callcard || !callcard.route.pickup.h3Res7 || !callcard.route.destination.h3Res7) {
+    return { ok: false, state: 'invalid_input', message: '출발지와 도착지를 H3로 변환할 수 없습니다.' }
+  }
+
+  const driverGroup = await fetchDriversByAsp(supabase, driverColumns, callcard.aspId)
+  if (driverGroup.error) {
+    return { ok: false, state: 'error', message: '기사 벡터 조회에 실패했습니다.' }
+  }
+
+  return {
+    ok: true,
+    mode: 'scenario',
+    callcardId: callcard.id,
+    route: callcard.route,
+    candidates: buildCandidatesForCallcard(callcard, driverGroup.data),
+    formula: formula(),
   }
 }
