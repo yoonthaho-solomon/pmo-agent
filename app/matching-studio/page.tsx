@@ -1,27 +1,14 @@
-﻿import { AppShell } from '@/app/components/v2/shell/AppShell'
-import { MatchingRetryState } from '@/app/components/v2/matching/MatchingRetryState'
-import { MatchingStudio } from '@/app/components/v2/matching/MatchingStudio'
-import { getMatchingStudioModel } from '@/lib/adapters/matching'
+import { AppShell } from '@/app/components/v2/shell/AppShell'
+import { MatchingStudioView } from './MatchingStudioView'
 
 export const metadata = {
-  title: 'KONAMOBILITY 매칭 스튜디오',
+  title: 'KONAMOBILITY — 매칭 스튜디오',
 }
 
-export default async function MatchingStudioPage() {
-  const model = await getMatchingStudioModel()
-
+export default function MatchingStudioPage() {
   return (
     <AppShell>
-      {model.status === 'error' ? (
-        <MatchingRetryState title="매칭 데이터를 불러오지 못했습니다" message={model.message} />
-      ) : model.status === 'partial' ? (
-        <>
-          <MatchingRetryState title="일부 데이터만 연결되었습니다" message={model.message} />
-          <MatchingStudio model={model} />
-        </>
-      ) : (
-        <MatchingStudio model={model} />
-      )}
+      <MatchingStudioView />
     </AppShell>
   )
 }
