@@ -118,6 +118,30 @@ export function cosineSimilarity(a: number[], b: number[]): number {
   return denom === 0 ? 0 : dot / denom
 }
 
+// ETA-derived dimensions (group 'ETA', e.g. score_near) are excluded from the
+// final matching cosine so ETA never contributes to the cosine 75% term. They
+// remain in the 22D vector for storage and on-screen display only.
+export const MATCHING_EXCLUDED_DIMENSION_KEYS: VectorDimensionKey[] = VECTOR_DIMENSIONS
+  .filter((dim) => dim.group === 'ETA')
+  .map((dim) => dim.key)
+
+const MATCHING_EXCLUDED_INDICES: readonly number[] = VECTOR_DIMENSIONS
+  .map((dim, index) => (dim.group === 'ETA' ? index : -1))
+  .filter((index) => index >= 0)
+
+// Returns the vector with ETA-derived dimensions removed, for the final
+// matching score. The original 22D vector is left untouched for display.
+export function matchingVectorSlice(vector: number[]): number[] {
+  if (MATCHING_EXCLUDED_INDICES.length === 0) return vector
+  return vector.filter((_, index) => !MATCHING_EXCLUDED_INDICES.includes(index))
+}
+
+// Cosine similarity for the final matching score. Cosine is magnitude-normalized,
+// so dropping the ETA dimensions re-normalizes correctly over the remaining dims.
+export function cosineSimilarityForMatching(a: number[], b: number[]): number {
+  return cosineSimilarity(matchingVectorSlice(a), matchingVectorSlice(b))
+}
+
 export function scoreDriverForCall(call: CallVectorInput, driver: DriverVectorRow & { pref_s_hexagons?: string[] | null }): number {
   const cosine = cosineSimilarity(callToVector(call), driverToVector(driver))
   const startBonus = call.s_hexagon && driver.pref_s_hexagons?.includes(call.s_hexagon) ? 0.1 : 0
