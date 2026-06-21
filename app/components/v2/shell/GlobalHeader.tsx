@@ -1,23 +1,30 @@
 import styles from '../styles/primitives.module.css'
-import { Badge } from '../primitives/Badge'
 import { WorkspaceTabs } from './WorkspaceTabs'
 
 export function GlobalHeader() {
   return (
     <header className={styles.header}>
       <div className={styles.headerInner}>
-        <div className={styles.brand} aria-label="KONAMOBILITY">
-          <span className={styles.brandMark}>K</span>
-          <span className={styles.brandText}>
-            <span className={styles.brandTitle}>KONAMOBILITY</span>
-            <span className={styles.brandSubtitle}>AI Dispatch Workspace</span>
-          </span>
+        {/* Left: brand + tab nav */}
+        <div className={styles.brand}>
+          <div className={styles.brandLogo}>
+            {/* Conic-gradient icon — matches mockup */}
+            <div className={styles.brandMark} aria-hidden />
+            <div className={styles.brandText}>
+              <span className={styles.brandTitle}>KONAMOBILITY</span>
+              <span className={styles.brandV2}>V2</span>
+            </div>
+          </div>
+          <WorkspaceTabs />
         </div>
-        <WorkspaceTabs />
+
+        {/* Right: connection status + V2 badge */}
         <div className={styles.headerRight}>
-          <span className={styles.statusDot} aria-hidden />
-          <span>연결됨</span>
-          <Badge tone="cyan">V2 Preview</Badge>
+          <div className={styles.statusCluster} role="status" aria-label="Supabase 연결 상태">
+            <span className={styles.statusDot} aria-hidden />
+            Supabase 연결됨
+          </div>
+          <div className={styles.previewBadge}>V2 Preview</div>
         </div>
       </div>
     </header>

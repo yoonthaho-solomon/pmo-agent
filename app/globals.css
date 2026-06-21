@@ -1,5 +1,5 @@
 @import "tailwindcss";
-/* Pretendard (Korean + Latin) is loaded via <link> in app/layout.tsx */
+/* Pretendard + JetBrains Mono are loaded via <link> in app/layout.tsx */
 
 /* ============================================================
    PMO Dispatch — design tokens
@@ -206,4 +206,106 @@ a { color: inherit; text-decoration: none; }
 @keyframes pmo-rise {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   KONAMOBILITY V2 — Design Tokens (2026 renewal)
+   Single source of truth for all --km-* CSS variables.
+   Components reference these via var(--km-*).
+   ============================================================ */
+:root {
+  --km-bg-solid:         #05070d;
+  --km-bg-radial-1:      #0a1322;
+  --km-bg-radial-2:      #070b14;
+  --km-bg-radial-3:      #04060c;
+
+  --km-panel:            rgba(9, 14, 23, 0.72);
+  --km-panel-kpi:        rgba(10, 15, 25, 0.70);
+  --km-surface:          rgba(20, 28, 42, 0.70);
+  --km-surface-row:      rgba(16, 22, 35, 0.60);
+
+  --km-border:           rgba(148, 163, 184, 0.13);
+  --km-border-hair:      rgba(148, 163, 184, 0.09);
+  --km-border-faint:     rgba(148, 163, 184, 0.06);
+  --km-border-cyan:      rgba(34, 211, 238, 0.50);
+  --km-border-violet:    rgba(167, 139, 250, 0.32);
+  --km-border-amber:     rgba(251, 191, 36, 0.24);
+
+  --km-text-hi:          #e8edf6;
+  --km-text:             #dbe3f0;
+  --km-text-mid:         #9aa7bd;
+  --km-text-dim:         #8b98ae;
+  --km-text-faint:       #7c89a0;
+  --km-text-mono-dim:    #6b778d;
+
+  --km-cyan:             #22d3ee;
+  --km-cyan-bright:      #5ce0f0;
+  --km-cyan-grad-a:      #3ddcef;
+  --km-cyan-grad-b:      #22c6e0;
+
+  --km-violet:           #a78bfa;
+  --km-violet-bright:    #c3acff;
+  --km-violet-mid:       #b79bff;
+
+  --km-green:            #4ade80;
+  --km-green-text:       #7ee0a3;
+  --km-amber:            #fbbf24;
+  --km-amber-text:       #fbd77a;
+  --km-red:              #f87171;
+
+  --km-bg-green:         rgba(74, 222, 128, 0.12);
+  --km-bg-amber:         rgba(251, 191, 36, 0.10);
+  --km-bg-violet:        rgba(167, 139, 250, 0.14);
+  --km-bg-cyan:          rgba(34, 211, 238, 0.10);
+
+  --km-r-pill:           8px;
+  --km-r-chip:           9px;
+  --km-r-card:           14px;
+  --km-r-panel:          18px;
+
+  --km-shadow-panel:     0 24px 60px rgba(0, 0, 0, 0.50);
+  --km-shadow-panel-lg:  0 28px 64px rgba(0, 0, 0, 0.55);
+  --km-shadow-kpi:       0 18px 44px rgba(0, 0, 0, 0.40);
+  --km-glow-cyan:        0 0 26px rgba(34, 211, 238, 0.14);
+  --km-glow-cyan-sel:    0 0 26px rgba(34, 211, 238, 0.16);
+  --km-glow-violet:      0 0 26px rgba(167, 139, 250, 0.10);
+  --km-text-glow-cyan:   0 0 22px rgba(34, 211, 238, 0.45);
+  --km-text-glow-violet: 0 0 20px rgba(167, 139, 250, 0.40);
+
+  --km-blur:             blur(20px) saturate(135%);
+  --km-blur-bar:         blur(14px);
+
+  --km-font-ui:          'Pretendard Variable', 'Pretendard', system-ui, -apple-system, sans-serif;
+  --km-font-mono:        'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
+  --km-tracking:         -0.01em;
+
+  --km-fs-page:          27px;
+  --km-fs-section:       16px;
+  --km-fs-card:          15px;
+  --km-fs-body:          14px;
+  --km-fs-sub:           13px;
+  --km-fs-cap:           12px;
+  --km-fs-micro:         11px;
+  --km-fs-kpi:           34px;
+  --km-fs-kpi-sm:        31px;
+  --km-fs-mono-sm:       11px;
+
+  --km-ease:             cubic-bezier(0.22, 0.61, 0.36, 1);
+  --km-dur-fast:         140ms;
+  --km-dur:              160ms;
+}
+
+/* Glass panel utility class */
+.km-panel {
+  background: var(--km-panel);
+  backdrop-filter: var(--km-blur);
+  -webkit-backdrop-filter: var(--km-blur);
+  border: 1px solid var(--km-border);
+  border-radius: var(--km-r-panel);
+  box-shadow: var(--km-shadow-panel);
+}
+
+@keyframes km-pulse {
+  0%, 100% { opacity: .55; transform: scale(1); }
+  50%       { opacity: 1;   transform: scale(1.25); }
 }
