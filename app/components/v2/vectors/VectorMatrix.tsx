@@ -45,13 +45,13 @@ export function VectorMatrix({
   onLoadMore: () => void
 }) {
   return (
-    <section className={styles.matrixPanel} aria-label="Vector matrix">
+    <section className={styles.matrixPanel} aria-label="22D 벡터 매트릭스">
       <div className={styles.sectionHeader}>
         <div>
           <p>VECTOR MATRIX</p>
           <h1>엔티티 × 22D 팩터</h1>
         </div>
-        <span>{visibleEntities.length}/{totalEntities} rows · limit {rowLimit}</span>
+        <span>{visibleEntities.length}/{totalEntities}개 표시 · 현재 {rowLimit}개 제한</span>
       </div>
       <VectorMatrixToolbar
         query={query}
@@ -65,7 +65,7 @@ export function VectorMatrix({
         <table className={styles.matrixTable}>
           <thead>
             <tr>
-              <th className={styles.entityCol}>Entity</th>
+              <th className={styles.entityCol}>엔티티</th>
               {factors.map((factor) => (
                 <th key={factor.key} data-selected={selectedFactorKey === factor.key}>
                   <button type="button" onClick={() => onSelectFactor(factor.key)} title={`${factor.label} · ${factor.key}`}>
@@ -93,7 +93,7 @@ export function VectorMatrix({
       </div>
       <div className={styles.matrixFooter}>
         <span>Null은 대시로 표시하며 0과 구분합니다. 색상은 값 강도 보조표현입니다.</span>
-        {canLoadMore && <button type="button" onClick={onLoadMore}>Load more rows</button>}
+        {canLoadMore && <button type="button" onClick={onLoadMore}>더 보기</button>}
       </div>
     </section>
   )

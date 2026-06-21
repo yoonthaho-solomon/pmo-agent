@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react'
+﻿import type { CSSProperties } from 'react'
 import type { MatrixCell, MatrixRow } from '@/lib/adapters/ingestion'
 import { Panel } from '../primitives/Panel'
 import { IngestionCell } from './IngestionCell'
@@ -22,9 +22,9 @@ export function IngestionMatrix({
     <Panel className={styles.matrixPanel}>
       <div className={styles.panelHeader}>
         <div>
-          <div className={styles.sectionKicker}>Ingestion matrix</div>
-          <h1>Data connection map</h1>
-          <p>Read-only view of which dates have call cards, driver logs, match results, and meter baseline tables.</p>
+          <div className={styles.sectionKicker}>INGESTION MATRIX</div>
+          <h1>날짜별 적재 연결 상태</h1>
+          <p>호출데이터, 기사 로그, 매칭 결과, 앱미터 기준 데이터가 어떤 날짜까지 연결됐는지 읽기 전용으로 확인합니다.</p>
         </div>
         <div className={styles.legend}>
           {Object.entries(STATUS_META).map(([key, meta]) => (
@@ -34,7 +34,7 @@ export function IngestionMatrix({
       </div>
 
       <div className={styles.matrix} style={{ '--date-count': dates.length || 1 } as CSSProperties}>
-        <div className={styles.corner}>Dataset</div>
+        <div className={styles.corner}>데이터</div>
         {dates.map((date) => (
           <div key={date} className={styles.dateHead} data-related={selectedCell?.date === date}>{date.slice(5)}</div>
         ))}

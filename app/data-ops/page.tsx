@@ -1,14 +1,9 @@
-import { AppShell } from '@/app/components/v2/shell/AppShell'
-import { DataOpsView } from './DataOpsView'
+﻿import { DataOpsWorkspace } from '@/app/components/v2/data-ops/DataOpsWorkspace'
 
 export const metadata = {
-  title: 'KONAMOBILITY — 데이터 운영',
+  title: 'KONAMOBILITY 데이터 운영',
 }
 
 export default function DataOpsPage() {
-  return (
-    <AppShell>
-      <DataOpsView />
-    </AppShell>
-  )
+  return <DataOpsWorkspace />
 }

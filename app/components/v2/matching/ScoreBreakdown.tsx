@@ -1,4 +1,4 @@
-import type { MatchingCandidateModel, MatchingStudioModel } from '@/lib/matching-studio-model'
+﻿import type { MatchingCandidateModel, MatchingStudioModel } from '@/lib/matching-studio-model'
 import { formatPercent, formatRatioPercent, formatScore } from './formatters'
 import styles from './matchingStudio.module.css'
 

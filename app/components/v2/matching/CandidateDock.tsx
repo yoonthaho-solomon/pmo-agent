@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import type { MatchingCandidateModel } from '@/lib/matching-studio-model'
 import { formatPercent, formatScore } from './formatters'
@@ -22,7 +22,7 @@ export function CandidateDock({
       <aside className={styles.candidateDock}>
         <p className={styles.eyebrow}>CANDIDATE DOCK</p>
         <h2>재계산 필요</h2>
-        <p className={styles.muted}>출발지 또는 도착지가 변경되었습니다. 시나리오 Top 10을 다시 계산해야 후보와 Evidence를 볼 수 있습니다.</p>
+        <p className={styles.muted}>출발지 또는 도착지가 변경되었습니다. 시나리오 Top 10을 다시 계산해야 후보와 추천 근거를 볼 수 있습니다.</p>
       </aside>
     )
   }
@@ -42,7 +42,7 @@ export function CandidateDock({
       <aside className={styles.candidateDock}>
         <p className={styles.eyebrow}>CANDIDATE DOCK</p>
         <h2>시나리오 계산 실패</h2>
-        <p className={styles.muted}>출발지·도착지 또는 서버 상태를 확인한 후 다시 계산해 주세요. 이전 후보와 Evidence는 표시하지 않습니다.</p>
+        <p className={styles.muted}>출발지·도착지 또는 서버 상태를 확인한 후 다시 계산해 주세요. 이전 후보와 추천 근거는 표시하지 않습니다.</p>
       </aside>
     )
   }
@@ -62,7 +62,7 @@ export function CandidateDock({
       <div className={styles.dockHeader}>
         <div>
           <p className={styles.eyebrow}>CANDIDATE DOCK</p>
-          <h2>{state === 'ready' ? '시나리오 Top 10' : 'Top 10 분석 후보'}</h2>
+          <h2>{state === 'ready' ? '시나리오 Top 10' : 'Top 10 우선 후보'}</h2>
         </div>
         <span>{candidates.length}명</span>
       </div>

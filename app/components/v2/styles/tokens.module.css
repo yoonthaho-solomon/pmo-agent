@@ -1,4 +1,4 @@
-/* V2 design tokens — all values derived from the 2026 renewal --km-* system.
+﻿/* V2 design tokens ??all values derived from the 2026 renewal --km-* system.
    Components reference --km-v2-* here; the underlying values match the mockups. */
 .root {
   color-scheme: dark;
@@ -19,6 +19,7 @@
 
   /* ---- Text ---- */
   --km-v2-text-primary:      var(--km-text-hi);            /* #e8edf6 */
+  --km-v2-text-strong:       var(--km-text-hi);
   --km-v2-text-secondary:    var(--km-text-mid);           /* #9aa7bd */
   --km-v2-text-muted:        var(--km-text-dim);           /* #8b98ae */
   --km-v2-text-disabled:     var(--km-text-faint);         /* #7c89a0 */

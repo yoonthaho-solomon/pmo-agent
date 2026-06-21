@@ -1,4 +1,4 @@
-import type { IngestionStatus } from '@/lib/adapters/ingestion'
+﻿import type { IngestionStatus } from '@/lib/adapters/ingestion'
 
 export const STATUS_META: Record<IngestionStatus, { label: string; color: string }> = {
   healthy: { label: '검증 완료', color: 'var(--km-v2-green)' },

@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import type { CSSProperties } from 'react'
 import type { DataSourceId, SourceCard } from '@/lib/adapters/ingestion'
@@ -18,7 +18,7 @@ export function SourceRail({
   return (
     <Panel className={styles.sourceRail}>
       <div className={styles.sectionKicker}>Data sources</div>
-      <h2 className={styles.railTitle}>Readiness filter</h2>
+      <h2 className={styles.railTitle}>적재 범위</h2>
       <div className={styles.sourceList}>
         {sources.map((source) => (
           <button

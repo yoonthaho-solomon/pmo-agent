@@ -1,14 +1,14 @@
-'use client'
+﻿'use client'
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import styles from '../styles/primitives.module.css'
 
 export const v2Workspaces = [
-  { id: 'data-ops',        label: '데이터 운영',    href: '/data-ops' },
+  { id: 'data-ops', label: '데이터 운영', href: '/data-ops' },
   { id: 'vector-workbench', label: '벡터 워크벤치', href: '/vector-workbench' },
-  { id: 'matching-studio', label: '매칭 스튜디오',  href: '/matching-studio' },
-  { id: 'dispatch-logic',  label: '배차 로직',      href: '/dispatch-logic' },
+  { id: 'matching-studio', label: '매칭 스튜디오', href: '/matching-studio' },
+  { id: 'dispatch-logic', label: '배차 로직', href: '/dispatch-logic' },
 ] as const
 
 export function WorkspaceTabs() {

@@ -1,4 +1,4 @@
-import type { ScenarioPointInput } from '@/lib/adapters/matching'
+﻿import type { ScenarioPointInput } from '@/lib/adapters/matching'
 import type { GoogleMapsGlobal } from '@/lib/google-maps/client-loader'
 import type { MatchingCallcardModel } from '@/lib/matching-studio-model'
 import type { ScenarioStatus } from './useMatchingStudio'
@@ -60,8 +60,8 @@ export function CallBuilder({
     <aside className={styles.callBuilder} aria-label="콜카드 입력 패널">
       <div>
         <p className={styles.eyebrow}>CALL BUILDER</p>
-        <h2>콜카드 위치 선택</h2>
-        <p className={styles.muted}>기존 콜카드의 22D 성향 벡터는 유지하고, 출발·도착 H3만 바꿔 시나리오 Top 10을 계산합니다.</p>
+        <h2>콜카드 조건</h2>
+        <p className={styles.muted}>기존 콜카드의 22D 성향 벡터는 유지하고, 출발지·도착지 H3를 바꿔 Top 10 후보를 다시 계산합니다.</p>
       </div>
 
       <label className={styles.field}>
@@ -130,7 +130,7 @@ export function CallBuilder({
           <button type="button" onClick={onClearScenario}>원본 위치</button>
         </div>
         {scenarioStatus === 'dirty' ? <p className={styles.formNotice}>시나리오 재계산이 필요합니다.</p> : null}
-        {hasScenarioInput && !canRunScenario ? <p className={styles.formNotice}>출발지와 도착지는 검색 결과에서 선택해야 계산할 수 있습니다.</p> : null}
+        {hasScenarioInput && !canRunScenario ? <p className={styles.formNotice}>출발지와 도착지를 검색 결과에서 모두 선택해야 계산할 수 있습니다.</p> : null}
         {scenarioError ? <p className={styles.formError}>{scenarioError}</p> : null}
       </div>
 

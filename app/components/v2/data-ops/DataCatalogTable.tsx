@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useMemo, useState } from 'react'
 import type { CatalogItem, DataSourceId, MatrixRow } from '@/lib/adapters/ingestion'
@@ -11,6 +11,20 @@ const INITIAL_FILTERS: CatalogFilters = {
   category: 'all',
   status: 'all',
   availableOnly: false,
+}
+
+function categoryLabel(value: string) {
+  if (value === 'call') return '호출'
+  if (value === 'driver') return '기사'
+  if (value === 'matching') return '매칭'
+  if (value === 'meter') return '앱미터'
+  return value
+}
+
+function statusText(value: string, availability: number | null) {
+  if (value === 'available') return availability == null ? '사용 가능' : `${availability}%`
+  if (value === 'partial') return '부분 가능'
+  return '미지원'
 }
 
 export function DataCatalogTable({
@@ -50,8 +64,8 @@ export function DataCatalogTable({
     <Panel className={styles.catalog}>
       <div className={styles.panelHeader}>
         <div>
-          <div className={styles.sectionKicker}>Data catalog</div>
-          <h2>What this project can extract from loaded data</h2>
+          <div className={styles.sectionKicker}>DATA CATALOG</div>
+          <h2>적재 데이터로 만들 수 있는 매칭 팩터</h2>
         </div>
       </div>
       <DataCatalogToolbar items={sourceFiltered} filters={filters} onChange={setFilters} />
@@ -59,29 +73,29 @@ export function DataCatalogTable({
         <table className={styles.catalogTable}>
           <thead>
             <tr>
-              <th>Category</th>
-              <th>Data product</th>
-              <th>Fields</th>
-              <th>Tables</th>
-              <th>Availability</th>
+              <th>구분</th>
+              <th>활용 항목</th>
+              <th>필드</th>
+              <th>테이블</th>
+              <th>상태</th>
             </tr>
           </thead>
           <tbody>
             {visibleItems.map((item) => (
               <tr key={item.id}>
-                <td>{item.group}</td>
+                <td>{categoryLabel(item.group)}</td>
                 <td>
                   <strong>{item.title}</strong>
                   <span>{item.description}</span>
                 </td>
                 <td>{item.fields.join(', ')}</td>
                 <td>{item.tables.join(', ')}</td>
-                <td><b data-status={item.status}>{item.availability == null ? '-' : `${item.availability}%`}</b></td>
+                <td><b data-status={item.status}>{statusText(item.status, item.availability)}</b></td>
               </tr>
             ))}
           </tbody>
         </table>
-        {visibleItems.length === 0 && <div className={styles.emptyText}>No catalog items match this filter.</div>}
+        {visibleItems.length === 0 && <div className={styles.emptyText}>조건에 맞는 데이터 항목이 없습니다.</div>}
       </div>
     </Panel>
   )

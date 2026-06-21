@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import type { CSSProperties } from 'react'
 import type { MatrixCell } from '@/lib/adapters/ingestion'
@@ -28,7 +28,7 @@ export function IngestionCell({
       onClick={() => onSelect(cell.id)}
       type="button"
       style={{ '--cell-color': meta.color } as CSSProperties}
-      aria-label={`${cell.date} ${cell.table} ${statusLabel(cell.status)} ${numberLabel(cell.count)} rows`}
+      aria-label={`${cell.date} ${cell.table} ${statusLabel(cell.status)} ${numberLabel(cell.count)}건`}
     >
       <span>{numberLabel(cell.count)}</span>
       <small>{statusLabel(cell.status)}</small>

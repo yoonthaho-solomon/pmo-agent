@@ -1,4 +1,4 @@
-import type { IngestionViewModel } from '@/lib/adapters/ingestion'
+﻿import type { IngestionViewModel } from '@/lib/adapters/ingestion'
 import { Button } from '../primitives/Button'
 import { Panel } from '../primitives/Panel'
 import { numberLabel } from './formatters'
@@ -8,22 +8,22 @@ export function DataOpsSummaryBar({ model, onRefresh }: { model: IngestionViewMo
   return (
     <Panel className={styles.summary}>
       <div>
-        <span>Loaded period</span>
+        <span>적재 기간</span>
         <strong>{model.period}</strong>
       </div>
       <div>
-        <span>Data present days</span>
+        <span>데이터 확인일</span>
         <strong>{numberLabel(model.kpis.presentDays)}</strong>
       </div>
       <div>
-        <span>Missing days</span>
+        <span>누락일</span>
         <strong>{numberLabel(model.kpis.missingDays)}</strong>
       </div>
       <div>
-        <span>Core tables present</span>
+        <span>핵심 테이블</span>
         <strong>{model.kpis.coreTablesPresent}/{model.kpis.coreTablesTotal}</strong>
       </div>
-      <Button onClick={onRefresh}>Refresh</Button>
+      <Button onClick={onRefresh}>새로고침</Button>
     </Panel>
   )
 }

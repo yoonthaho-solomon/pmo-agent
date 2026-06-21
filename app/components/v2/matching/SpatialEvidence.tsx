@@ -1,4 +1,4 @@
-import type { MatchingCallcardModel, MatchingCandidateModel } from '@/lib/matching-studio-model'
+﻿import type { MatchingCallcardModel, MatchingCandidateModel } from '@/lib/matching-studio-model'
 import { compactH3, formatPercent } from './formatters'
 import styles from './matchingStudio.module.css'
 
