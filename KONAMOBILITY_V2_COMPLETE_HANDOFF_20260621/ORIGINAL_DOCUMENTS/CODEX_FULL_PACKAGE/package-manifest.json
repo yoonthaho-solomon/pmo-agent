@@ -1,0 +1,33 @@
+{
+  "package": "KONAMOBILITY_V2_CODEX_FULL_PACKAGE",
+  "reference_images": [
+    "01_DATA_OPS_CONSOLE_REFERENCE.png",
+    "02_VECTOR_WORKBENCH_REFERENCE.png",
+    "03_MATCHING_STUDIO_REFERENCE.png"
+  ],
+  "documents": [
+    "00_CODEX_MASTER_PROMPT.md",
+    "01_PRODUCT_SCOPE.md",
+    "02_FRONTEND_ARCHITECTURE.md",
+    "03_WIREFRAME_LAYOUT_SPEC.md",
+    "04_DESIGN_SYSTEM.md",
+    "05_COMPONENT_SPEC.md",
+    "06_INTERACTION_MOTION_SPEC.md",
+    "07_MAPBOX_DECKGL_H3_SPEC.md",
+    "08_DATA_API_CONTRACT.md",
+    "09_IMPLEMENTATION_PLAN.md",
+    "10_QA_ACCEPTANCE.md",
+    "11_DO_NOT_CHANGE.md",
+    "12_CODE_REVIEW_PROMPT.md",
+    "OFFICIAL_REFERENCE_NOTES.md",
+    "README_FIRST.md"
+  ],
+  "styles": [
+    "styles/component-primitives.css",
+    "styles/design-tokens.css"
+  ],
+  "scaffolds": [
+    "scaffolds/component-tree.txt",
+    "scaffolds/ui-types.ts"
+  ]
+}

@@ -1,0 +1,188 @@
+﻿{
+    "package":  {
+                    "sourceHead":  "f2b5b2b8ecc83e39423945b9353d54b7f6cb8f60",
+                    "generatedAt":  "2026-06-21",
+                    "name":  "KONAMOBILITY_V2_COMPLETE_HANDOFF_20260621",
+                    "sourceShortHead":  "f2b5b2b"
+                },
+    "project":  {
+                    "purpose":  "AI-priority dispatch matching workspace",
+                    "name":  "pmo-agent",
+                    "product":  "KONAMOBILITY V2"
+                },
+    "repository":  {
+                       "remote":  "https://github.com/yoonthaho-solomon/pmo-agent.git",
+                       "branch":  "feature/konamobility-v2-workspaces"
+                   },
+    "currentState":  {
+                         "releaseQaComplete":  false,
+                         "phase1":  "complete",
+                         "phase5":  "stabilized",
+                         "phase2":  "complete",
+                         "phase6Started":  false,
+                         "phase3":  "complete",
+                         "productionMerged":  false,
+                         "phase4":  "complete"
+                     },
+    "phases":  [
+                   {
+                       "phase":  1,
+                       "status":  "complete",
+                       "commit":  "f0ddbf2"
+                   },
+                   {
+                       "phase":  2,
+                       "status":  "complete",
+                       "commit":  "f0a6d8d"
+                   },
+                   {
+                       "phase":  3,
+                       "status":  "complete",
+                       "commit":  "a981747"
+                   },
+                   {
+                       "phase":  4,
+                       "status":  "complete",
+                       "commit":  "4c3258d"
+                   },
+                   {
+                       "phase":  5,
+                       "status":  "stabilized",
+                       "commit":  "f2b5b2b"
+                   }
+               ],
+    "commits":  [
+                    "f0ddbf2",
+                    "f0a6d8d",
+                    "a981747",
+                    "22f931e",
+                    "655891d",
+                    "4c3258d",
+                    "4df1063",
+                    "72ea008",
+                    "4d836c8",
+                    "f2b5b2b"
+                ],
+    "routes":  [
+                   "/ingest",
+                   "/vectors",
+                   "/simulator",
+                   "/data-ops",
+                   "/vector-workbench",
+                   "/matching-studio"
+               ],
+    "apis":  [
+                 "/api/maps/routes",
+                 "/api/matching-studio/scenario",
+                 "/api/system-status"
+             ],
+    "protectedAreas":  [
+                           "/ingest",
+                           "/vectors",
+                           "/simulator",
+                           "lib/matching-vector.ts",
+                           "lib/h3-match-score.ts",
+                           "Supabase schema"
+                       ],
+    "matchingFormula":  {
+                            "etaIncluded":  false,
+                            "expectedFareIncluded":  false,
+                            "h3SpatialWeight":  0.25,
+                            "cosineWeight":  0.75,
+                            "roadDistanceIncluded":  false
+                        },
+    "vectorDefinition":  {
+                             "dimensions":  22,
+                             "order":  [
+                                           "score_dawn",
+                                           "score_morning",
+                                           "score_daytime",
+                                           "score_night",
+                                           "score_mon",
+                                           "score_tue",
+                                           "score_wed",
+                                           "score_thu",
+                                           "score_fri",
+                                           "score_sat",
+                                           "score_sun",
+                                           "score_short",
+                                           "score_medium",
+                                           "score_long",
+                                           "score_low_fare",
+                                           "score_mid_fare",
+                                           "score_high_fare",
+                                           "score_paid",
+                                           "score_free",
+                                           "score_surge",
+                                           "score_normal",
+                                           "score_near"
+                                       ]
+                         },
+    "h3Semantics":  {
+                        "resolution":  "res7 where applicable",
+                        "driverPreferredH3":  "historical preference, not live GPS"
+                    },
+    "googleCloud":  {
+                        "valuesIncluded":  false,
+                        "project":  "KONAMOBILITY-PMO-MAPS",
+                        "apis":  [
+                                     "Maps JavaScript API",
+                                     "Places API (New)",
+                                     "Routes API"
+                                 ]
+                    },
+    "environmentVariables":  [
+                                 "NEXT_PUBLIC_SUPABASE_URL",
+                                 "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+                                 "SUPABASE_URL",
+                                 "SUPABASE_ANON_KEY",
+                                 "SUPABASE_SERVICE_ROLE_KEY",
+                                 "NEXT_PUBLIC_GOOGLE_MAPS_API_KEY",
+                                 "NEXT_PUBLIC_GOOGLE_MAP_ID",
+                                 "GOOGLE_MAPS_SERVER_API_KEY",
+                                 "OPENAI_API_KEY"
+                             ],
+    "designDirection":  {
+                            "style":  "dark ops workspace; map-first; high readability",
+                            "brand":  "KONAMOBILITY"
+                        },
+    "resources":  [
+
+                  ],
+    "taskRequests":  [
+
+                     ],
+    "pendingReleaseTasks":  [
+                                "Full visual QA",
+                                "Clean build outside Windows EPERM issue",
+                                "Production auth/rate limit",
+                                "Google key restrictions",
+                                "Production smoke and rollback"
+                            ],
+    "knownIssues":  [
+                        "Windows Next.js 16 .next/trace EPERM or timeout",
+                        "Vercel protected preview 401 is not build failure"
+                    ],
+    "validation":  {
+                       "productionReady":  false,
+                       "packageGenerated":  true
+                   },
+    "security":  {
+                     "serviceRoleServerOnly":  true,
+                     "productionAuthRateLimitComplete":  false,
+                     "secretsIncluded":  false
+                 },
+    "preview":  {
+                    "url":  "https://pmo-agent-q1vrtld8f-yoonthaho-solomons-projects.vercel.app",
+                    "branchAlias":  "https://pmo-agent-git-feature-konamo-19d15f-yoonthaho-solomons-projects.vercel.app",
+                    "protectedAuthMayReturn401":  true
+                },
+    "recovery":  {
+                     "sourceZip":  "SOURCE/KONAMOBILITY_V2_SOURCE_SNAPSHOT_f2b5b2b.zip",
+                     "gitBundle":  "SOURCE/KONAMOBILITY_V2_SOURCE_f2b5b2b.bundle"
+                 },
+    "nextAction":  {
+                       "type":  "Release QA",
+                       "newFeatureDevelopment":  false
+                   }
+}

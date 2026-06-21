@@ -1,0 +1,1474 @@
+﻿diff --git a/app/components/v2/data-ops/DataCatalogTable.tsx b/app/components/v2/data-ops/DataCatalogTable.tsx
+new file mode 100644
+index 0000000..5a9090a
+--- /dev/null
++++ b/app/components/v2/data-ops/DataCatalogTable.tsx
+@@ -0,0 +1,88 @@
++'use client'
++
++import { useMemo, useState } from 'react'
++import type { CatalogItem, DataSourceId, MatrixRow } from '@/lib/adapters/ingestion'
++import { Panel } from '../primitives/Panel'
++import { DataCatalogToolbar, type CatalogFilters } from './DataCatalogToolbar'
++import styles from './dataOps.module.css'
++
++const INITIAL_FILTERS: CatalogFilters = {
++  search: '',
++  category: 'all',
++  status: 'all',
++  availableOnly: false,
++}
++
++export function DataCatalogTable({
++  items,
++  rows,
++  selectedSourceId,
++}: {
++  items: CatalogItem[]
++  rows: MatrixRow[]
++  selectedSourceId: DataSourceId
++}) {
++  const [filters, setFilters] = useState<CatalogFilters>(INITIAL_FILTERS)
++
++  const sourceFiltered = useMemo(() => {
++    if (selectedSourceId === 'all') return items
++    return items.filter((item) => item.tables.some((table) => rows.find((row) => row.table === table)?.sourceId === selectedSourceId))
++  }, [items, rows, selectedSourceId])
++
++  const visibleItems = useMemo(() => {
++    const query = filters.search.trim().toLowerCase()
++    return sourceFiltered.filter((item) => {
++      if (filters.category !== 'all' && item.group !== filters.category) return false
++      if (filters.status !== 'all' && item.status !== filters.status) return false
++      if (filters.availableOnly && item.status !== 'available') return false
++      if (!query) return true
++      return [
++        item.title,
++        item.group,
++        item.description,
++        ...item.fields,
++        ...item.tables,
++      ].some((value) => value.toLowerCase().includes(query))
++    })
++  }, [filters, sourceFiltered])
++
++  return (
++    <Panel className={styles.catalog}>
++      <div className={styles.panelHeader}>
++        <div>
++          <div className={styles.sectionKicker}>Data catalog</div>
++          <h2>What this project can extract from loaded data</h2>
++        </div>
++      </div>
++      <DataCatalogToolbar items={sourceFiltered} filters={filters} onChange={setFilters} />
++      <div className={styles.catalogTableWrap}>
++        <table className={styles.catalogTable}>
++          <thead>
++            <tr>
++              <th>Category</th>
++              <th>Data product</th>
++              <th>Fields</th>
++              <th>Tables</th>
++              <th>Availability</th>
++            </tr>
++          </thead>
++          <tbody>
++            {visibleItems.map((item) => (
++              <tr key={item.id}>
++                <td>{item.group}</td>
++                <td>
++                  <strong>{item.title}</strong>
++                  <span>{item.description}</span>
++                </td>
++                <td>{item.fields.join(', ')}</td>
++                <td>{item.tables.join(', ')}</td>
++                <td><b data-status={item.status}>{item.availability == null ? '-' : `${item.availability}%`}</b></td>
++              </tr>
++            ))}
++          </tbody>
++        </table>
++        {visibleItems.length === 0 && <div className={styles.emptyText}>No catalog items match this filter.</div>}
++      </div>
++    </Panel>
++  )
++}
+diff --git a/app/components/v2/data-ops/DataCatalogToolbar.tsx b/app/components/v2/data-ops/DataCatalogToolbar.tsx
+new file mode 100644
+index 0000000..9a2b13d
+--- /dev/null
++++ b/app/components/v2/data-ops/DataCatalogToolbar.tsx
+@@ -0,0 +1,57 @@
++'use client'
++
++import type { CatalogItem } from '@/lib/adapters/ingestion'
++import styles from './dataOps.module.css'
++
++export type CatalogFilters = {
++  search: string
++  category: string
++  status: string
++  availableOnly: boolean
++}
++
++export function DataCatalogToolbar({
++  items,
++  filters,
++  onChange,
++}: {
++  items: CatalogItem[]
++  filters: CatalogFilters
++  onChange: (filters: CatalogFilters) => void
++}) {
++  const categories = ['all', ...Array.from(new Set(items.map((item) => item.group)))]
++  const statuses = ['all', 'available', 'partial', 'unavailable']
++
++  return (
++    <div className={styles.catalogToolbar}>
++      <input
++        aria-label="Catalog search"
++        placeholder="Search fields, tables, products"
++        value={filters.search}
++        onChange={(event) => onChange({ ...filters, search: event.target.value })}
++      />
++      <select
++        aria-label="Catalog category"
++        value={filters.category}
++        onChange={(event) => onChange({ ...filters, category: event.target.value })}
++      >
++        {categories.map((category) => <option key={category} value={category}>{category}</option>)}
++      </select>
++      <select
++        aria-label="Catalog status"
++        value={filters.status}
++        onChange={(event) => onChange({ ...filters, status: event.target.value })}
++      >
++        {statuses.map((status) => <option key={status} value={status}>{status}</option>)}
++      </select>
++      <label>
++        <input
++          type="checkbox"
++          checked={filters.availableOnly}
++          onChange={(event) => onChange({ ...filters, availableOnly: event.target.checked })}
++        />
++        Available only
++      </label>
++    </div>
++  )
++}
+diff --git a/app/components/v2/data-ops/DataInspector.tsx b/app/components/v2/data-ops/DataInspector.tsx
+new file mode 100644
+index 0000000..84179a4
+--- /dev/null
++++ b/app/components/v2/data-ops/DataInspector.tsx
+@@ -0,0 +1,26 @@
++import type { MatrixCell } from '@/lib/adapters/ingestion'
++import { Panel } from '../primitives/Panel'
++import { numberLabel } from './formatters'
++import { statusLabel } from './statusMeta'
++import styles from './dataOps.module.css'
++
++export function DataInspector({ cell }: { cell: MatrixCell | null }) {
++  return (
++    <Panel className={styles.inspector}>
++      <div className={styles.sectionKicker}>Inspector</div>
++      <h2>{cell ? cell.date : 'Select a cell'}</h2>
++      {cell ? (
++        <div className={styles.inspectorBody}>
++          <dl>
++            <div><dt>Dataset</dt><dd>{cell.table}</dd></div>
++            <div><dt>Status</dt><dd>{statusLabel(cell.status)}</dd></div>
++            <div><dt>Rows</dt><dd>{numberLabel(cell.count)}</dd></div>
++            <div><dt>Reason</dt><dd>{cell.reason}</dd></div>
++          </dl>
++        </div>
++      ) : (
++        <p className={styles.emptyText}>Click a date cell to inspect the source table, count, and status reason.</p>
++      )}
++    </Panel>
++  )
++}
+diff --git a/app/components/v2/data-ops/DataOpsSummaryBar.tsx b/app/components/v2/data-ops/DataOpsSummaryBar.tsx
+new file mode 100644
+index 0000000..fe70f06
+--- /dev/null
++++ b/app/components/v2/data-ops/DataOpsSummaryBar.tsx
+@@ -0,0 +1,29 @@
++import type { IngestionViewModel } from '@/lib/adapters/ingestion'
++import { Button } from '../primitives/Button'
++import { Panel } from '../primitives/Panel'
++import { numberLabel } from './formatters'
++import styles from './dataOps.module.css'
++
++export function DataOpsSummaryBar({ model, onRefresh }: { model: IngestionViewModel; onRefresh: () => void }) {
++  return (
++    <Panel className={styles.summary}>
++      <div>
++        <span>Loaded period</span>
++        <strong>{model.period}</strong>
++      </div>
++      <div>
++        <span>Data present days</span>
++        <strong>{numberLabel(model.kpis.presentDays)}</strong>
++      </div>
++      <div>
++        <span>Missing days</span>
++        <strong>{numberLabel(model.kpis.missingDays)}</strong>
++      </div>
++      <div>
++        <span>Core tables present</span>
++        <strong>{model.kpis.coreTablesPresent}/{model.kpis.coreTablesTotal}</strong>
++      </div>
++      <Button onClick={onRefresh}>Refresh</Button>
++    </Panel>
++  )
++}
+diff --git a/app/components/v2/data-ops/DataOpsWorkspace.tsx b/app/components/v2/data-ops/DataOpsWorkspace.tsx
+index 521d1a9..c698626 100644
+--- a/app/components/v2/data-ops/DataOpsWorkspace.tsx
++++ b/app/components/v2/data-ops/DataOpsWorkspace.tsx
+@@ -1,242 +1,64 @@
+ 'use client'
+ 
+-import { useEffect, useMemo, useState } from 'react'
+-import type { CSSProperties } from 'react'
+-import { adaptIngestionSummary, type DataSourceId, type IngestionStatus, type MatrixCell, type SystemStatusResponse } from '@/lib/adapters/ingestion'
++import { useMemo, useState } from 'react'
++import type { DataSourceId, MatrixCell } from '@/lib/adapters/ingestion'
+ import { AppShell } from '../shell/AppShell'
+-import { QueryStateBoundary, type V2QueryStatus } from '../shell/QueryStateBoundary'
+-import { Button } from '../primitives/Button'
+-import { Panel } from '../primitives/Panel'
++import { QueryStateBoundary } from '../shell/QueryStateBoundary'
++import { DataCatalogTable } from './DataCatalogTable'
++import { DataInspector } from './DataInspector'
++import { DataOpsSummaryBar } from './DataOpsSummaryBar'
++import { IngestionMatrix } from './IngestionMatrix'
++import { SourceRail } from './SourceRail'
++import { useDataOpsStatus } from './useDataOpsStatus'
+ import styles from './dataOps.module.css'
+ 
+-const STATUS_META: Record<IngestionStatus, { label: string; color: string }> = {
+-  healthy: { label: 'Ready', color: 'var(--km-v2-green)' },
+-  partial: { label: 'Partial', color: 'var(--km-v2-amber)' },
+-  missing: { label: 'Missing', color: 'var(--km-v2-red)' },
+-  pending: { label: 'Checking', color: 'rgba(145, 183, 207, 0.72)' },
+-}
+-
+-function numberLabel(value: number | null | undefined) {
+-  return value == null ? '-' : value.toLocaleString('ko-KR')
+-}
+-
+-function statusLabel(status: IngestionStatus) {
+-  return STATUS_META[status].label
+-}
+-
+ export function DataOpsWorkspace() {
+-  const [rawStatus, setRawStatus] = useState<SystemStatusResponse | null>(null)
+-  const [queryStatus, setQueryStatus] = useState<V2QueryStatus>('loading')
+-  const [errorMessage, setErrorMessage] = useState<string | undefined>()
++  const { model, queryStatus, errorMessage, retry } = useDataOpsStatus()
+   const [selectedSourceId, setSelectedSourceId] = useState<DataSourceId>('all')
+   const [selectedCellId, setSelectedCellId] = useState<string | null>(null)
+-  const [retryKey, setRetryKey] = useState(0)
+-
+-  useEffect(() => {
+-    let cancelled = false
+-
+-    async function loadStatus() {
+-      setQueryStatus('loading')
+-      setErrorMessage(undefined)
+-      const controller = new AbortController()
+-      const timer = window.setTimeout(() => controller.abort(), 10000)
+-
+-      try {
+-        const response = await fetch('/api/system-status', { cache: 'no-store', signal: controller.signal })
+-        const json = await response.json() as SystemStatusResponse
+-        if (cancelled) return
+-
+-        setRawStatus(json)
+-        if (!response.ok || json.error) {
+-          setQueryStatus('error')
+-          setErrorMessage(json.error ?? `Status API failed with ${response.status}`)
+-        } else if (!json.callTables?.length && !json.meterTables?.length && !json.vectorTables?.length) {
+-          setQueryStatus('empty')
+-        } else if (json.ok === false) {
+-          setQueryStatus('partial')
+-          setErrorMessage(json.message)
+-        } else {
+-          setQueryStatus('success')
+-        }
+-      } catch (error) {
+-        if (cancelled) return
+-        setRawStatus(null)
+-        setQueryStatus('error')
+-        setErrorMessage(error instanceof Error && error.name === 'AbortError'
+-          ? 'Status API timed out.'
+-          : 'Could not load ingestion status.')
+-      } finally {
+-        window.clearTimeout(timer)
+-      }
+-    }
+ 
+-    loadStatus()
+-    return () => {
+-      cancelled = true
+-    }
+-  }, [retryKey])
+-
+-  const model = useMemo(() => rawStatus ? adaptIngestionSummary(rawStatus) : null, [rawStatus])
+   const visibleRows = useMemo(() => {
+     if (!model) return []
+     return selectedSourceId === 'all'
+       ? model.rows
+       : model.rows.filter((row) => row.sourceId === selectedSourceId)
+   }, [model, selectedSourceId])
++
+   const visibleCells = useMemo(() => {
+     if (!model) return []
+     return selectedSourceId === 'all'
+       ? model.cells
+       : model.cells.filter((cell) => cell.sourceId === selectedSourceId)
+   }, [model, selectedSourceId])
++
+   const selectedCell = useMemo<MatrixCell | null>(() => {
+     if (!model || !selectedCellId) return null
+     return model.cells.find((cell) => cell.id === selectedCellId) ?? null
+   }, [model, selectedCellId])
+-  const visibleCatalog = useMemo(() => {
+-    if (!model) return []
+-    if (selectedSourceId === 'all') return model.catalog
+-    return model.catalog.filter((item) => item.tables.some((table) => {
+-      const source = model.rows.find((row) => row.table === table)?.sourceId
+-      return source === selectedSourceId
+-    }))
+-  }, [model, selectedSourceId])
+ 
+   return (
+     <AppShell>
+       <QueryStateBoundary status={queryStatus} message={errorMessage}>
+         {model && (
+           <div className={styles.layout}>
+-            <Panel className={styles.sourceRail}>
+-              <div className={styles.sectionKicker}>Data sources</div>
+-              <h2 className={styles.railTitle}>Readiness filter</h2>
+-              <div className={styles.sourceList}>
+-                {model.sources.map((source) => (
+-                  <button
+-                    key={source.id}
+-                    className={styles.sourceButton}
+-                    data-selected={selectedSourceId === source.id}
+-                    onClick={() => {
+-                      setSelectedSourceId(source.id)
+-                      setSelectedCellId(null)
+-                    }}
+-                    type="button"
+-                  >
+-                    <span className={styles.sourceTop}>
+-                      <span>{source.title}</span>
+-                      <span className={styles.statusDot} style={{ '--status-color': STATUS_META[source.status].color } as CSSProperties} />
+-                    </span>
+-                    <strong>{source.countLabel}</strong>
+-                    <span>{source.dateRange}</span>
+-                    <small>{source.description}</small>
+-                  </button>
+-                ))}
+-              </div>
+-            </Panel>
+-
+-            <Panel className={styles.summary}>
+-              <div>
+-                <span>Loaded period</span>
+-                <strong>{model.period}</strong>
+-              </div>
+-              <div>
+-                <span>Ready days</span>
+-                <strong>{numberLabel(model.kpis.loadedDays)}</strong>
+-              </div>
+-              <div>
+-                <span>Missing days</span>
+-                <strong>{numberLabel(model.kpis.missingDays)}</strong>
+-              </div>
+-              <div>
+-                <span>Core tables</span>
+-                <strong>{model.kpis.coreTablesReady}/{model.kpis.coreTablesTotal}</strong>
+-              </div>
+-              <Button onClick={() => setRetryKey((key) => key + 1)}>Refresh</Button>
+-            </Panel>
+-
+-            <Panel className={styles.matrixPanel}>
+-              <div className={styles.panelHeader}>
+-                <div>
+-                  <div className={styles.sectionKicker}>Ingestion matrix</div>
+-                  <h1>Daily data connection map</h1>
+-                  <p>Read-only view of which dates have call cards, driver logs, match results, and meter baseline tables.</p>
+-                </div>
+-                <div className={styles.legend}>
+-                  {Object.entries(STATUS_META).map(([key, meta]) => (
+-                    <span key={key}><i style={{ background: meta.color }} />{meta.label}</span>
+-                  ))}
+-                </div>
+-              </div>
+-
+-              <div className={styles.matrix} style={{ '--date-count': model.dates.length || 1 } as CSSProperties}>
+-                <div className={styles.corner}>Dataset</div>
+-                {model.dates.map((date) => <div key={date} className={styles.dateHead}>{date.slice(5)}</div>)}
+-                {visibleRows.map((row) => (
+-                  <div className={styles.rowGroup} key={row.id}>
+-                    <div className={styles.rowHead}>
+-                      <strong>{row.title}</strong>
+-                      <span>{row.table}</span>
+-                    </div>
+-                    {model.dates.map((date) => {
+-                      const cell = visibleCells.find((item) => item.rowId === row.id && item.date === date)
+-                      const meta = cell ? STATUS_META[cell.status] : STATUS_META.pending
+-                      return (
+-                        <button
+-                          key={`${row.id}-${date}`}
+-                          className={styles.cell}
+-                          data-selected={selectedCellId === cell?.id}
+-                          onClick={() => cell && setSelectedCellId(cell.id)}
+-                          type="button"
+-                          style={{ '--cell-color': meta.color } as CSSProperties}
+-                        >
+-                          <span>{cell ? numberLabel(cell.count) : '-'}</span>
+-                          <small>{cell ? statusLabel(cell.status) : 'Checking'}</small>
+-                        </button>
+-                      )
+-                    })}
+-                  </div>
+-                ))}
+-              </div>
+-            </Panel>
+-
+-            <Panel className={styles.inspector}>
+-              <div className={styles.sectionKicker}>Inspector</div>
+-              <h2>{selectedCell ? selectedCell.date : 'Select a cell'}</h2>
+-              {selectedCell ? (
+-                <div className={styles.inspectorBody}>
+-                  <dl>
+-                    <div><dt>Dataset</dt><dd>{selectedCell.table}</dd></div>
+-                    <div><dt>Status</dt><dd>{statusLabel(selectedCell.status)}</dd></div>
+-                    <div><dt>Rows</dt><dd>{numberLabel(selectedCell.count)}</dd></div>
+-                    <div><dt>Reason</dt><dd>{selectedCell.reason}</dd></div>
+-                  </dl>
+-                </div>
+-              ) : (
+-                <p className={styles.emptyText}>Click a date cell to inspect the source table, count, and status reason.</p>
+-              )}
+-            </Panel>
+-
+-            <Panel className={styles.catalog}>
+-              <div className={styles.panelHeader}>
+-                <div>
+-                  <div className={styles.sectionKicker}>Data catalog</div>
+-                  <h2>What this project can extract from loaded data</h2>
+-                </div>
+-              </div>
+-              <div className={styles.catalogGrid}>
+-                {visibleCatalog.map((item) => (
+-                  <article key={item.id} className={styles.catalogCard} data-status={item.status}>
+-                    <div>
+-                      <span>{item.group}</span>
+-                      <strong>{item.title}</strong>
+-                    </div>
+-                    <p>{item.description}</p>
+-                    <small>{item.fields.join(' · ')}</small>
+-                    <b>{item.availability == null ? '-' : `${item.availability}%`}</b>
+-                  </article>
+-                ))}
+-              </div>
+-            </Panel>
++            <SourceRail
++              sources={model.sources}
++              selectedSourceId={selectedSourceId}
++              onSelect={(sourceId) => {
++                setSelectedSourceId(sourceId)
++                setSelectedCellId(null)
++              }}
++            />
++            <DataOpsSummaryBar model={model} onRefresh={retry} />
++            <IngestionMatrix
++              dates={model.dates}
++              rows={visibleRows}
++              cells={visibleCells}
++              selectedCell={selectedCell}
++              onSelect={setSelectedCellId}
++            />
++            <DataInspector cell={selectedCell} />
++            <DataCatalogTable items={model.catalog} rows={model.rows} selectedSourceId={selectedSourceId} />
+           </div>
+         )}
+       </QueryStateBoundary>
+diff --git a/app/components/v2/data-ops/IngestionCell.tsx b/app/components/v2/data-ops/IngestionCell.tsx
+new file mode 100644
+index 0000000..696c17d
+--- /dev/null
++++ b/app/components/v2/data-ops/IngestionCell.tsx
+@@ -0,0 +1,38 @@
++'use client'
++
++import type { CSSProperties } from 'react'
++import type { MatrixCell } from '@/lib/adapters/ingestion'
++import { numberLabel } from './formatters'
++import { IngestionTooltip } from './IngestionTooltip'
++import { STATUS_META, statusLabel } from './statusMeta'
++import styles from './dataOps.module.css'
++
++export function IngestionCell({
++  cell,
++  selected,
++  related,
++  onSelect,
++}: {
++  cell: MatrixCell
++  selected: boolean
++  related: boolean
++  onSelect: (cellId: string) => void
++}) {
++  const meta = STATUS_META[cell.status]
++  return (
++    <button
++      className={styles.cell}
++      data-selected={selected}
++      data-related={related}
++      data-status={cell.status}
++      onClick={() => onSelect(cell.id)}
++      type="button"
++      style={{ '--cell-color': meta.color } as CSSProperties}
++      aria-label={`${cell.date} ${cell.table} ${statusLabel(cell.status)} ${numberLabel(cell.count)} rows`}
++    >
++      <span>{numberLabel(cell.count)}</span>
++      <small>{statusLabel(cell.status)}</small>
++      <IngestionTooltip cell={cell} />
++    </button>
++  )
++}
+diff --git a/app/components/v2/data-ops/IngestionMatrix.tsx b/app/components/v2/data-ops/IngestionMatrix.tsx
+new file mode 100644
+index 0000000..adcc3ec
+--- /dev/null
++++ b/app/components/v2/data-ops/IngestionMatrix.tsx
+@@ -0,0 +1,67 @@
++import type { CSSProperties } from 'react'
++import type { MatrixCell, MatrixRow } from '@/lib/adapters/ingestion'
++import { Panel } from '../primitives/Panel'
++import { IngestionCell } from './IngestionCell'
++import { STATUS_META } from './statusMeta'
++import styles from './dataOps.module.css'
++
++export function IngestionMatrix({
++  dates,
++  rows,
++  cells,
++  selectedCell,
++  onSelect,
++}: {
++  dates: string[]
++  rows: MatrixRow[]
++  cells: MatrixCell[]
++  selectedCell: MatrixCell | null
++  onSelect: (cellId: string) => void
++}) {
++  return (
++    <Panel className={styles.matrixPanel}>
++      <div className={styles.panelHeader}>
++        <div>
++          <div className={styles.sectionKicker}>Ingestion matrix</div>
++          <h1>Data connection map</h1>
++          <p>Read-only view of which dates have call cards, driver logs, match results, and meter baseline tables.</p>
++        </div>
++        <div className={styles.legend}>
++          {Object.entries(STATUS_META).map(([key, meta]) => (
++            <span key={key} data-disabled={key === 'delayed'}><i style={{ background: meta.color }} />{meta.label}</span>
++          ))}
++        </div>
++      </div>
++
++      <div className={styles.matrix} style={{ '--date-count': dates.length || 1 } as CSSProperties}>
++        <div className={styles.corner}>Dataset</div>
++        {dates.map((date) => (
++          <div key={date} className={styles.dateHead} data-related={selectedCell?.date === date}>{date.slice(5)}</div>
++        ))}
++        {rows.map((row) => (
++          <div className={styles.rowGroup} key={row.id}>
++            <div className={styles.rowHead} data-related={selectedCell?.rowId === row.id}>
++              <strong>{row.title}</strong>
++              <span>{row.table}</span>
++            </div>
++            {dates.map((date) => {
++              const cell = cells.find((item) => item.rowId === row.id && item.date === date)
++              if (!cell) {
++                return <div key={`${row.id}-${date}`} className={styles.cellPlaceholder}>-</div>
++              }
++              return (
++                <IngestionCell
++                  key={cell.id}
++                  cell={cell}
++                  selected={selectedCell?.id === cell.id}
++                  related={selectedCell?.rowId === cell.rowId || selectedCell?.date === cell.date}
++                  onSelect={onSelect}
++                />
++              )
++            })}
++          </div>
++        ))}
++      </div>
++    </Panel>
++  )
++}
+diff --git a/app/components/v2/data-ops/IngestionTooltip.tsx b/app/components/v2/data-ops/IngestionTooltip.tsx
+new file mode 100644
+index 0000000..288d146
+--- /dev/null
++++ b/app/components/v2/data-ops/IngestionTooltip.tsx
+@@ -0,0 +1,15 @@
++import type { MatrixCell } from '@/lib/adapters/ingestion'
++import { numberLabel } from './formatters'
++import { statusLabel } from './statusMeta'
++import styles from './dataOps.module.css'
++
++export function IngestionTooltip({ cell }: { cell: MatrixCell }) {
++  return (
++    <span className={styles.tooltip} role="tooltip">
++      <strong>{cell.date}</strong>
++      <span>{cell.table}</span>
++      <span>{statusLabel(cell.status)} · {numberLabel(cell.count)} rows</span>
++      <small>{cell.reason}</small>
++    </span>
++  )
++}
+diff --git a/app/components/v2/data-ops/SourceRail.tsx b/app/components/v2/data-ops/SourceRail.tsx
+new file mode 100644
+index 0000000..1c69c05
+--- /dev/null
++++ b/app/components/v2/data-ops/SourceRail.tsx
+@@ -0,0 +1,43 @@
++'use client'
++
++import type { CSSProperties } from 'react'
++import type { DataSourceId, SourceCard } from '@/lib/adapters/ingestion'
++import { Panel } from '../primitives/Panel'
++import { STATUS_META } from './statusMeta'
++import styles from './dataOps.module.css'
++
++export function SourceRail({
++  sources,
++  selectedSourceId,
++  onSelect,
++}: {
++  sources: SourceCard[]
++  selectedSourceId: DataSourceId
++  onSelect: (sourceId: DataSourceId) => void
++}) {
++  return (
++    <Panel className={styles.sourceRail}>
++      <div className={styles.sectionKicker}>Data sources</div>
++      <h2 className={styles.railTitle}>Readiness filter</h2>
++      <div className={styles.sourceList}>
++        {sources.map((source) => (
++          <button
++            key={source.id}
++            className={styles.sourceButton}
++            data-selected={selectedSourceId === source.id}
++            onClick={() => onSelect(source.id)}
++            type="button"
++          >
++            <span className={styles.sourceTop}>
++              <span>{source.title}</span>
++              <span className={styles.statusDot} style={{ '--status-color': STATUS_META[source.status].color } as CSSProperties} />
++            </span>
++            <strong>{source.countLabel}</strong>
++            <span>{source.dateRange}</span>
++            <small>{source.description}</small>
++          </button>
++        ))}
++      </div>
++    </Panel>
++  )
++}
+diff --git a/app/components/v2/data-ops/dataOps.module.css b/app/components/v2/data-ops/dataOps.module.css
+index 41b18f7..7dc8581 100644
+--- a/app/components/v2/data-ops/dataOps.module.css
++++ b/app/components/v2/data-ops/dataOps.module.css
+@@ -1,17 +1,19 @@
+ .layout {
+-  min-height: calc(100vh - 116px);
++  height: calc(100vh - 92px);
++  overflow: hidden;
+   display: grid;
+   grid-template-columns: 260px minmax(0, 1fr) 320px;
+-  grid-template-rows: auto minmax(460px, 1fr) auto;
++  grid-template-rows: 112px minmax(360px, 1fr) 260px;
+   gap: 18px;
+ }
+ 
+ .sourceRail {
+   grid-row: 1 / 4;
+-  padding: 22px;
++  padding: 18px;
+   display: flex;
+   flex-direction: column;
+-  gap: 18px;
++  gap: 14px;
++  overflow: auto;
+ }
+ 
+ .summary {
+@@ -20,7 +22,7 @@
+   grid-template-columns: repeat(4, minmax(150px, 1fr)) auto;
+   gap: 14px;
+   align-items: center;
+-  padding: 18px 20px;
++  padding: 14px 20px;
+ }
+ 
+ .summary div {
+@@ -39,7 +41,7 @@
+ 
+ .summary strong {
+   color: var(--km-v2-text-strong);
+-  font-size: clamp(22px, 2vw, 32px);
++  font-size: clamp(20px, 1.7vw, 28px);
+   line-height: 1;
+ }
+ 
+@@ -58,12 +60,12 @@
+ }
+ 
+ .sourceButton {
+-  min-height: 136px;
++  min-height: 112px;
+   border: 1px solid rgba(107, 148, 180, 0.24);
+   border-radius: 18px;
+   background: rgba(10, 16, 28, 0.82);
+   color: var(--km-v2-text);
+-  padding: 16px;
++  padding: 14px;
+   text-align: left;
+   cursor: pointer;
+   display: grid;
+@@ -80,7 +82,7 @@
+ 
+ .sourceButton strong {
+   color: var(--km-v2-text-strong);
+-  font-size: 28px;
++  font-size: 25px;
+   line-height: 1;
+ }
+ 
+@@ -111,7 +113,7 @@
+ 
+ .matrixPanel {
+   min-width: 0;
+-  padding: 24px;
++  padding: 20px 24px;
+   overflow: hidden;
+ }
+ 
+@@ -120,14 +122,14 @@
+   align-items: flex-start;
+   justify-content: space-between;
+   gap: 20px;
+-  margin-bottom: 20px;
++  margin-bottom: 14px;
+ }
+ 
+ .panelHeader h1 {
+   margin: 4px 0 8px;
+   color: var(--km-v2-text-strong);
+-  font-size: clamp(34px, 4vw, 56px);
+-  line-height: 0.96;
++  font-size: clamp(30px, 3vw, 44px);
++  line-height: 1;
+   letter-spacing: -0.04em;
+ }
+ 
+@@ -135,8 +137,8 @@
+   margin: 0;
+   max-width: 760px;
+   color: var(--km-v2-text);
+-  font-size: 18px;
+-  line-height: 1.55;
++  font-size: 16px;
++  line-height: 1.42;
+ }
+ 
+ .legend {
+@@ -156,6 +158,10 @@
+   font-weight: 800;
+ }
+ 
++.legend span[data-disabled='true'] {
++  opacity: 0.45;
++}
++
+ .legend i {
+   width: 10px;
+   height: 10px;
+@@ -165,6 +171,7 @@
+ .matrix {
+   display: grid;
+   grid-template-columns: 188px repeat(var(--date-count, 1), minmax(92px, 1fr));
++  max-height: calc(100% - 104px);
+   overflow: auto;
+   border: 1px solid rgba(107, 148, 180, 0.18);
+   border-radius: 20px;
+@@ -174,11 +181,17 @@
+ .dateHead,
+ .rowHead,
+ .cell {
+-  min-height: 74px;
++  min-height: 54px;
+   border-right: 1px solid rgba(107, 148, 180, 0.14);
+   border-bottom: 1px solid rgba(107, 148, 180, 0.14);
+ }
+ 
++.cell[data-status='unsupported'] {
++  background:
++    repeating-linear-gradient(135deg, rgba(145, 183, 207, 0.12) 0 7px, rgba(7, 12, 22, 0.28) 7px 14px),
++    rgba(8, 14, 25, 0.78);
++}
++
+ .corner,
+ .dateHead {
+   position: sticky;
+@@ -194,6 +207,12 @@
+   place-items: center;
+ }
+ 
++.dateHead[data-related='true'],
++.rowHead[data-related='true'] {
++  color: var(--km-v2-cyan);
++  background: rgba(20, 57, 79, 0.96);
++}
++
+ .corner,
+ .rowHead {
+   position: sticky;
+@@ -207,7 +226,7 @@
+ }
+ 
+ .rowHead {
+-  padding: 14px;
++  padding: 10px 14px;
+   display: grid;
+   align-content: center;
+   gap: 6px;
+@@ -215,7 +234,7 @@
+ 
+ .rowHead strong {
+   color: var(--km-v2-text-strong);
+-  font-size: 17px;
++  font-size: 15px;
+ }
+ 
+ .rowHead span {
+@@ -238,15 +257,21 @@
+ }
+ 
+ .cell:hover,
+-.cell[data-selected='true'] {
++.cell[data-selected='true'],
++.cell[data-related='true'] {
+   transform: scale(1.025);
+   filter: brightness(1.18);
+   outline: 2px solid var(--cell-color);
+   outline-offset: -2px;
+ }
+ 
++.cell[data-related='true']:not([data-selected='true']) {
++  outline-width: 1px;
++  filter: brightness(1.08);
++}
++
+ .cell span {
+-  font-size: 19px;
++  font-size: 17px;
+   font-weight: 900;
+ }
+ 
+@@ -256,8 +281,61 @@
+   font-weight: 800;
+ }
+ 
++.cellPlaceholder {
++  min-height: 54px;
++  border-right: 1px solid rgba(107, 148, 180, 0.14);
++  border-bottom: 1px solid rgba(107, 148, 180, 0.14);
++  display: grid;
++  place-items: center;
++  color: var(--km-v2-text-muted);
++  background: rgba(7, 12, 22, 0.62);
++}
++
++.tooltip {
++  pointer-events: none;
++  position: absolute;
++  z-index: 12;
++  left: 50%;
++  bottom: calc(100% + 12px);
++  width: 260px;
++  transform: translateX(-50%) translateY(8px);
++  opacity: 0;
++  display: grid;
++  gap: 7px;
++  padding: 14px;
++  border: 1px solid rgba(72, 210, 255, 0.38);
++  border-radius: 16px;
++  background: rgba(6, 12, 22, 0.98);
++  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.4);
++  color: var(--km-v2-text);
++  text-align: left;
++  transition: opacity 140ms ease, transform 140ms ease;
++}
++
++.tooltip strong {
++  color: var(--km-v2-text-strong);
++  font-size: 16px;
++}
++
++.tooltip span,
++.tooltip small {
++  color: var(--km-v2-text);
++  font-size: 13px;
++  line-height: 1.35;
++}
++
++.cell {
++  position: relative;
++}
++
++.cell:hover .tooltip,
++.cell:focus-visible .tooltip {
++  opacity: 1;
++  transform: translateX(-50%) translateY(0);
++}
++
+ .inspector {
+-  padding: 22px;
++  padding: 20px;
+   overflow: hidden;
+ }
+ 
+@@ -301,60 +379,103 @@
+ 
+ .catalog {
+   grid-column: 2 / 4;
+-  padding: 24px;
++  padding: 18px 20px;
++  overflow: hidden;
+ }
+ 
+-.catalogGrid {
++.catalogToolbar {
+   display: grid;
+-  grid-template-columns: repeat(3, minmax(0, 1fr));
+-  gap: 14px;
++  grid-template-columns: minmax(260px, 1fr) 180px 160px auto;
++  gap: 10px;
++  align-items: center;
++  margin-bottom: 14px;
+ }
+ 
+-.catalogCard {
+-  min-height: 210px;
+-  border: 1px solid rgba(107, 148, 180, 0.18);
+-  border-radius: 20px;
+-  background: rgba(10, 16, 29, 0.82);
+-  padding: 18px;
+-  display: grid;
+-  gap: 12px;
+-  align-content: start;
++.catalogToolbar input,
++.catalogToolbar select {
++  min-height: 42px;
++  border: 1px solid rgba(107, 148, 180, 0.22);
++  border-radius: 12px;
++  background: rgba(7, 13, 25, 0.78);
++  color: var(--km-v2-text-strong);
++  padding: 0 12px;
++  font-size: 14px;
+ }
+ 
+-.catalogCard[data-status='available'] {
+-  border-color: rgba(103, 220, 154, 0.34);
++.catalogToolbar label {
++  min-height: 42px;
++  display: inline-flex;
++  align-items: center;
++  gap: 8px;
++  color: var(--km-v2-text);
++  font-size: 14px;
++  font-weight: 800;
+ }
+ 
+-.catalogCard[data-status='partial'] {
+-  border-color: rgba(248, 179, 92, 0.34);
++.catalogTableWrap {
++  max-height: 170px;
++  overflow: auto;
++  border: 1px solid rgba(107, 148, 180, 0.16);
++  border-radius: 18px;
+ }
+ 
+-.catalogCard span {
++.catalogTable {
++  width: 100%;
++  min-width: 940px;
++  border-collapse: collapse;
++}
++
++.catalogTable th,
++.catalogTable td {
++  border-bottom: 1px solid rgba(107, 148, 180, 0.12);
++  padding: 10px 12px;
++  text-align: left;
++  vertical-align: top;
++}
++
++.catalogTable th {
++  position: sticky;
++  top: 0;
++  z-index: 1;
++  background: rgba(7, 12, 22, 0.98);
+   color: var(--km-v2-text-muted);
+   font-size: 12px;
+-  font-weight: 900;
++  letter-spacing: 0.1em;
+   text-transform: uppercase;
+ }
+ 
+-.catalogCard strong {
++.catalogTable td {
++  color: var(--km-v2-text);
++  font-size: 14px;
++  line-height: 1.4;
++}
++
++.catalogTable strong {
+   display: block;
+-  margin-top: 4px;
+   color: var(--km-v2-text-strong);
+-  font-size: 22px;
+-  line-height: 1.14;
++  font-size: 15px;
++  margin-bottom: 5px;
+ }
+ 
+-.catalogCard p,
+-.catalogCard small {
++.catalogTable span {
+   color: var(--km-v2-text);
+-  font-size: 15px;
+-  line-height: 1.45;
+ }
+ 
+-.catalogCard b {
+-  align-self: end;
++.catalogTable b {
+   color: var(--km-v2-cyan);
+-  font-size: 26px;
++  font-size: 18px;
++}
++
++.catalogTable b[data-status='available'] {
++  color: var(--km-v2-green);
++}
++
++.catalogTable b[data-status='partial'] {
++  color: var(--km-v2-amber);
++}
++
++.catalogTable b[data-status='unavailable'] {
++  color: var(--km-v2-red);
+ }
+ 
+ @media (max-width: 1280px) {
+@@ -376,14 +497,14 @@
+     grid-template-columns: repeat(2, minmax(0, 1fr));
+   }
+ 
+-  .catalogGrid {
+-    grid-template-columns: repeat(2, minmax(0, 1fr));
++  .catalogToolbar {
++    grid-template-columns: 1fr 1fr;
+   }
+ }
+ 
+ @media (max-width: 760px) {
+   .summary,
+-  .catalogGrid {
++  .catalogToolbar {
+     grid-template-columns: 1fr;
+   }
+ 
+diff --git a/app/components/v2/data-ops/formatters.ts b/app/components/v2/data-ops/formatters.ts
+new file mode 100644
+index 0000000..077dd78
+--- /dev/null
++++ b/app/components/v2/data-ops/formatters.ts
+@@ -0,0 +1,3 @@
++export function numberLabel(value: number | null | undefined) {
++  return value == null ? '-' : value.toLocaleString('ko-KR')
++}
+diff --git a/app/components/v2/data-ops/statusMeta.ts b/app/components/v2/data-ops/statusMeta.ts
+new file mode 100644
+index 0000000..68cbcff
+--- /dev/null
++++ b/app/components/v2/data-ops/statusMeta.ts
+@@ -0,0 +1,16 @@
++import type { IngestionStatus } from '@/lib/adapters/ingestion'
++
++export const STATUS_META: Record<IngestionStatus, { label: string; color: string }> = {
++  healthy: { label: '검증 완료', color: 'var(--km-v2-green)' },
++  data_present: { label: '적재 확인', color: 'var(--km-v2-green)' },
++  partial: { label: '부분 확인', color: 'var(--km-v2-amber)' },
++  missing: { label: '누락', color: 'var(--km-v2-red)' },
++  error: { label: '오류', color: 'var(--km-v2-red)' },
++  delayed: { label: '지연 기준 미설정', color: 'var(--km-v2-blue)' },
++  pending: { label: '확인 불가', color: 'rgba(145, 183, 207, 0.72)' },
++  unsupported: { label: '날짜 상세 미지원', color: 'rgba(145, 183, 207, 0.46)' },
++}
++
++export function statusLabel(status: IngestionStatus) {
++  return STATUS_META[status].label
++}
+diff --git a/app/components/v2/data-ops/useDataOpsStatus.ts b/app/components/v2/data-ops/useDataOpsStatus.ts
+new file mode 100644
+index 0000000..a969b65
+--- /dev/null
++++ b/app/components/v2/data-ops/useDataOpsStatus.ts
+@@ -0,0 +1,66 @@
++'use client'
++
++import { useEffect, useMemo, useState } from 'react'
++import { adaptIngestionSummary, type SystemStatusResponse } from '@/lib/adapters/ingestion'
++import type { V2QueryStatus } from '../shell/QueryStateBoundary'
++
++export function useDataOpsStatus() {
++  const [rawStatus, setRawStatus] = useState<SystemStatusResponse | null>(null)
++  const [queryStatus, setQueryStatus] = useState<V2QueryStatus>('loading')
++  const [errorMessage, setErrorMessage] = useState<string | undefined>()
++  const [retryKey, setRetryKey] = useState(0)
++
++  useEffect(() => {
++    let cancelled = false
++
++    async function loadStatus() {
++      setQueryStatus('loading')
++      setErrorMessage(undefined)
++      const controller = new AbortController()
++      const timer = window.setTimeout(() => controller.abort(), 10000)
++
++      try {
++        const response = await fetch('/api/system-status', { cache: 'no-store', signal: controller.signal })
++        const json = await response.json() as SystemStatusResponse
++        if (cancelled) return
++
++        setRawStatus(json)
++        if (!response.ok || json.error) {
++          setQueryStatus('error')
++          setErrorMessage(json.error ?? `Status API failed with ${response.status}`)
++        } else if (!json.callTables?.length && !json.meterTables?.length && !json.vectorTables?.length) {
++          setQueryStatus('empty')
++        } else if (json.ok === false) {
++          setQueryStatus('partial')
++          setErrorMessage(json.message)
++        } else {
++          setQueryStatus('success')
++        }
++      } catch (error) {
++        if (cancelled) return
++        setRawStatus(null)
++        setQueryStatus('error')
++        setErrorMessage(error instanceof Error && error.name === 'AbortError'
++          ? 'Status API timed out.'
++          : 'Could not load ingestion status.')
++      } finally {
++        window.clearTimeout(timer)
++      }
++    }
++
++    loadStatus()
++    return () => {
++      cancelled = true
++    }
++  }, [retryKey])
++
++  const model = useMemo(() => rawStatus ? adaptIngestionSummary(rawStatus) : null, [rawStatus])
++
++  return {
++    model,
++    rawStatus,
++    queryStatus,
++    errorMessage,
++    retry: () => setRetryKey((key) => key + 1),
++  }
++}
+diff --git a/lib/adapters/ingestion.ts b/lib/adapters/ingestion.ts
+index c450c2c..65086e9 100644
+--- a/lib/adapters/ingestion.ts
++++ b/lib/adapters/ingestion.ts
+@@ -1,4 +1,4 @@
+-export type IngestionStatus = 'healthy' | 'partial' | 'missing' | 'pending'
++export type IngestionStatus = 'healthy' | 'data_present' | 'partial' | 'missing' | 'error' | 'delayed' | 'pending' | 'unsupported'
+ 
+ export type RawTableStatus = {
+   table: string
+@@ -39,6 +39,7 @@ export type SourceCard = {
+   dateRange: string
+   countLabel: string
+   description: string
++  verificationLevel: 'verified' | 'presence-only' | 'unsupported' | 'unknown' | 'error'
+ }
+ 
+ export type MatrixRow = {
+@@ -57,6 +58,7 @@ export type MatrixCell = {
+   count: number | null
+   table: string
+   reason: string
++  verificationLevel: 'verified' | 'presence-only' | 'unsupported' | 'unknown' | 'error'
+ }
+ 
+ export type CatalogItem = {
+@@ -80,15 +82,26 @@ export type IngestionViewModel = {
+   cells: MatrixCell[]
+   catalog: CatalogItem[]
+   kpis: {
+-    loadedDays: number | null
++    presentDays: number | null
+     missingDays: number | null
+-    coreTablesReady: number
++    coreTablesPresent: number
+     coreTablesTotal: number
+     latestDate: string | null
+   }
+   error: string | null
+ }
+ 
++export type StatusDefinition = {
++  status: IngestionStatus
++  fields: string[]
++  condition: string
++  expectedCount: string
++  dateMissing: string
++  futureDate: string
++  lowVolume: string
++  sourceDifference: string
++}
++
+ const MATRIX_ROWS: MatrixRow[] = [
+   { id: 'callcards', title: 'Call cards', table: 'callcard_mbti', sourceId: 'call' },
+   { id: 'driverLogs', title: 'Driver logs', table: 'driver_daily_logs', sourceId: 'driver' },
+@@ -165,9 +178,9 @@ function formatRange(minDate: string | null, maxDate: string | null): string {
+ 
+ function tableStatus(table: RawTableStatus | null): IngestionStatus {
+   if (!table) return 'pending'
+-  if (table.status === 'error') return table.importance === 'optional' ? 'partial' : 'missing'
++  if (table.status === 'error') return table.importance === 'optional' ? 'partial' : 'error'
+   if (!table.count) return 'missing'
+-  return 'healthy'
++  return 'data_present'
+ }
+ 
+ function getTables(raw: SystemStatusResponse): RawTableStatus[] {
+@@ -187,11 +200,13 @@ function sourceCard(id: DataSourceId, title: string, tables: RawTableStatus[], d
+   const statuses = tables.map(tableStatus)
+   const status = statuses.includes('missing')
+     ? 'missing'
+-    : statuses.includes('partial')
++    : statuses.includes('error')
++      ? 'error'
++      : statuses.includes('partial')
+       ? 'partial'
+       : statuses.includes('pending')
+         ? 'pending'
+-        : 'healthy'
++        : 'data_present'
+   const minDate = tables.map((row) => onlyDate(row.minDate)).filter(Boolean).sort()[0] ?? null
+   const maxDate = tables.map((row) => onlyDate(row.maxDate)).filter(Boolean).sort().at(-1) ?? null
+   return {
+@@ -201,6 +216,7 @@ function sourceCard(id: DataSourceId, title: string, tables: RawTableStatus[], d
+     dateRange: formatRange(minDate, maxDate),
+     countLabel: formatNumber(count),
+     description,
++    verificationLevel: status === 'data_present' ? 'presence-only' : status === 'error' ? 'error' : status === 'pending' ? 'unknown' : 'presence-only',
+   }
+ }
+ 
+@@ -219,17 +235,100 @@ function dateRowCount(rowId: string, dateRow: RawDateRow | undefined): number |
+ 
+ function cellStatus(row: MatrixRow, count: number | null, table: RawTableStatus | null): IngestionStatus {
+   if (!table) return 'pending'
+-  if (table.status === 'error') return table.importance === 'optional' ? 'partial' : 'missing'
+-  if (row.sourceId === 'meter') return tableStatus(table)
++  if (table.status === 'error') return table.importance === 'optional' ? 'partial' : 'error'
++  if (row.sourceId === 'meter') return 'unsupported'
+   if (count == null) return 'pending'
+   if (count <= 0) return 'missing'
+-  return 'healthy'
++  return 'data_present'
+ }
+ 
++export const INGESTION_STATUS_DEFINITIONS: StatusDefinition[] = [
++  {
++    status: 'healthy',
++    fields: ['expected count', 'SLA/completeness rule'],
++    condition: 'Reserved for a future verified completeness rule. The current adapter does not emit healthy for presence-only data.',
++    expectedCount: 'No synthetic expected count is used.',
++    dateMissing: 'Not inferred.',
++    futureDate: 'Future dates are not generated by the adapter.',
++    lowVolume: 'A positive count is not enough to call data healthy.',
++    sourceDifference: 'Not emitted until a source provides a verified completeness rule.',
++  },
++  {
++    status: 'data_present',
++    fields: ['table.status', 'table.count', 'dateRows.*'],
++    condition: 'Table exists, table.status is not error, and count is greater than 0. Daily count greater than 0 also means data is present.',
++    expectedCount: 'No synthetic expected count is used.',
++    dateMissing: 'Not applied when a daily date row is missing.',
++    futureDate: 'Future dates are not generated by the adapter.',
++    lowVolume: 'A positive count, even 1 row, is displayed as data present, not complete or healthy.',
++    sourceDifference: 'Call, driver, and matching rows use daily counts. Source rail uses table counts.',
++  },
++  {
++    status: 'partial',
++    fields: ['table.status', 'table.importance'],
++    condition: 'table.status is error and table.importance is optional, or catalog availability is between 1% and 99%.',
++    expectedCount: 'No synthetic expected count is used.',
++    dateMissing: 'Date-level partial is not inferred without an explicit API field.',
++    futureDate: 'Future dates are not generated by the adapter.',
++    lowVolume: 'Low volume is not partial unless the API reports an optional table error.',
++    sourceDifference: 'Optional table errors can make meter or supporting data partial without blocking core data.',
++  },
++  {
++    status: 'missing',
++    fields: ['table.status', 'table.count', 'dateRows.*'],
++    condition: 'Table count is 0, table.status is empty, or a provided daily count is 0.',
++    expectedCount: 'No synthetic expected count is used.',
++    dateMissing: 'Missing is used only when an explicit table or daily count says 0/error.',
++    futureDate: 'Future dates are not generated by the adapter.',
++    lowVolume: 'A 1-row day is not missing.',
++    sourceDifference: 'Call, driver, and matching rows can be missing by date. Meter date cells use unsupported when the API has no daily counts.',
++  },
++  {
++    status: 'error',
++    fields: ['table.status', 'table.importance', 'table.error'],
++    condition: 'A core source has table.status error.',
++    expectedCount: 'No synthetic expected count is used.',
++    dateMissing: 'Not inferred.',
++    futureDate: 'Future dates are not generated by the adapter.',
++    lowVolume: 'Not inferred from low volume.',
++    sourceDifference: 'Core source errors are exposed instead of being hidden as empty data.',
++  },
++  {
++    status: 'delayed',
++    fields: [],
++    condition: 'Not currently emitted because /api/system-status does not provide last received timestamps or SLA thresholds.',
++    expectedCount: 'No synthetic expected count is used.',
++    dateMissing: 'Not inferred.',
++    futureDate: 'Future dates are not generated by the adapter.',
++    lowVolume: 'Not inferred from low volume.',
++    sourceDifference: 'Reserved for a later timestamp-aware API.',
++  },
++  {
++    status: 'pending',
++    fields: ['table existence', 'dateRows existence'],
++    condition: 'Table metadata or daily count is unavailable.',
++    expectedCount: 'No synthetic expected count is used.',
++    dateMissing: 'A missing date row becomes pending, not missing.',
++    futureDate: 'Future dates are not generated by the adapter.',
++    lowVolume: 'Not applicable.',
++    sourceDifference: 'A missing date row becomes pending rather than missing.',
++  },
++  {
++    status: 'unsupported',
++    fields: ['sourceId', 'dateRows'],
++    condition: 'The source exists, but the current API does not provide date-level counts for that source.',
++    expectedCount: 'No synthetic expected count is used.',
++    dateMissing: 'Date detail is unsupported rather than assumed missing.',
++    futureDate: 'Future dates are not generated by the adapter.',
++    lowVolume: 'Not applicable.',
++    sourceDifference: 'Used for meter date cells because only table-level meter status is available.',
++  },
++]
++
+ function availability(raw: SystemStatusResponse, tables: string[]): { value: number | null; status: CatalogItem['status'] } {
+   const resolved = tables.map((table) => findTable(raw, table)).filter(Boolean) as RawTableStatus[]
+   if (resolved.length === 0) return { value: null, status: 'unavailable' }
+-  const available = resolved.filter((row) => tableStatus(row) === 'healthy').length
++  const available = resolved.filter((row) => ['healthy', 'data_present'].includes(tableStatus(row))).length
+   const value = Math.round((available / resolved.length) * 100)
+   return {
+     value,
+@@ -260,20 +359,34 @@ export function adaptIngestionSummary(raw: SystemStatusResponse): IngestionViewM
+       count,
+       table: row.table,
+       reason: row.sourceId === 'meter'
+-        ? 'Meter tables are available at table level. Daily matrix counts need a later API extension.'
+-        : status === 'healthy'
+-          ? 'Loaded and connected for this date.'
+-          : 'No daily count was returned for this date.',
+-    }
++        ? 'The current API does not provide daily meter ingestion counts. Only table-level meter status is available.'
++        : status === 'data_present'
++          ? 'Data is present for this date. Completeness is not asserted because no expected count is provided.'
++          : status === 'missing'
++            ? 'The API returned 0 rows for this date.'
++            : status === 'error'
++              ? 'The source table reported a core error.'
++              : 'No daily count was returned for this date.',
++      verificationLevel: row.sourceId === 'meter'
++        ? 'unsupported'
++        : status === 'data_present'
++          ? 'presence-only'
++          : status === 'error'
++            ? 'error'
++            : status === 'pending'
++              ? 'unknown'
++              : 'presence-only',
++    } satisfies MatrixCell
+   }))
+ 
+   const dayStatuses = dates.map((date) => {
+     const dateCells = cells.filter((cell) => cell.date === date && cell.sourceId !== 'meter')
+     if (dateCells.length === 0) return 'pending'
++    if (dateCells.some((cell) => cell.status === 'error')) return 'error'
+     if (dateCells.some((cell) => cell.status === 'missing')) return 'missing'
+     if (dateCells.some((cell) => cell.status === 'partial')) return 'partial'
+     if (dateCells.some((cell) => cell.status === 'pending')) return 'pending'
+-    return 'healthy'
++    return 'data_present'
+   })
+ 
+   const catalog = CATALOG.map((item) => {
+@@ -288,7 +401,7 @@ export function adaptIngestionSummary(raw: SystemStatusResponse): IngestionViewM
+   const minDate = dates[0] ?? onlyDate(findTable(raw, 'callcard_mbti')?.minDate)
+   const maxDate = dates.at(-1) ?? onlyDate(findTable(raw, 'callcard_mbti')?.maxDate)
+   const coreTables = ['callcard_mbti', 'driver_daily_logs', 'matching_scores', 'driver_mbti']
+-  const readyCoreTables = coreTables.filter((table) => tableStatus(findTable(raw, table)) === 'healthy').length
++  const presentCoreTables = coreTables.filter((table) => ['healthy', 'data_present'].includes(tableStatus(findTable(raw, table)))).length
+   const coreError = allTables.find((row) => row.status === 'error' && row.importance !== 'optional')
+ 
+   return {
+@@ -297,7 +410,7 @@ export function adaptIngestionSummary(raw: SystemStatusResponse): IngestionViewM
+     period: formatRange(minDate, maxDate),
+     dates,
+     sources: [
+-      sourceCard('all', 'All data', [...callTables, ...driverTables, ...matchingTables, ...meterTables], 'Overall readiness across call, meter, driver, and match tables.'),
++      sourceCard('all', 'All data', [...callTables, ...driverTables, ...matchingTables, ...meterTables], 'Presence check across call, meter, driver, and match tables.'),
+       sourceCard('call', 'Call data', callTables, 'Passenger request, route, fare, product, and call outcome records.'),
+       sourceCard('meter', 'Meter data', meterTables, 'Market baseline from meter hourly and driver activity logs.'),
+       sourceCard('driver', 'Driver logs', driverTables, 'Accepted call history used to build driver behavior vectors.'),
+@@ -307,9 +420,9 @@ export function adaptIngestionSummary(raw: SystemStatusResponse): IngestionViewM
+     cells,
+     catalog,
+     kpis: {
+-      loadedDays: dates.length ? dayStatuses.filter((status) => status === 'healthy').length : null,
++      presentDays: dates.length ? dayStatuses.filter((status) => status === 'data_present').length : null,
+       missingDays: dates.length ? dayStatuses.filter((status) => status === 'missing').length : null,
+-      coreTablesReady: readyCoreTables,
++      coreTablesPresent: presentCoreTables,
+       coreTablesTotal: coreTables.length,
+       latestDate: maxDate,
+     },

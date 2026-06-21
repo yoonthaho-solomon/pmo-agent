@@ -1,0 +1,58 @@
+:root {
+  color-scheme: dark;
+
+  --km-bg-app: #061018;
+  --km-bg-shell: #08131e;
+  --km-bg-panel: #0c1925;
+  --km-bg-panel-raised: #102130;
+  --km-bg-interactive: #122738;
+  --km-bg-hover: #162d40;
+  --km-bg-selected: #153348;
+
+  --km-border-subtle: rgba(145, 183, 207, 0.12);
+  --km-border-default: rgba(145, 183, 207, 0.20);
+  --km-border-strong: rgba(111, 211, 239, 0.42);
+
+  --km-text-primary: #f3f7fa;
+  --km-text-secondary: #a9bac6;
+  --km-text-muted: #718795;
+  --km-text-disabled: #4e626f;
+
+  --km-cyan: #43d6ef;
+  --km-cyan-strong: #19c7e8;
+  --km-violet: #9273f5;
+  --km-violet-strong: #7b57ef;
+  --km-green: #55d69a;
+  --km-amber: #f2a640;
+  --km-red: #f2645a;
+  --km-blue: #4b8ef7;
+
+  --km-route-passenger: #5eddf5;
+  --km-route-pickup: #9b76f5;
+  --km-origin: #57d69d;
+  --km-destination: #f2a640;
+
+  --km-radius-control: 6px;
+  --km-radius-row: 6px;
+  --km-radius-panel: 8px;
+  --km-radius-floating: 10px;
+
+  --km-space-1: 4px;
+  --km-space-2: 8px;
+  --km-space-3: 12px;
+  --km-space-4: 16px;
+  --km-space-5: 20px;
+  --km-space-6: 24px;
+  --km-space-8: 32px;
+
+  --km-header-height: 64px;
+  --km-shadow-floating: 0 16px 48px rgba(0, 0, 0, 0.38);
+
+  --km-motion-fast: 120ms;
+  --km-motion-standard: 180ms;
+  --km-motion-medium: 240ms;
+  --km-motion-map: 600ms;
+  --km-ease-standard: cubic-bezier(.2, 0, 0, 1);
+  --km-ease-enter: cubic-bezier(0, 0, .2, 1);
+  --km-ease-exit: cubic-bezier(.4, 0, 1, 1);
+}

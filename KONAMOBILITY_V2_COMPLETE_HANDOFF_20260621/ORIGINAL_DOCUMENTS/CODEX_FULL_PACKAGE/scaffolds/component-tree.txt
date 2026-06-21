@@ -1,0 +1,58 @@
+app/
+├─ layout.tsx
+├─ data-ops/
+│  └─ page.tsx
+├─ vector-workbench/
+│  └─ page.tsx
+└─ matching-studio/
+   └─ page.tsx
+
+components/
+├─ shell/
+│  ├─ AppShell.tsx
+│  ├─ GlobalHeader.tsx
+│  ├─ WorkspaceTabs.tsx
+│  └─ QueryStateBoundary.tsx
+├─ data-ops/
+│  ├─ DataOpsWorkspace.tsx
+│  ├─ SourceRail.tsx
+│  ├─ DataOpsSummaryBar.tsx
+│  ├─ IngestionMatrix.tsx
+│  ├─ IngestionCell.tsx
+│  ├─ DataInspector.tsx
+│  └─ DataCatalogTable.tsx
+├─ vectors/
+│  ├─ VectorWorkbench.tsx
+│  ├─ FactorLibrary.tsx
+│  ├─ VectorMatrix.tsx
+│  ├─ RelationshipMap.tsx
+│  ├─ FactorInspector.tsx
+│  └─ CosineLens.tsx
+└─ matching/
+   ├─ MatchingStudio.tsx
+   ├─ WinnerSummaryBar.tsx
+   ├─ MatchingMap.tsx
+   ├─ CallBuilder.tsx
+   ├─ LayerControl.tsx
+   ├─ CandidateDock.tsx
+   └─ EvidenceDrawer.tsx
+
+lib/
+├─ adapters/
+│  ├─ ingestion.ts
+│  ├─ vectors.ts
+│  └─ matching.ts
+├─ formatters/
+├─ map/
+│  ├─ createDeckLayers.ts
+│  ├─ mapStyle.ts
+│  └─ mapUtils.ts
+├─ spatial/
+│  ├─ h3.ts
+│  └─ route.ts
+└─ scoring/
+
+stores/
+├─ useDataOpsStore.ts
+├─ useVectorWorkbenchStore.ts
+└─ useMatchingStudioStore.ts

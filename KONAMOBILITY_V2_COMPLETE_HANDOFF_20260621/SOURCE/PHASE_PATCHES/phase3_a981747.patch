@@ -1,0 +1,472 @@
+﻿diff --git a/app/components/v2/vectors/CosineLens.tsx b/app/components/v2/vectors/CosineLens.tsx
+index 9ad622c..b96e3cb 100644
+--- a/app/components/v2/vectors/CosineLens.tsx
++++ b/app/components/v2/vectors/CosineLens.tsx
+@@ -48,14 +48,15 @@ export function CosineLens({
+   onCompareA: (id: string) => void
+   onCompareB: (id: string) => void
+ }) {
+-  const score = cosine(compareA, compareB)
+-  const diffs = factorDiffs(compareA, compareB, factors)
++  const sameEntitySelected = compareAId != null && compareAId === compareBId
++  const score = sameEntitySelected ? null : cosine(compareA, compareB)
++  const diffs = sameEntitySelected ? [] : factorDiffs(compareA, compareB, factors)
+   const similar = [...diffs].filter((item) => item.diff != null).sort((a, b) => (a.diff ?? 0) - (b.diff ?? 0)).slice(0, 4)
+   const different = [...diffs].filter((item) => item.diff != null).sort((a, b) => (b.diff ?? 0) - (a.diff ?? 0)).slice(0, 4)
+   const groupScores = DISPLAY_AXES.map((axis) => {
+     const av = compareA ? axis.indexes.map((index) => compareA.vector[index]) : []
+     const bv = compareB ? axis.indexes.map((index) => compareB.vector[index]) : []
+-    if (av.some((value) => value == null) || bv.some((value) => value == null)) return { name: axis.name, score: null }
++    if (sameEntitySelected || av.some((value) => value == null) || bv.some((value) => value == null)) return { name: axis.name, score: null }
+     return { name: axis.name, score: cosineSimilarity(av as number[], bv as number[]) }
+   })
+ 
+@@ -69,9 +70,10 @@ export function CosineLens({
+         <strong>{percentValue(score, 1)}</strong>
+       </div>
+       <div className={styles.selectorGrid}>
+-        <EntitySelector id="compare-a" label="비교 대상 A" value={compareAId} entities={entities} onChange={onCompareA} />
+-        <EntitySelector id="compare-b" label="비교 대상 B" value={compareBId} entities={entities} onChange={onCompareB} />
++        <EntitySelector id="compare-a" label="비교 대상 A" value={compareAId} entities={entities} disabledEntityId={compareBId} onChange={onCompareA} />
++        <EntitySelector id="compare-b" label="비교 대상 B" value={compareBId} entities={entities} disabledEntityId={compareAId} onChange={onCompareB} />
+       </div>
++      {sameEntitySelected ? <p className={styles.selectionWarning}>서로 다른 두 엔티티를 선택하세요.</p> : null}
+       <p className={styles.analysisNote}>이 값은 벡터 분석용 코사인 유사도이며 추천 순위나 배차 우선순위가 아닙니다.</p>
+       <div className={styles.groupCompare}>
+         {groupScores.map((item) => <div key={item.name}><span>{item.name}</span><b>{percentValue(item.score, 0)}</b></div>)}
+diff --git a/app/components/v2/vectors/EntitySelector.tsx b/app/components/v2/vectors/EntitySelector.tsx
+index bcb5385..4eedf10 100644
+--- a/app/components/v2/vectors/EntitySelector.tsx
++++ b/app/components/v2/vectors/EntitySelector.tsx
+@@ -9,12 +9,14 @@ export function EntitySelector({
+   label,
+   value,
+   entities,
++  disabledEntityId,
+   onChange,
+ }: {
+   id: string
+   label: string
+   value: string | null
+   entities: VectorEntityModel[]
++  disabledEntityId?: string | null
+   onChange: (value: string) => void
+ }) {
+   return (
+@@ -23,7 +25,9 @@ export function EntitySelector({
+       <select id={id} value={value ?? ''} onChange={(event) => onChange(event.target.value)}>
+         <option value="" disabled>선택</option>
+         {entities.map((entity) => (
+-          <option key={entity.id} value={entity.id}>{entity.label} · {entityTypeLabel(entity.type)}</option>
++          <option key={entity.id} value={entity.id} disabled={entity.id === disabledEntityId}>
++            {entity.label} · {entityTypeLabel(entity.type)}
++          </option>
+         ))}
+       </select>
+     </label>
+diff --git a/app/components/v2/vectors/RelationshipMap.tsx b/app/components/v2/vectors/RelationshipMap.tsx
+index b8aefe5..10edc85 100644
+--- a/app/components/v2/vectors/RelationshipMap.tsx
++++ b/app/components/v2/vectors/RelationshipMap.tsx
+@@ -13,6 +13,8 @@ export function RelationshipMap({
+   onXFactor,
+   onYFactor,
+   sampleLimit,
++  selectedEntityId,
++  onSelectEntity,
+ }: {
+   entities: VectorEntityModel[]
+   factors: VectorFactorModel[]
+@@ -21,12 +23,21 @@ export function RelationshipMap({
+   onXFactor: (key: VectorDimensionKey) => void
+   onYFactor: (key: VectorDimensionKey) => void
+   sampleLimit: number
++  selectedEntityId: string | null
++  onSelectEntity: (id: string) => void
+ }) {
+   const xFactor = factors.find((factor) => factor.key === xFactorKey) ?? factors[0]
+   const yFactor = factors.find((factor) => factor.key === yFactorKey) ?? factors[1] ?? factors[0]
+   const sample = entities
+     .filter((entity) => xFactor && yFactor && entity.vector[xFactor.index] != null && entity.vector[yFactor.index] != null)
+     .slice(0, sampleLimit)
++  const selectedEntity = entities.find((entity) => entity.id === selectedEntityId) ?? null
++  const selectedInSample = sample.some((entity) => entity.id === selectedEntityId)
++  const handlePointKeyDown = (event: React.KeyboardEvent<SVGCircleElement>, entityId: string) => {
++    if (event.key !== 'Enter' && event.key !== ' ') return
++    event.preventDefault()
++    onSelectEntity(entityId)
++  }
+ 
+   return (
+     <section className={styles.relationship} aria-label="Relationship map">
+@@ -62,13 +73,24 @@ export function RelationshipMap({
+               cy={178 - y * 160}
+               r={entity.type === 'driver' ? 4 : 5}
+               data-type={entity.type}
++              data-selected={entity.id === selectedEntityId}
++              role="button"
++              tabIndex={0}
+               aria-label={`${entity.label}: ${xFactor.label} ${numberValue(x, 2)}, ${yFactor.label} ${numberValue(y, 2)}`}
++              onClick={() => onSelectEntity(entity.id)}
++              onKeyDown={(event) => handlePointKeyDown(event, entity.id)}
+             />
+           )
+         })}
+         <text x="36" y="202">{xFactor.label}</text>
+         <text x="8" y="22">{yFactor.label}</text>
+       </svg>
++      {selectedEntity ? (
++        <p className={styles.mapSelection}>
++          선택 엔티티 {selectedEntity.label}
++          {!selectedInSample ? <span>현재 표본 또는 Matrix 표시 범위 밖일 수 있습니다.</span> : null}
++        </p>
++      ) : null}
+       <p className={styles.mapNote}>차원축소가 아닌 선택한 두 22D 팩터의 실제 값 분포입니다. 표본은 현재 정렬 순서의 상위 {sampleLimit}개로 제한합니다.</p>
+     </section>
+   )
+diff --git a/app/components/v2/vectors/VectorCell.tsx b/app/components/v2/vectors/VectorCell.tsx
+index 84a47c3..09a0890 100644
+--- a/app/components/v2/vectors/VectorCell.tsx
++++ b/app/components/v2/vectors/VectorCell.tsx
+@@ -9,22 +9,35 @@ export function VectorCell({
+   value,
+   factor,
+   selected,
++  entityLabel,
++  onSelect,
+ }: {
+   value: number | null | undefined
+   factor: VectorFactorModel
+   selected: boolean
++  entityLabel: string
++  onSelect: () => void
+ }) {
+   const intensity = value == null ? 0 : Math.max(0, Math.min(1, value))
+   const label = value == null ? '값 없음' : numberValue(value, 3)
++  const handleKeyDown = (event: React.KeyboardEvent<HTMLTableCellElement>) => {
++    if (event.key !== 'Enter' && event.key !== ' ') return
++    event.preventDefault()
++    onSelect()
++  }
+   return (
+     <td
+       className={styles.vectorCell}
++      role="gridcell"
+       data-selected={selected}
+       data-empty={value == null}
+       data-tooltip={`${factor.label} · ${factor.key} · ${label}`}
+       style={{ '--value': intensity } as CSSProperties}
+       tabIndex={0}
+-      aria-label={`${factor.label} ${label}`}
++      aria-label={`${entityLabel} ${factor.label} ${label}`}
++      aria-selected={selected}
++      onClick={onSelect}
++      onKeyDown={handleKeyDown}
+     >
+       <span>{numberValue(value, 2)}</span>
+       <small>{value == null ? 'missing' : factor.group}</small>
+diff --git a/app/components/v2/vectors/VectorMatrix.tsx b/app/components/v2/vectors/VectorMatrix.tsx
+index 81f0310..4713359 100644
+--- a/app/components/v2/vectors/VectorMatrix.tsx
++++ b/app/components/v2/vectors/VectorMatrix.tsx
+@@ -23,6 +23,7 @@ export function VectorMatrix({
+   onSort,
+   onSelectFactor,
+   onSelectEntity,
++  onSelectCell,
+   onLoadMore,
+ }: {
+   factors: VectorFactorModel[]
+@@ -40,6 +41,7 @@ export function VectorMatrix({
+   onSort: (value: SortMode) => void
+   onSelectFactor: (key: VectorDimensionKey) => void
+   onSelectEntity: (id: string) => void
++  onSelectCell: (entityId: string, factorKey: VectorDimensionKey) => void
+   onLoadMore: () => void
+ }) {
+   return (
+@@ -83,6 +85,7 @@ export function VectorMatrix({
+                 selectedFactorKey={selectedFactorKey}
+                 selected={selectedEntityId === entity.id}
+                 onSelect={onSelectEntity}
++                onSelectCell={onSelectCell}
+               />
+             ))}
+           </tbody>
+diff --git a/app/components/v2/vectors/VectorMatrixRow.tsx b/app/components/v2/vectors/VectorMatrixRow.tsx
+index 797eb4b..9b028cf 100644
+--- a/app/components/v2/vectors/VectorMatrixRow.tsx
++++ b/app/components/v2/vectors/VectorMatrixRow.tsx
+@@ -12,23 +12,37 @@ export function VectorMatrixRow({
+   selectedFactorKey,
+   selected,
+   onSelect,
++  onSelectCell,
+ }: {
+   entity: VectorEntityModel
+   factors: VectorFactorModel[]
+   selectedFactorKey: VectorDimensionKey
+   selected: boolean
+   onSelect: (id: string) => void
++  onSelectCell: (entityId: string, factorKey: VectorDimensionKey) => void
+ }) {
+   return (
+-    <tr className={styles.matrixRow} data-selected={selected}>
++    <tr className={styles.matrixRow} data-selected={selected} aria-selected={selected}>
+       <th scope="row" className={styles.entityCol}>
+-        <button type="button" onClick={() => onSelect(entity.id)} data-selected={selected}>
++        <button
++          type="button"
++          onClick={() => onSelect(entity.id)}
++          data-selected={selected}
++          aria-label={`${entity.label} 행 선택`}
++        >
+           <span>{entity.label}</span>
+           <small>{entityTypeLabel(entity.type)} · {entity.aspId ?? '-'}</small>
+         </button>
+       </th>
+       {factors.map((factor) => (
+-        <VectorCell key={factor.key} value={entity.vector[factor.index]} factor={factor} selected={selectedFactorKey === factor.key} />
++        <VectorCell
++          key={factor.key}
++          value={entity.vector[factor.index]}
++          factor={factor}
++          selected={selectedFactorKey === factor.key}
++          entityLabel={entity.label}
++          onSelect={() => onSelectCell(entity.id, factor.key)}
++        />
+       ))}
+     </tr>
+   )
+diff --git a/app/components/v2/vectors/VectorRetryState.tsx b/app/components/v2/vectors/VectorRetryState.tsx
+new file mode 100644
+index 0000000..617ae63
+--- /dev/null
++++ b/app/components/v2/vectors/VectorRetryState.tsx
+@@ -0,0 +1,32 @@
++'use client'
++
++import { useRouter } from 'next/navigation'
++import { useTransition } from 'react'
++import styles from './vectorWorkbench.module.css'
++
++export function VectorRetryState({
++  title,
++  message,
++}: {
++  title: 'Error' | 'Partial'
++  message: string
++}) {
++  const router = useRouter()
++  const [isPending, startTransition] = useTransition()
++
++  return (
++    <section className={styles.retryState} aria-live="polite">
++      <div>
++        <strong>{title}</strong>
++        <span>{isPending ? '다시 불러오는 중입니다.' : message}</span>
++      </div>
++      <button
++        type="button"
++        onClick={() => startTransition(() => router.refresh())}
++        disabled={isPending}
++      >
++        {isPending ? 'Loading' : 'Retry'}
++      </button>
++    </section>
++  )
++}
+diff --git a/app/components/v2/vectors/VectorWorkbench.tsx b/app/components/v2/vectors/VectorWorkbench.tsx
+index 6f2c5d0..75619cf 100644
+--- a/app/components/v2/vectors/VectorWorkbench.tsx
++++ b/app/components/v2/vectors/VectorWorkbench.tsx
+@@ -54,6 +54,7 @@ export function VectorWorkbench({ model }: { model: VectorWorkbenchModel }) {
+             onSort={state.setSortMode}
+             onSelectFactor={state.setSelectedFactorKey}
+             onSelectEntity={state.setSelectedEntityId}
++            onSelectCell={state.selectMatrixCell}
+             onLoadMore={state.loadMore}
+           />
+           <div className={styles.bottomGrid}>
+@@ -65,6 +66,8 @@ export function VectorWorkbench({ model }: { model: VectorWorkbenchModel }) {
+               onXFactor={state.setXFactorKey}
+               onYFactor={state.setYFactorKey}
+               sampleLimit={model.relationshipSampleLimit}
++              selectedEntityId={state.selectedEntityId}
++              onSelectEntity={state.setSelectedEntityId}
+             />
+             <CosineLens
+               entities={model.entities}
+diff --git a/app/components/v2/vectors/useVectorWorkbench.ts b/app/components/v2/vectors/useVectorWorkbench.ts
+index a178a82..db387fe 100644
+--- a/app/components/v2/vectors/useVectorWorkbench.ts
++++ b/app/components/v2/vectors/useVectorWorkbench.ts
+@@ -87,6 +87,10 @@ export function useVectorWorkbench(model: VectorWorkbenchModel) {
+     rowLimit,
+     canLoadMore,
+     loadMore: () => setRowLimit((current) => Math.min(current + 40, sortedEntities.length)),
++    selectMatrixCell: (entityId: string, factorKey: VectorDimensionKey) => {
++      setSelectedEntityId(entityId)
++      setSelectedFactorKey(factorKey)
++    },
+     selectedEntity,
+     selectedEntityId,
+     setSelectedEntityId,
+diff --git a/app/components/v2/vectors/vectorWorkbench.module.css b/app/components/v2/vectors/vectorWorkbench.module.css
+index 2961599..5c379e7 100644
+--- a/app/components/v2/vectors/vectorWorkbench.module.css
++++ b/app/components/v2/vectors/vectorWorkbench.module.css
+@@ -273,6 +273,14 @@
+   cursor: pointer;
+ }
+ 
++.matrixTable thead th button:focus-visible,
++.matrixRow .entityCol button:focus-visible,
++.matrixFooter button:focus-visible,
++.scatter circle:focus-visible {
++  outline: 2px solid var(--km-v2-cyan);
++  outline-offset: -2px;
++}
++
+ .matrixTable thead th[data-selected='true'] {
+   background: rgba(67, 214, 239, 0.13);
+   box-shadow: inset 0 -2px 0 var(--km-v2-cyan);
+@@ -336,6 +344,7 @@
+   text-align: center;
+   color: var(--km-v2-text-primary);
+   background: color-mix(in srgb, var(--km-v2-cyan) calc(var(--value) * 42%), rgba(8, 19, 30, 0.86));
++  cursor: pointer;
+ }
+ 
+ .vectorCell:focus-visible {
+@@ -416,19 +425,28 @@
+ .scatter circle {
+   fill: var(--km-v2-violet);
+   opacity: 0.76;
++  cursor: pointer;
+ }
+ 
+ .scatter circle[data-type='callcard'] {
+   fill: var(--km-v2-cyan);
+ }
+ 
++.scatter circle[data-selected='true'] {
++  opacity: 1;
++  stroke: var(--km-v2-orange);
++  stroke-width: 4;
++}
++
+ .scatter text {
+   fill: var(--km-v2-text-muted);
+   font-size: 10px;
+ }
+ 
+ .mapNote,
++.mapSelection,
+ .analysisNote,
++.selectionWarning,
+ .empty,
+ .descriptionBox p {
+   color: var(--km-v2-text-secondary);
+@@ -436,6 +454,20 @@
+   line-height: 1.45;
+ }
+ 
++.mapSelection,
++.selectionWarning {
++  margin: 8px 0 0;
++  color: var(--km-v2-orange);
++  font-weight: 850;
++}
++
++.mapSelection span {
++  display: block;
++  margin-top: 2px;
++  color: var(--km-v2-text-muted);
++  font-weight: 700;
++}
++
+ .inspector {
+   grid-template-rows: auto auto auto auto minmax(0, 1fr) auto;
+ }
+@@ -610,6 +642,48 @@
+ .legend i[data-level='high'] { background: rgba(67, 214, 239, 0.62); }
+ .legend i[data-level='none'] { background: repeating-linear-gradient(135deg, rgba(145, 183, 207, 0.08), rgba(145, 183, 207, 0.08) 4px, transparent 4px, transparent 8px); }
+ 
++.retryState {
++  margin-bottom: 12px;
++  display: flex;
++  align-items: center;
++  justify-content: space-between;
++  gap: 14px;
++  padding: 14px 16px;
++  border: 1px solid var(--km-v2-border-default);
++  border-radius: var(--km-v2-radius-panel);
++  background: rgba(12, 25, 37, 0.88);
++}
++
++.retryState div {
++  display: grid;
++  gap: 4px;
++}
++
++.retryState strong {
++  color: var(--km-v2-text-primary);
++  font-size: 18px;
++}
++
++.retryState span {
++  color: var(--km-v2-text-secondary);
++  font-size: 14px;
++}
++
++.retryState button {
++  min-height: 38px;
++  padding: 0 16px;
++  color: var(--km-v2-cyan);
++  border: 1px solid var(--km-v2-border-strong);
++  border-radius: var(--km-v2-radius-control);
++  background: rgba(67, 214, 239, 0.08);
++  cursor: pointer;
++}
++
++.retryState button:disabled {
++  cursor: wait;
++  opacity: 0.58;
++}
++
+ @media (max-width: 1180px) {
+   .mainGrid {
+     grid-template-columns: 230px minmax(0, 1fr);
+diff --git a/app/vector-workbench/page.tsx b/app/vector-workbench/page.tsx
+index 0e881be..dc454ba 100644
+--- a/app/vector-workbench/page.tsx
++++ b/app/vector-workbench/page.tsx
+@@ -1,5 +1,6 @@
+-﻿import { AppShell } from '@/app/components/v2/shell/AppShell'
+-import { EmptyState, ErrorState, PartialState } from '@/app/components/v2/primitives/QueryStates'
++import { AppShell } from '@/app/components/v2/shell/AppShell'
++import { EmptyState } from '@/app/components/v2/primitives/QueryStates'
++import { VectorRetryState } from '@/app/components/v2/vectors/VectorRetryState'
+ import { VectorWorkbench } from '@/app/components/v2/vectors/VectorWorkbench'
+ import { getVectorWorkbenchModel } from '@/lib/adapters/vectors'
+ 
+@@ -10,11 +11,11 @@ export default async function VectorWorkbenchPage() {
+ 
+   return (
+     <AppShell>
+-      {model.status === 'error' ? <ErrorState message={model.message} /> : null}
++      {model.status === 'error' ? <VectorRetryState title="Error" message="벡터 데이터를 다시 불러오지 못했습니다." /> : null}
+       {model.status === 'empty' ? <EmptyState message={model.message} /> : null}
+       {model.status === 'partial' ? (
+         <>
+-          <PartialState message={model.message} />
++          <VectorRetryState title="Partial" message="일부 벡터 원천을 불러오지 못했습니다. 다시 시도할 수 있습니다." />
+           <VectorWorkbench model={model} />
+         </>
+       ) : null}
+@@ -22,4 +23,3 @@ export default async function VectorWorkbenchPage() {
+     </AppShell>
+   )
+ }
+-

@@ -1,0 +1,40 @@
+﻿f2b5b2b (HEAD -> feature/konamobility-v2-workspaces, origin/feature/konamobility-v2-workspaces) fix: surface v2 data connection errors
+4d836c8 fix: guard matching studio scenario state
+72ea008 fix: stabilize Google scenario matching inputs
+4df1063 feat: add Google spatial matching studio
+4c3258d fix: clarify matching studio candidate scope
+655891d fix: finalize matching studio server ranking
+22f931e feat: add v2 matching studio
+a981747 fix: complete vector workbench interactions
+c4e7026 feat: add v2 vector workbench
+f0a6d8d feat: finalize v2 data operations console
+a40ad4d feat: build v2 data operations console
+f0ddbf2 feat: add isolated konamobility v2 foundation
+cfee4f6 (tag: matching-simulator-v2-h3-final, tag: matching-simulator-v2-h3-backup-20260620-2, tag: matching-simulator-v2-h3-backup-20260620, origin/feature/matching-simulator-v2-h3, feature/matching-simulator-v2-h3) refactor: simplify matching simulator page
+0507537 refactor: simplify embedding factors page
+f486f7b style: strengthen navigation chips and simplify top flows
+8dcc1a0 feat: clarify dispatch dashboard IA and copy
+20ee65e (origin/main) feat: add route map preview and unify pmo branding
+06ea377 feat: redesign data status as ops board
+2a736e4 feat: introduce v3 dispatch workbench shell
+3256974 feat: elevate simulator dispatch presentation
+f7d0252 feat: clarify dispatch integration contract
+e6dbcce feat: show callcard addresses in simulator
+b5bb7e6 feat: surface raw callcard conditions in vectors page
+886c1f9 fix: clarify ingest page status language
+fcdd968 feat: refocus ingest page on matching data readiness
+e2b8242 feat: clarify vector and simulator core flows
+1f8b387 feat: polish vector and dispatch handoff layouts
+ac46797 (tag: layout-redesign-base-v1) feat: redesign matching simulator workbench
+740724a feat: redesign vector factor studio
+5af6d2a feat: redesign ingest readiness dashboard
+e501b36 docs: define UX redesign blueprint
+5fe4339 feat: redesign dispatch logic handoff page
+eba65c0 fix: balance visual shell scale
+4146e2a feat: elevate dispatch dashboard visual shell
+84caab7 feat: clarify core screens for matching flow
+881401b feat: focus ingest readiness dashboard
+d8b0b18 feat: unify primary navigation shell
+d49fc74 fix: clarify ingest readiness core
+45a8c09 fix: clarify dispatch handoff flow
+afa48f0 fix: route main entry to ingest

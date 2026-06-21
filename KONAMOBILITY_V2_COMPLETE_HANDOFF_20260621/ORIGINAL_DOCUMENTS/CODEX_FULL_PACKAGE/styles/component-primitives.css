@@ -1,0 +1,86 @@
+.km-app {
+  min-height: 100dvh;
+  color: var(--km-text-primary);
+  background:
+    radial-gradient(circle at 50% -20%, rgba(40, 111, 145, 0.10), transparent 42%),
+    var(--km-bg-app);
+}
+
+.km-panel {
+  background: var(--km-bg-panel);
+  border: 1px solid var(--km-border-subtle);
+  border-radius: var(--km-radius-panel);
+}
+
+.km-floating-panel {
+  background: color-mix(in srgb, var(--km-bg-panel-raised) 94%, transparent);
+  border: 1px solid var(--km-border-default);
+  border-radius: var(--km-radius-floating);
+  box-shadow: var(--km-shadow-floating);
+  backdrop-filter: blur(12px);
+}
+
+.km-interactive-row {
+  border: 1px solid transparent;
+  border-radius: var(--km-radius-row);
+  transition:
+    background-color var(--km-motion-standard) var(--km-ease-standard),
+    border-color var(--km-motion-standard) var(--km-ease-standard),
+    color var(--km-motion-standard) var(--km-ease-standard);
+}
+
+.km-interactive-row:hover {
+  background: var(--km-bg-hover);
+  border-color: var(--km-border-default);
+}
+
+.km-interactive-row[data-selected="true"] {
+  background: var(--km-bg-selected);
+  border-color: var(--km-border-strong);
+}
+
+.km-focusable:focus-visible {
+  outline: 2px solid var(--km-cyan);
+  outline-offset: 2px;
+}
+
+.km-button-primary {
+  min-height: 40px;
+  padding: 0 16px;
+  color: #041015;
+  font-weight: 700;
+  background: linear-gradient(90deg, var(--km-cyan), var(--km-violet));
+  border: 0;
+  border-radius: var(--km-radius-control);
+  transition:
+    filter var(--km-motion-fast) var(--km-ease-standard),
+    transform var(--km-motion-fast) var(--km-ease-standard);
+}
+
+.km-button-primary:hover { filter: brightness(1.06); }
+.km-button-primary:active { transform: translateY(1px); }
+.km-button-primary:disabled {
+  cursor: not-allowed;
+  filter: saturate(.25);
+  opacity: .55;
+}
+
+.km-input {
+  min-height: 38px;
+  color: var(--km-text-primary);
+  background: var(--km-bg-interactive);
+  border: 1px solid var(--km-border-default);
+  border-radius: var(--km-radius-control);
+}
+
+.km-input:hover { border-color: var(--km-border-strong); }
+.km-input:focus { border-color: var(--km-cyan); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

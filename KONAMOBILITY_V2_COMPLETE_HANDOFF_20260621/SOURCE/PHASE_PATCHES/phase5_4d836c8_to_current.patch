@@ -1,0 +1,56 @@
+﻿diff --git a/app/components/v2/data-ops/useDataOpsStatus.ts b/app/components/v2/data-ops/useDataOpsStatus.ts
+index a969b65..ba40858 100644
+--- a/app/components/v2/data-ops/useDataOpsStatus.ts
++++ b/app/components/v2/data-ops/useDataOpsStatus.ts
+@@ -28,11 +28,11 @@ export function useDataOpsStatus() {
+         if (!response.ok || json.error) {
+           setQueryStatus('error')
+           setErrorMessage(json.error ?? `Status API failed with ${response.status}`)
+-        } else if (!json.callTables?.length && !json.meterTables?.length && !json.vectorTables?.length) {
+-          setQueryStatus('empty')
+         } else if (json.ok === false) {
+-          setQueryStatus('partial')
++          setQueryStatus(json.source === 'none' ? 'error' : 'partial')
+           setErrorMessage(json.message)
++        } else if (!json.callTables?.length && !json.meterTables?.length && !json.vectorTables?.length) {
++          setQueryStatus('empty')
+         } else {
+           setQueryStatus('success')
+         }
+diff --git a/app/matching-studio/page.tsx b/app/matching-studio/page.tsx
+index 21ac81a..dc4658b 100644
+--- a/app/matching-studio/page.tsx
++++ b/app/matching-studio/page.tsx
+@@ -12,12 +12,12 @@ export default async function MatchingStudioPage() {
+   return (
+     <AppShell>
+       {model.status === 'error' ? (
+-        <MatchingRetryState title="Matching Studio Error" message="매칭 분석 데이터를 다시 불러오지 못했습니다." />
++        <MatchingRetryState title="Matching Studio Error" message={model.message || '매칭 분석 데이터를 다시 불러오지 못했습니다.'} />
+       ) : null}
+       {model.status === 'empty' ? <EmptyState message={model.message} /> : null}
+       {model.status === 'partial' ? (
+         <>
+-          <MatchingRetryState title="Partial Data" message="일부 매칭 데이터만 준비되었습니다. 화면은 가능한 데이터 기준으로 표시합니다." />
++          <MatchingRetryState title="Partial Data" message={model.message || '일부 매칭 데이터만 준비되었습니다. 가능한 데이터 기준으로 표시합니다.'} />
+           <MatchingStudio model={model} />
+         </>
+       ) : null}
+diff --git a/app/vector-workbench/page.tsx b/app/vector-workbench/page.tsx
+index dc454ba..f940d08 100644
+--- a/app/vector-workbench/page.tsx
++++ b/app/vector-workbench/page.tsx
+@@ -11,11 +11,11 @@ export default async function VectorWorkbenchPage() {
+ 
+   return (
+     <AppShell>
+-      {model.status === 'error' ? <VectorRetryState title="Error" message="벡터 데이터를 다시 불러오지 못했습니다." /> : null}
++      {model.status === 'error' ? <VectorRetryState title="Error" message={model.message || '벡터 데이터를 다시 불러오지 못했습니다.'} /> : null}
+       {model.status === 'empty' ? <EmptyState message={model.message} /> : null}
+       {model.status === 'partial' ? (
+         <>
+-          <VectorRetryState title="Partial" message="일부 벡터 원천을 불러오지 못했습니다. 다시 시도할 수 있습니다." />
++          <VectorRetryState title="Partial" message={model.message || '일부 벡터 원천만 준비되었습니다. 가능한 데이터 기준으로 표시합니다.'} />
+           <VectorWorkbench model={model} />
+         </>
+       ) : null}

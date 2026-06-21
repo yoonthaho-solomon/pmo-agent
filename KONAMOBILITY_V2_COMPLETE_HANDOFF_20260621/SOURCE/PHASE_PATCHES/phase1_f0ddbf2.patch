@@ -1,0 +1,862 @@
+﻿diff --git a/app/components/v2/WorkspacePlaceholder.tsx b/app/components/v2/WorkspacePlaceholder.tsx
+new file mode 100644
+index 0000000..7fab44b
+--- /dev/null
++++ b/app/components/v2/WorkspacePlaceholder.tsx
+@@ -0,0 +1,79 @@
++import { AppShell } from './shell/AppShell'
++import { Badge } from './primitives/Badge'
++import { Button } from './primitives/Button'
++import { Input } from './primitives/Input'
++import { Panel } from './primitives/Panel'
++import { Tooltip } from './primitives/Tooltip'
++import { QueryStateBoundary } from './shell/QueryStateBoundary'
++import styles from './styles/primitives.module.css'
++
++const workspaceCopy = {
++  'data-ops': {
++    eyebrow: 'DATA OPS CONSOLE',
++    title: '데이터 운영 콘솔',
++    body: '호출데이터와 앱미터데이터가 언제, 얼마나, 정상적으로 쌓였는지 날짜 매트릭스와 인스펙터로 확인하는 작업공간입니다.',
++    panel: 'Phase 2에서 Source Rail, 적재 Matrix, 선택 Cell Inspector, Data Catalog를 실제 system-status 응답에 연결합니다.',
++    badge: '데이터 운영',
++  },
++  'vector-workbench': {
++    eyebrow: 'VECTOR WORKBENCH',
++    title: '벡터 워크벤치',
++    body: '콜카드 조건과 기사 운행패턴이 어떤 팩터로 임베딩되고, 코사인 유사도에 어떤 차이를 만드는지 비교하는 작업공간입니다.',
++    panel: 'Phase 3에서 Factor Library, Vector Matrix, Relationship Map, Cosine Lens를 기존 22D 계산에 연결합니다.',
++    badge: '22D 보호',
++  },
++  'matching-studio': {
++    eyebrow: 'MATCHING STUDIO',
++    title: '공간 매칭 스튜디오',
++    body: '콜 조건과 출발·도착 위치를 기준으로 먼저 발송할 기사 후보를 확인하는 지도 중심 작업공간입니다.',
++    panel: 'Phase 4 이후 Call Builder, Map Stage, Candidate Dock, Evidence Drawer를 순서대로 연결합니다.',
++    badge: '지도 준비',
++  },
++} as const
++
++export function WorkspacePlaceholder({ workspace }: { workspace: keyof typeof workspaceCopy }) {
++  const copy = workspaceCopy[workspace]
++
++  return (
++    <AppShell>
++      <div className={styles.workspace}>
++        <Panel className={styles.placeholderHero}>
++          <div>
++            <Badge tone="cyan">{copy.eyebrow}</Badge>
++            <h1 className={styles.placeholderTitle}>{copy.title}</h1>
++            <p className={styles.placeholderText}>{copy.body}</p>
++          </div>
++          <Panel floating className={styles.placeholderMeta}>
++            <Badge tone="green">Phase 1 Foundation</Badge>
++            <strong>{copy.badge}</strong>
++            <span>{copy.panel}</span>
++          </Panel>
++        </Panel>
++
++        <Panel className={styles.placeholderHero}>
++          <div>
++            <Badge tone="violet">Primitives Check</Badge>
++            <p className={styles.placeholderText}>
++              이 화면은 V2 AppShell과 공통 UI primitive가 기존 V1 화면과 격리되어 동작하는지 확인하기 위한 placeholder입니다.
++            </p>
++          </div>
++          <div className={styles.placeholderMeta}>
++            <Input aria-label="V2 input preview" placeholder="V2 입력 필드" />
++            <Tooltip label="Phase 1 기본 tooltip입니다.">
++              <Button variant="primary">상태 확인</Button>
++            </Tooltip>
++          </div>
++        </Panel>
++
++        <QueryStateBoundary status="success">
++          <Panel className={styles.stateBox}>
++            <div>
++              <strong>V2 경로 준비 완료</strong>
++              <span>실제 데이터 UI는 다음 Phase에서 연결합니다.</span>
++            </div>
++          </Panel>
++        </QueryStateBoundary>
++      </div>
++    </AppShell>
++  )
++}
+diff --git a/app/components/v2/primitives/Badge.tsx b/app/components/v2/primitives/Badge.tsx
+new file mode 100644
+index 0000000..6c5a892
+--- /dev/null
++++ b/app/components/v2/primitives/Badge.tsx
+@@ -0,0 +1,25 @@
++import type { ReactNode } from 'react'
++import styles from '../styles/primitives.module.css'
++
++const toneColor = {
++  neutral: 'var(--km-v2-text-secondary)',
++  cyan: 'var(--km-v2-cyan)',
++  green: 'var(--km-v2-green)',
++  amber: 'var(--km-v2-amber)',
++  red: 'var(--km-v2-red)',
++  violet: 'var(--km-v2-violet)',
++} as const
++
++export function Badge({
++  children,
++  tone = 'neutral',
++}: {
++  children: ReactNode
++  tone?: keyof typeof toneColor
++}) {
++  return (
++    <span className={styles.badge} style={{ color: toneColor[tone] }}>
++      {children}
++    </span>
++  )
++}
+diff --git a/app/components/v2/primitives/Button.tsx b/app/components/v2/primitives/Button.tsx
+new file mode 100644
+index 0000000..49cac7d
+--- /dev/null
++++ b/app/components/v2/primitives/Button.tsx
+@@ -0,0 +1,18 @@
++import type { ButtonHTMLAttributes } from 'react'
++import styles from '../styles/primitives.module.css'
++
++export function Button({
++  variant = 'default',
++  className = '',
++  ...props
++}: ButtonHTMLAttributes<HTMLButtonElement> & {
++  variant?: 'default' | 'primary'
++}) {
++  return (
++    <button
++      className={`${styles.button} ${variant === 'primary' ? styles.buttonPrimary : ''} ${className}`}
++      type={props.type ?? 'button'}
++      {...props}
++    />
++  )
++}
+diff --git a/app/components/v2/primitives/Input.tsx b/app/components/v2/primitives/Input.tsx
+new file mode 100644
+index 0000000..8f99007
+--- /dev/null
++++ b/app/components/v2/primitives/Input.tsx
+@@ -0,0 +1,6 @@
++import type { InputHTMLAttributes } from 'react'
++import styles from '../styles/primitives.module.css'
++
++export function Input({ className = '', ...props }: InputHTMLAttributes<HTMLInputElement>) {
++  return <input className={`${styles.input} ${className}`} {...props} />
++}
+diff --git a/app/components/v2/primitives/InteractiveRow.tsx b/app/components/v2/primitives/InteractiveRow.tsx
+new file mode 100644
+index 0000000..3df7a71
+--- /dev/null
++++ b/app/components/v2/primitives/InteractiveRow.tsx
+@@ -0,0 +1,18 @@
++import type { ButtonHTMLAttributes, ReactNode } from 'react'
++import styles from '../styles/primitives.module.css'
++
++export function InteractiveRow({
++  children,
++  selected = false,
++  className = '',
++  ...props
++}: ButtonHTMLAttributes<HTMLButtonElement> & {
++  children: ReactNode
++  selected?: boolean
++}) {
++  return (
++    <button className={`${styles.interactiveRow} ${className}`} data-selected={selected} type="button" {...props}>
++      {children}
++    </button>
++  )
++}
+diff --git a/app/components/v2/primitives/Panel.tsx b/app/components/v2/primitives/Panel.tsx
+new file mode 100644
+index 0000000..638c9ee
+--- /dev/null
++++ b/app/components/v2/primitives/Panel.tsx
+@@ -0,0 +1,14 @@
++import type { ReactNode } from 'react'
++import styles from '../styles/primitives.module.css'
++
++export function Panel({
++  children,
++  floating = false,
++  className = '',
++}: {
++  children: ReactNode
++  floating?: boolean
++  className?: string
++}) {
++  return <section className={`${floating ? styles.floatingPanel : styles.panel} ${className}`}>{children}</section>
++}
+diff --git a/app/components/v2/primitives/QueryStates.tsx b/app/components/v2/primitives/QueryStates.tsx
+new file mode 100644
+index 0000000..3a9d8b2
+--- /dev/null
++++ b/app/components/v2/primitives/QueryStates.tsx
+@@ -0,0 +1,42 @@
++import styles from '../styles/primitives.module.css'
++
++function StateBox({
++  title,
++  message,
++  children,
++}: {
++  title: string
++  message?: string
++  children?: React.ReactNode
++}) {
++  return (
++    <div className={`${styles.panel} ${styles.stateBox}`}>
++      <div>
++        <strong>{title}</strong>
++        <span>{message}</span>
++        {children}
++      </div>
++    </div>
++  )
++}
++
++export function LoadingState({ message = '데이터를 확인하고 있습니다.' }: { message?: string }) {
++  return (
++    <StateBox title="Loading" message={message}>
++      <div style={{ height: 16 }} />
++      <div className={styles.skeleton} />
++    </StateBox>
++  )
++}
++
++export function EmptyState({ message = '표시할 데이터가 없습니다.' }: { message?: string }) {
++  return <StateBox title="Empty" message={message} />
++}
++
++export function PartialState({ message = '일부 데이터만 준비되었습니다.' }: { message?: string }) {
++  return <StateBox title="Partial" message={message} />
++}
++
++export function ErrorState({ message = '데이터를 불러오지 못했습니다.' }: { message?: string }) {
++  return <StateBox title="Error" message={message} />
++}
+diff --git a/app/components/v2/primitives/Tooltip.tsx b/app/components/v2/primitives/Tooltip.tsx
+new file mode 100644
+index 0000000..035414d
+--- /dev/null
++++ b/app/components/v2/primitives/Tooltip.tsx
+@@ -0,0 +1,17 @@
++import type { ReactNode } from 'react'
++import styles from '../styles/primitives.module.css'
++
++export function Tooltip({
++  label,
++  children,
++}: {
++  label: ReactNode
++  children: ReactNode
++}) {
++  return (
++    <span className={styles.tooltipWrap}>
++      {children}
++      <span className={styles.tooltip} role="tooltip">{label}</span>
++    </span>
++  )
++}
+diff --git a/app/components/v2/shell/AppShell.tsx b/app/components/v2/shell/AppShell.tsx
+new file mode 100644
+index 0000000..f310f11
+--- /dev/null
++++ b/app/components/v2/shell/AppShell.tsx
+@@ -0,0 +1,16 @@
++import type { ReactNode } from 'react'
++import tokenStyles from '../styles/tokens.module.css'
++import styles from '../styles/primitives.module.css'
++import { GlobalHeader } from './GlobalHeader'
++import { RouteTransition } from './RouteTransition'
++
++export function AppShell({ children }: { children: ReactNode }) {
++  return (
++    <div className={`${tokenStyles.root} ${styles.app}`}>
++      <GlobalHeader />
++      <main className={styles.body}>
++        <RouteTransition>{children}</RouteTransition>
++      </main>
++    </div>
++  )
++}
+diff --git a/app/components/v2/shell/GlobalHeader.tsx b/app/components/v2/shell/GlobalHeader.tsx
+new file mode 100644
+index 0000000..4d1750d
+--- /dev/null
++++ b/app/components/v2/shell/GlobalHeader.tsx
+@@ -0,0 +1,25 @@
++import styles from '../styles/primitives.module.css'
++import { Badge } from '../primitives/Badge'
++import { WorkspaceTabs } from './WorkspaceTabs'
++
++export function GlobalHeader() {
++  return (
++    <header className={styles.header}>
++      <div className={styles.headerInner}>
++        <div className={styles.brand} aria-label="KONAMOBILITY">
++          <span className={styles.brandMark}>K</span>
++          <span className={styles.brandText}>
++            <span className={styles.brandTitle}>KONAMOBILITY</span>
++            <span className={styles.brandSubtitle}>AI Dispatch Workspace</span>
++          </span>
++        </div>
++        <WorkspaceTabs />
++        <div className={styles.headerRight}>
++          <span className={styles.statusDot} aria-hidden />
++          <span>연결됨</span>
++          <Badge tone="cyan">V2 Preview</Badge>
++        </div>
++      </div>
++    </header>
++  )
++}
+diff --git a/app/components/v2/shell/QueryStateBoundary.tsx b/app/components/v2/shell/QueryStateBoundary.tsx
+new file mode 100644
+index 0000000..d85e071
+--- /dev/null
++++ b/app/components/v2/shell/QueryStateBoundary.tsx
+@@ -0,0 +1,20 @@
++import type { ReactNode } from 'react'
++import { EmptyState, ErrorState, LoadingState, PartialState } from '../primitives/QueryStates'
++
++export type V2QueryStatus = 'idle' | 'loading' | 'success' | 'empty' | 'partial' | 'error'
++
++export function QueryStateBoundary({
++  status,
++  message,
++  children,
++}: {
++  status: V2QueryStatus
++  message?: string
++  children: ReactNode
++}) {
++  if (status === 'loading' || status === 'idle') return <LoadingState message={message} />
++  if (status === 'empty') return <EmptyState message={message} />
++  if (status === 'partial') return <PartialState message={message} />
++  if (status === 'error') return <ErrorState message={message} />
++  return <>{children}</>
++}
+diff --git a/app/components/v2/shell/RouteTransition.tsx b/app/components/v2/shell/RouteTransition.tsx
+new file mode 100644
+index 0000000..2985f39
+--- /dev/null
++++ b/app/components/v2/shell/RouteTransition.tsx
+@@ -0,0 +1,6 @@
++import type { ReactNode } from 'react'
++import styles from '../styles/primitives.module.css'
++
++export function RouteTransition({ children }: { children: ReactNode }) {
++  return <div className={styles.routeTransition}>{children}</div>
++}
+diff --git a/app/components/v2/shell/WorkspaceTabs.tsx b/app/components/v2/shell/WorkspaceTabs.tsx
+new file mode 100644
+index 0000000..5519f94
+--- /dev/null
++++ b/app/components/v2/shell/WorkspaceTabs.tsx
+@@ -0,0 +1,33 @@
++'use client'
++
++import Link from 'next/link'
++import { usePathname } from 'next/navigation'
++import styles from '../styles/primitives.module.css'
++
++export const v2Workspaces = [
++  { id: 'data-ops', label: '데이터 운영', href: '/data-ops' },
++  { id: 'vector-workbench', label: '벡터 워크벤치', href: '/vector-workbench' },
++  { id: 'matching-studio', label: '매칭 스튜디오', href: '/matching-studio' },
++] as const
++
++export function WorkspaceTabs() {
++  const pathname = usePathname()
++
++  return (
++    <nav className={styles.tabs} aria-label="KONAMOBILITY V2 작업공간">
++      {v2Workspaces.map((item) => {
++        const active = pathname === item.href
++        return (
++          <Link
++            key={item.id}
++            href={item.href}
++            className={`${styles.tab} ${active ? styles.tabActive : ''}`}
++            aria-current={active ? 'page' : undefined}
++          >
++            {item.label}
++          </Link>
++        )
++      })}
++    </nav>
++  )
++}
+diff --git a/app/components/v2/styles/primitives.module.css b/app/components/v2/styles/primitives.module.css
+new file mode 100644
+index 0000000..98cf11e
+--- /dev/null
++++ b/app/components/v2/styles/primitives.module.css
+@@ -0,0 +1,387 @@
++.app {
++  min-height: 100dvh;
++  color: var(--km-v2-text-primary);
++  background:
++    radial-gradient(circle at 50% -20%, rgba(67, 214, 239, 0.1), transparent 42%),
++    linear-gradient(180deg, #061018 0%, #050b12 100%);
++}
++
++.header {
++  position: sticky;
++  top: 0;
++  z-index: 50;
++  height: var(--km-v2-header-height);
++  border-bottom: 1px solid var(--km-v2-border-subtle);
++  background: rgba(6, 16, 24, 0.92);
++  backdrop-filter: blur(14px) saturate(140%);
++}
++
++.headerInner {
++  height: 100%;
++  padding: 0 16px;
++  display: grid;
++  grid-template-columns: 260px 1fr 260px;
++  align-items: center;
++  gap: 16px;
++}
++
++.brand {
++  display: inline-flex;
++  align-items: center;
++  gap: 12px;
++  min-width: 0;
++}
++
++.brandMark {
++  width: 34px;
++  height: 34px;
++  border-radius: 10px;
++  display: grid;
++  place-items: center;
++  color: #041015;
++  background: linear-gradient(135deg, var(--km-v2-cyan), var(--km-v2-violet));
++  font-weight: 900;
++  letter-spacing: -0.04em;
++}
++
++.brandText {
++  min-width: 0;
++  display: grid;
++  gap: 2px;
++}
++
++.brandTitle {
++  font-size: 17px;
++  font-weight: 850;
++  line-height: 1;
++  letter-spacing: -0.02em;
++}
++
++.brandSubtitle {
++  color: var(--km-v2-text-muted);
++  font-size: 11px;
++  font-weight: 750;
++  letter-spacing: 0.14em;
++  text-transform: uppercase;
++}
++
++.tabs {
++  justify-self: center;
++  display: inline-flex;
++  align-items: center;
++  gap: 8px;
++}
++
++.tab {
++  position: relative;
++  min-width: 132px;
++  height: 40px;
++  padding: 0 16px;
++  display: inline-grid;
++  place-items: center;
++  color: var(--km-v2-text-secondary);
++  border: 1px solid transparent;
++  border-radius: 999px;
++  font-size: 15px;
++  font-weight: 800;
++  transition:
++    color var(--km-v2-motion-standard) var(--km-v2-ease-standard),
++    background var(--km-v2-motion-standard) var(--km-v2-ease-standard),
++    border-color var(--km-v2-motion-standard) var(--km-v2-ease-standard);
++}
++
++.tab:hover {
++  color: var(--km-v2-text-primary);
++  background: rgba(18, 39, 56, 0.72);
++  border-color: var(--km-v2-border-default);
++}
++
++.tabActive {
++  color: var(--km-v2-cyan);
++  background: rgba(67, 214, 239, 0.08);
++  border-color: var(--km-v2-border-strong);
++}
++
++.tabActive::after {
++  content: "";
++  position: absolute;
++  left: 18px;
++  right: 18px;
++  bottom: -13px;
++  height: 2px;
++  border-radius: 999px;
++  background: var(--km-v2-cyan);
++  box-shadow: 0 0 16px rgba(67, 214, 239, 0.45);
++}
++
++.headerRight {
++  justify-self: end;
++  display: inline-flex;
++  align-items: center;
++  gap: 14px;
++  color: var(--km-v2-text-secondary);
++  font-size: 13px;
++}
++
++.statusDot {
++  width: 7px;
++  height: 7px;
++  border-radius: 999px;
++  background: var(--km-v2-green);
++  box-shadow: 0 0 12px rgba(85, 214, 154, 0.45);
++}
++
++.body {
++  min-height: calc(100dvh - var(--km-v2-header-height));
++  padding: 14px;
++}
++
++.workspace {
++  min-height: calc(100dvh - var(--km-v2-header-height) - 28px);
++  display: grid;
++  gap: 12px;
++}
++
++.routeTransition {
++  animation: kmV2Enter var(--km-v2-motion-medium) var(--km-v2-ease-standard);
++}
++
++.panel {
++  background: color-mix(in srgb, var(--km-v2-bg-panel) 96%, transparent);
++  border: 1px solid var(--km-v2-border-subtle);
++  border-radius: var(--km-v2-radius-panel);
++}
++
++.floatingPanel {
++  background: color-mix(in srgb, var(--km-v2-bg-panel-raised) 94%, transparent);
++  border: 1px solid var(--km-v2-border-default);
++  border-radius: var(--km-v2-radius-floating);
++  box-shadow: var(--km-v2-shadow-floating);
++  backdrop-filter: blur(12px);
++}
++
++.interactiveRow {
++  border: 1px solid transparent;
++  border-radius: var(--km-v2-radius-row);
++  transition:
++    background var(--km-v2-motion-standard) var(--km-v2-ease-standard),
++    border-color var(--km-v2-motion-standard) var(--km-v2-ease-standard);
++}
++
++.interactiveRow:hover,
++.interactiveRow[data-selected="true"] {
++  background: var(--km-v2-bg-hover);
++  border-color: var(--km-v2-border-default);
++}
++
++.button {
++  min-height: 38px;
++  padding: 0 14px;
++  border: 1px solid var(--km-v2-border-default);
++  border-radius: var(--km-v2-radius-control);
++  color: var(--km-v2-text-primary);
++  background: var(--km-v2-bg-interactive);
++  font-weight: 750;
++  cursor: pointer;
++  transition:
++    filter var(--km-v2-motion-fast) var(--km-v2-ease-standard),
++    transform var(--km-v2-motion-fast) var(--km-v2-ease-standard),
++    border-color var(--km-v2-motion-fast) var(--km-v2-ease-standard);
++}
++
++.button:hover {
++  border-color: var(--km-v2-border-strong);
++  filter: brightness(1.06);
++}
++
++.button:active {
++  transform: translateY(1px);
++}
++
++.buttonPrimary {
++  color: #041015;
++  border: 0;
++  background: linear-gradient(90deg, var(--km-v2-cyan), var(--km-v2-violet));
++}
++
++.input {
++  min-height: 38px;
++  padding: 0 12px;
++  color: var(--km-v2-text-primary);
++  background: var(--km-v2-bg-interactive);
++  border: 1px solid var(--km-v2-border-default);
++  border-radius: var(--km-v2-radius-control);
++}
++
++.input:focus {
++  outline: 2px solid rgba(67, 214, 239, 0.35);
++  outline-offset: 1px;
++  border-color: var(--km-v2-cyan);
++}
++
++.badge {
++  display: inline-flex;
++  align-items: center;
++  gap: 7px;
++  min-height: 26px;
++  padding: 0 10px;
++  border: 1px solid var(--km-v2-border-default);
++  border-radius: 999px;
++  color: var(--km-v2-text-secondary);
++  background: rgba(18, 39, 56, 0.52);
++  font-size: 12px;
++  font-weight: 750;
++}
++
++.tooltipWrap {
++  position: relative;
++  display: inline-flex;
++}
++
++.tooltip {
++  pointer-events: none;
++  position: absolute;
++  left: 50%;
++  bottom: calc(100% + 8px);
++  z-index: 20;
++  width: max-content;
++  max-width: 260px;
++  transform: translateX(-50%);
++  padding: 8px 10px;
++  color: var(--km-v2-text-primary);
++  background: var(--km-v2-bg-panel-raised);
++  border: 1px solid var(--km-v2-border-default);
++  border-radius: var(--km-v2-radius-control);
++  box-shadow: var(--km-v2-shadow-floating);
++  opacity: 0;
++  transition: opacity var(--km-v2-motion-fast) var(--km-v2-ease-standard);
++  font-size: 12px;
++  line-height: 1.45;
++}
++
++.tooltipWrap:hover .tooltip,
++.tooltipWrap:focus-within .tooltip {
++  opacity: 1;
++}
++
++.stateBox {
++  min-height: 170px;
++  padding: 24px;
++  display: grid;
++  place-items: center;
++  text-align: center;
++  color: var(--km-v2-text-secondary);
++}
++
++.stateBox strong {
++  display: block;
++  margin-bottom: 8px;
++  color: var(--km-v2-text-primary);
++  font-size: 18px;
++}
++
++.skeleton {
++  width: min(420px, 100%);
++  height: 12px;
++  border-radius: 999px;
++  background: linear-gradient(90deg, rgba(255,255,255,0.06), rgba(255,255,255,0.16), rgba(255,255,255,0.06));
++  background-size: 220% 100%;
++  animation: kmV2Skeleton 1.4s linear infinite;
++}
++
++.placeholderHero {
++  padding: 24px;
++  display: grid;
++  grid-template-columns: minmax(0, 1fr) 320px;
++  gap: 14px;
++}
++
++.placeholderTitle {
++  margin: 0;
++  color: var(--km-v2-text-primary);
++  font-size: clamp(24px, 3vw, 36px);
++  line-height: 1.08;
++  letter-spacing: -0.045em;
++}
++
++.placeholderText {
++  max-width: 760px;
++  margin: 12px 0 0;
++  color: var(--km-v2-text-secondary);
++  font-size: 15px;
++  line-height: 1.65;
++}
++
++.placeholderMeta {
++  padding: 18px;
++  display: grid;
++  align-content: center;
++  gap: 10px;
++}
++
++@keyframes kmV2Enter {
++  from {
++    opacity: 0;
++    transform: translateY(6px);
++  }
++  to {
++    opacity: 1;
++    transform: translateY(0);
++  }
++}
++
++@keyframes kmV2Skeleton {
++  to {
++    background-position: -220% 0;
++  }
++}
++
++@media (max-width: 1120px) {
++  .headerInner {
++    grid-template-columns: 210px 1fr auto;
++  }
++
++  .tab {
++    min-width: 110px;
++  }
++
++  .placeholderHero {
++    grid-template-columns: 1fr;
++  }
++}
++
++@media (max-width: 860px) {
++  .header {
++    height: auto;
++  }
++
++  .headerInner {
++    min-height: var(--km-v2-header-height);
++    grid-template-columns: 1fr;
++    padding: 12px 14px;
++  }
++
++  .tabs {
++    justify-self: stretch;
++    overflow-x: auto;
++    justify-content: flex-start;
++  }
++
++  .headerRight {
++    justify-self: start;
++  }
++}
++
++@media (prefers-reduced-motion: reduce) {
++  .routeTransition,
++  .skeleton {
++    animation: none;
++  }
++
++  .tab,
++  .button,
++  .interactiveRow,
++  .tooltip {
++    transition: none;
++  }
++}
+diff --git a/app/components/v2/styles/tokens.module.css b/app/components/v2/styles/tokens.module.css
+new file mode 100644
+index 0000000..e0c50b9
+--- /dev/null
++++ b/app/components/v2/styles/tokens.module.css
+@@ -0,0 +1,33 @@
++.root {
++  color-scheme: dark;
++  --km-v2-bg-app: #061018;
++  --km-v2-bg-shell: #08131e;
++  --km-v2-bg-panel: #0c1925;
++  --km-v2-bg-panel-raised: #102130;
++  --km-v2-bg-interactive: #122738;
++  --km-v2-bg-hover: #162d40;
++  --km-v2-bg-selected: #153348;
++  --km-v2-border-subtle: rgba(145, 183, 207, 0.12);
++  --km-v2-border-default: rgba(145, 183, 207, 0.2);
++  --km-v2-border-strong: rgba(111, 211, 239, 0.42);
++  --km-v2-text-primary: #f3f7fa;
++  --km-v2-text-secondary: #a9bac6;
++  --km-v2-text-muted: #718795;
++  --km-v2-text-disabled: #4e626f;
++  --km-v2-cyan: #43d6ef;
++  --km-v2-violet: #9273f5;
++  --km-v2-green: #55d69a;
++  --km-v2-amber: #f2a640;
++  --km-v2-red: #f2645a;
++  --km-v2-blue: #4b8ef7;
++  --km-v2-radius-control: 6px;
++  --km-v2-radius-row: 6px;
++  --km-v2-radius-panel: 8px;
++  --km-v2-radius-floating: 10px;
++  --km-v2-header-height: 64px;
++  --km-v2-shadow-floating: 0 16px 48px rgba(0, 0, 0, 0.38);
++  --km-v2-motion-fast: 120ms;
++  --km-v2-motion-standard: 180ms;
++  --km-v2-motion-medium: 240ms;
++  --km-v2-ease-standard: cubic-bezier(.2, 0, 0, 1);
++}
+diff --git a/app/data-ops/page.tsx b/app/data-ops/page.tsx
+new file mode 100644
+index 0000000..b232178
+--- /dev/null
++++ b/app/data-ops/page.tsx
+@@ -0,0 +1,5 @@
++import { WorkspacePlaceholder } from '@/app/components/v2/WorkspacePlaceholder'
++
++export default function DataOpsPage() {
++  return <WorkspacePlaceholder workspace="data-ops" />
++}
+diff --git a/app/matching-studio/page.tsx b/app/matching-studio/page.tsx
+new file mode 100644
+index 0000000..82be842
+--- /dev/null
++++ b/app/matching-studio/page.tsx
+@@ -0,0 +1,5 @@
++import { WorkspacePlaceholder } from '@/app/components/v2/WorkspacePlaceholder'
++
++export default function MatchingStudioPage() {
++  return <WorkspacePlaceholder workspace="matching-studio" />
++}
+diff --git a/app/vector-workbench/page.tsx b/app/vector-workbench/page.tsx
+new file mode 100644
+index 0000000..5c0529a
+--- /dev/null
++++ b/app/vector-workbench/page.tsx
+@@ -0,0 +1,5 @@
++import { WorkspacePlaceholder } from '@/app/components/v2/WorkspacePlaceholder'
++
++export default function VectorWorkbenchPage() {
++  return <WorkspacePlaceholder workspace="vector-workbench" />
++}
