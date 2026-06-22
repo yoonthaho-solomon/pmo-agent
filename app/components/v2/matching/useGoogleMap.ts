@@ -95,6 +95,7 @@ export function useGoogleMap({
           center: { lat: 36.8151, lng: 127.1139 },
           zoom: 12,
           mapId,
+          colorScheme: 'DARK',
           mapTypeControl: false,
           streetViewControl: false,
           fullscreenControl: false,
