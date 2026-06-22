@@ -1,5 +1,4 @@
 import { calculateSpatialScore, calculateV2FinalScore, type SpatialScoreResult } from '@/lib/h3-match-score'
-import { getH3GridDistance, normalizeH3Cell } from '@/lib/h3-dispatch'
 import { cosineSimilarityForMatching } from '@/lib/matching-vector'
 import type { AdaptCallcardLocationResult } from '@/lib/callcard-location-adapter'
 import type { VectorDimensionKey } from '@/lib/matching-vector'
@@ -73,41 +72,26 @@ export type MatchingStudioModel = {
   }
 }
 
-function bestPreferenceCell(targetH3: string | null, preferredCells: string[]): string | null {
-  const target = normalizeH3Cell(targetH3)
-  if (!target) return null
-
-  let bestCell: string | null = null
-  let bestDistance: number | null = null
-
-  for (const cell of preferredCells) {
-    const normalized = normalizeH3Cell(cell)
-    if (!normalized) continue
-
-    const distance = getH3GridDistance(target, normalized)
-    if (distance == null) continue
-
-    if (bestDistance == null || distance < bestDistance) {
-      bestDistance = distance
-      bestCell = normalized
-    }
-  }
-
-  return bestCell
-}
-
-export function calculateMatchingCandidate(callcard: MatchingCallcardModel, driver: MatchingDriverModel): MatchingCandidateModel | null {
+export function calculateMatchingCandidate(
+  callcard: MatchingCallcardModel,
+  driver: MatchingDriverModel,
+  prenormalizedPrefs?: { origin: string[]; destination: string[] },
+): MatchingCandidateModel | null {
   if (!callcard.vectorAvailable || !driver.vectorAvailable) return null
 
   const similarityScore = cosineSimilarityForMatching(callcard.vector, driver.vector) * 100
+  // Callcard h3Res7 values are already normalized lowercase res-7 cells (built by the
+  // location adapter), so when the caller also supplies prenormalized driver cells we can
+  // run the spatial scoring without re-validating every cell on each pair.
   const spatial = calculateSpatialScore({
     originH3: callcard.route.pickup.h3Res7,
     destinationH3: callcard.route.destination.h3Res7,
-    preferredOriginH3Cells: driver.prefOriginH3,
-    preferredDestinationH3Cells: driver.prefDestinationH3,
+    preferredOriginH3Cells: prenormalizedPrefs?.origin ?? driver.prefOriginH3,
+    preferredDestinationH3Cells: prenormalizedPrefs?.destination ?? driver.prefDestinationH3,
+    prenormalized: prenormalizedPrefs != null,
   })
-  const destinationCell = bestPreferenceCell(callcard.route.destination.h3Res7, driver.prefDestinationH3)
-  const originCell = bestPreferenceCell(callcard.route.pickup.h3Res7, driver.prefOriginH3)
+  const destinationCell = spatial.destinationBestCell
+  const originCell = spatial.originBestCell
 
   return {
     driver,

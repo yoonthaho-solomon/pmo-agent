@@ -1,7 +1,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { cellToLatLng } from 'h3-js'
 import { adaptCallcardLocation } from '@/lib/callcard-location-adapter'
-import { buildMatchingRouteLocation } from '@/lib/h3-dispatch'
+import { buildMatchingRouteLocation, normalizeH3Cell } from '@/lib/h3-dispatch'
 import { V2_MATCH_WEIGHTS } from '@/lib/h3-match-score'
 import {
   callToVector,
@@ -312,19 +312,52 @@ async function fetchDriversByAsp(
   return { data: drivers, count: totalCount || drivers.length, error: null }
 }
 
+type DriverPrefCache = Map<MatchingDriverModel, { origin: string[]; destination: string[] }>
+
+// Driver preferred H3 cells are reused across every callcard in their ASP, so normalize
+// them exactly once instead of re-validating each cell on every callcard × driver pair.
+function buildDriverPrefCache(drivers: MatchingDriverModel[]): DriverPrefCache {
+  const cache: DriverPrefCache = new Map()
+  for (const driver of drivers) {
+    if (cache.has(driver)) continue
+    cache.set(driver, {
+      origin: driver.prefOriginH3.map((cell) => normalizeH3Cell(cell)).filter((cell): cell is string => cell != null),
+      destination: driver.prefDestinationH3.map((cell) => normalizeH3Cell(cell)).filter((cell): cell is string => cell != null),
+    })
+  }
+  return cache
+}
+
 function buildCandidatesForCallcard(
   callcard: MatchingCallcardModel,
   drivers: MatchingDriverModel[],
+  prefCache?: DriverPrefCache,
 ): MatchingCandidateModel[] {
   return rankMatchingCandidates(
     drivers
-      .map((driver) => calculateMatchingCandidate(callcard, driver))
+      .map((driver) => calculateMatchingCandidate(callcard, driver, prefCache?.get(driver)))
       .filter((candidate): candidate is MatchingCandidateModel => candidate != null)
       .map(withH3Center),
   ).slice(0, TOP_CANDIDATE_LIMIT)
 }
 
+// The model build is expensive (fetch ~10k driver vectors + rank Top 10 for every callcard).
+// It only changes when the upstream pipelines refresh the tables, so a short in-memory TTL
+// keeps repeat loads instant without altering any matching score.
+const MODEL_CACHE_TTL_MS = 5 * 60 * 1000
+let modelCache: { value: MatchingStudioModel; expires: number } | null = null
+
 export async function getMatchingStudioModel(): Promise<MatchingStudioModel> {
+  if (modelCache && modelCache.expires > Date.now()) return modelCache.value
+
+  const model = await buildMatchingStudioModel()
+  if (model.status === 'success' || model.status === 'partial') {
+    modelCache = { value: model, expires: Date.now() + MODEL_CACHE_TTL_MS }
+  }
+  return model
+}
+
+async function buildMatchingStudioModel(): Promise<MatchingStudioModel> {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   if (!supabaseUrl || !supabaseKey) {
@@ -377,9 +410,10 @@ export async function getMatchingStudioModel(): Promise<MatchingStudioModel> {
     driverCount += group.count
   }
 
+  const prefCache = buildDriverPrefCache([...driversByAsp.values()].flat())
   const candidatesByCallcard = Object.fromEntries(callcards.map((callcard) => {
     const sameAspDrivers = driversByAsp.get(callcard.aspId) ?? driversByAsp.get(null) ?? []
-    return [callcard.id, buildCandidatesForCallcard(callcard, sameAspDrivers)]
+    return [callcard.id, buildCandidatesForCallcard(callcard, sameAspDrivers, prefCache)]
   }))
   const topCandidateDrivers = new Map<string, MatchingDriverModel>()
   for (const candidates of Object.values(candidatesByCallcard)) {
@@ -507,7 +541,7 @@ export async function calculateScenarioMatching(request: ScenarioMatchingRequest
     mode: 'scenario',
     callcardId: callcard.id,
     route: callcard.route,
-    candidates: buildCandidatesForCallcard(callcard, driverGroup.data),
+    candidates: buildCandidatesForCallcard(callcard, driverGroup.data, buildDriverPrefCache(driverGroup.data)),
     formula: formula(),
   }
 }
