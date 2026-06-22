@@ -1,5 +1,6 @@
 const fs = require('fs')
 const path = require('path')
+const http = require('http')
 
 const DESKTOP_DIR = '\uBC14\uD0D5 \uD654\uBA74'
 const CALL_DATA_DIR = '\uD638\uCD9C\uB370\uC774\uD130'
@@ -79,6 +80,38 @@ async function postJson(baseUrl, endpoint, body) {
   const json = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(`${endpoint} ${res.status}: ${JSON.stringify(json)}`)
   return json
+}
+
+// http.request-based variant: no timeout — for long-running matching calls that exceed undici's 5-min headersTimeout
+function postJsonLong(baseUrl, endpoint, body) {
+  const url = new URL(`${baseUrl}${endpoint}`)
+  const postData = JSON.stringify(body)
+  return new Promise((resolve, reject) => {
+    const req = http.request({
+      hostname: url.hostname,
+      port: parseInt(url.port) || 80,
+      path: url.pathname + (url.search || ''),
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(postData),
+      },
+    }, (res) => {
+      const chunks = []
+      res.on('data', (c) => chunks.push(c))
+      res.on('end', () => {
+        const text = Buffer.concat(chunks).toString()
+        let json
+        try { json = JSON.parse(text) } catch { json = {} }
+        if (res.statusCode >= 400) reject(new Error(`${endpoint} ${res.statusCode}: ${JSON.stringify(json)}`))
+        else resolve(json)
+      })
+      res.on('error', reject)
+    })
+    req.on('error', reject)
+    req.write(postData)
+    req.end()
+  })
 }
 
 async function postForm(baseUrl, endpoint, form) {
@@ -169,7 +202,7 @@ async function main() {
   if (!skipMatching) {
     for (const item of items) {
       const callDate = ymdToDate(item.date)
-      const result = await postJson(baseUrl, '/api/matching', { call_date: callDate })
+      const result = await postJsonLong(baseUrl, '/api/matching', { call_date: callDate })
       logRecord({ step: 'matching', date: item.date, result })
     }
   }

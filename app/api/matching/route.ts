@@ -77,11 +77,12 @@ const DRIVER_COLS = [
 
 function getSupabaseClient() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  // Server-side route: prefer service role key (no statement_timeout) for batch operations
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
   if (!supabaseUrl || !supabaseKey) {
     return {
-      error: 'Supabase 환경변수가 설정되지 않았습니다. NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY를 확인하세요.',
+      error: 'Supabase 환경변수가 설정되지 않았습니다. NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY를 확인하세요.',
       supabase: null,
     }
   }
@@ -94,21 +95,30 @@ function getSupabaseClient() {
 
 type SupabaseClientForMatching = NonNullable<ReturnType<typeof getSupabaseClient>['supabase']>
 
-async function fetchCallcards(supabase: SupabaseClientForMatching, callDate: string): Promise<CallcardRow[]> {
+async function fetchCallcards(
+  supabase: SupabaseClientForMatching,
+  callDate: string,
+): Promise<CallcardRow[]> {
   const all: CallcardRow[] = []
   const PAGE = 1000
-  let offset = 0
+  let lastId: string | null = null
   while (true) {
-    const { data, error } = await supabase
+    // keyset pagination: avoids OFFSET scan → no statement_timeout at large pages
+    let query = supabase
       .from('callcard_mbti')
       .select(CALLCARD_COLS)
       .eq('call_date', callDate)
-      .range(offset, offset + PAGE - 1)
+      .order('callcard_id', { ascending: true })
+      .limit(PAGE)
+    if (lastId !== null) {
+      query = query.gt('callcard_id', lastId)
+    }
+    const { data, error } = await query
     if (error) throw error
     if (!data || data.length === 0) break
     all.push(...(data as unknown as CallcardRow[]))
+    lastId = (data[data.length - 1] as unknown as CallcardRow).callcard_id
     if (data.length < PAGE) break
-    offset += PAGE
   }
   return all
 }
@@ -116,33 +126,31 @@ async function fetchCallcards(supabase: SupabaseClientForMatching, callDate: str
 async function fetchDrivers(supabase: SupabaseClientForMatching): Promise<DriverRow[]> {
   const all: DriverRow[] = []
   const PAGE = 1000
-  let offset = 0
+  let lastId: string | null = null
   while (true) {
-    const { data, error } = await supabase
+    // keyset pagination: avoids OFFSET scan → no statement_timeout at large pages
+    let query = supabase
       .from('driver_mbti')
       .select(DRIVER_COLS)
-      .range(offset, offset + PAGE - 1)
+      .order('driver_id', { ascending: true })
+      .limit(PAGE)
+    if (lastId !== null) {
+      query = query.gt('driver_id', lastId)
+    }
+    const { data, error } = await query
     if (error) throw error
     if (!data || data.length === 0) break
     all.push(...(data as unknown as DriverRow[]))
+    lastId = (data[data.length - 1] as unknown as DriverRow).driver_id
     if (data.length < PAGE) break
-    offset += PAGE
   }
   return all
 }
 
 function computeMatches(
   callcards: CallcardRow[],
-  drivers: DriverRow[],
+  driversByAsp: Map<number, DriverRow[]>,
 ): MatchScore[] {
-  // asp_id별 driver 풀 인덱싱
-  const driversByAsp = new Map<number, DriverRow[]>()
-  for (const d of drivers) {
-    const list = driversByAsp.get(d.asp_id) ?? []
-    list.push(d)
-    driversByAsp.set(d.asp_id, list)
-  }
-
   const results: MatchScore[] = []
 
   for (const call of callcards) {
@@ -207,8 +215,8 @@ export async function POST(request: NextRequest) {
     ])
   } catch (err) {
     console.error('[matching] 데이터 조회 실패', err)
-    await logAgentRun({ run_date: new Date().toISOString().slice(0, 10), agent_name: 'matching', input_rows: 0, status: 'failed', duration_ms: Date.now() - startedAt, error_msg: String(err) })
-    return NextResponse.json({ error: '데이터 조회 실패', detail: String(err) }, { status: 500 })
+    await logAgentRun({ run_date: new Date().toISOString().slice(0, 10), agent_name: 'matching', input_rows: 0, status: 'failed', duration_ms: Date.now() - startedAt, error_msg: JSON.stringify(err) })
+    return NextResponse.json({ error: '데이터 조회 실패', detail: JSON.stringify(err) }, { status: 500 })
   }
 
   inputRows = callcards.length
@@ -228,36 +236,41 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const scores = computeMatches(callcards, drivers)
-
-  if (scores.length === 0) {
-    await logAgentRun({ run_date: new Date().toISOString().slice(0, 10), agent_name: 'matching', input_rows: inputRows, status: 'failed', duration_ms: Date.now() - startedAt, error_msg: '매칭 결과 없음 (asp_id 불일치 가능)' })
-    return NextResponse.json(
-      { error: '매칭 결과가 없습니다. asp_id가 callcard_mbti와 driver_mbti 간에 일치하는지 확인하세요.' },
-      { status: 422 }
-    )
+  // asp_id별 driver 풀 인덱싱 (한 번만)
+  const driversByAsp = new Map<number, DriverRow[]>()
+  for (const d of drivers) {
+    const list = driversByAsp.get(d.asp_id) ?? []
+    list.push(d)
+    driversByAsp.set(d.asp_id, list)
   }
 
-  const BATCH = 500
-  for (let i = 0; i < scores.length; i += BATCH) {
-    const chunk = scores.slice(i, i + BATCH)
-    const { error } = await supabase
-      .from('matching_scores')
-      .upsert(chunk, { onConflict: 'call_id,driver_id' })
+  // 1000 콜카드씩 처리 → 즉시 upsert (270K 객체 누적 방지)
+  const COMPUTE_BATCH = 1000
+  const UPSERT_BATCH = 500
+  let totalMatchCount = 0
 
-    if (error) {
-      console.error('[matching] upsert 실패', {
-        message: error.message,
-        code: error.code,
-        hint: error.hint,
-        batch_index: i,
-      })
-      await logAgentRun({ run_date: new Date().toISOString().slice(0, 10), agent_name: 'matching', input_rows: inputRows, status: 'failed', duration_ms: Date.now() - startedAt, error_msg: error.message })
-      return NextResponse.json(
-        { error: 'matching_scores upsert 실패', detail: error.message, code: error.code, hint: error.hint },
-        { status: 500 }
-      )
+  for (let ci = 0; ci < callcards.length; ci += COMPUTE_BATCH) {
+    const batch = callcards.slice(ci, ci + COMPUTE_BATCH)
+    const scores = computeMatches(batch, driversByAsp)
+
+    if (scores.length === 0) continue
+
+    for (let ui = 0; ui < scores.length; ui += UPSERT_BATCH) {
+      const chunk = scores.slice(ui, ui + UPSERT_BATCH)
+      const { error } = await supabase
+        .from('matching_scores')
+        .upsert(chunk, { onConflict: 'call_id,driver_id' })
+
+      if (error) {
+        console.error('[matching] upsert 실패', { message: error.message, code: error.code, call_batch: ci })
+        await logAgentRun({ run_date: new Date().toISOString().slice(0, 10), agent_name: 'matching', input_rows: inputRows, status: 'failed', duration_ms: Date.now() - startedAt, error_msg: error.message })
+        return NextResponse.json(
+          { error: 'matching_scores upsert 실패', detail: error.message, code: error.code },
+          { status: 500 }
+        )
+      }
     }
+    totalMatchCount += scores.length
   }
 
   await logAgentRun({ run_date: new Date().toISOString().slice(0, 10), agent_name: 'matching', input_rows: inputRows, status: 'success', duration_ms: Date.now() - startedAt })
@@ -266,7 +279,7 @@ export async function POST(request: NextRequest) {
     call_date: callDate,
     call_count: callcards.length,
     driver_count: drivers.length,
-    match_count: scores.length,
+    match_count: totalMatchCount,
   })
 }
 
