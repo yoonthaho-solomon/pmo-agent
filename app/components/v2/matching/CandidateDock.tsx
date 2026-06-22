@@ -1,7 +1,7 @@
 ﻿'use client'
 
 import type { MatchingCandidateModel } from '@/lib/matching-studio-model'
-import { formatPercent, formatScore } from './formatters'
+import { formatScore } from './formatters'
 import styles from './matchingStudio.module.css'
 
 export type CandidateDockState = 'original' | 'dirty' | 'calculating' | 'ready' | 'error'
@@ -87,7 +87,6 @@ export function CandidateDock({
             <span className={styles.rank}>#{index + 1}</span>
             <span>
               <b>{candidate.driver.id}</b>
-              <small>성향 {formatPercent(candidate.similarityScore)} · 공간 {formatPercent(candidate.spatial.spatialScore)}</small>
             </span>
             <strong>{formatScore(candidate.finalScore)}</strong>
           </div>

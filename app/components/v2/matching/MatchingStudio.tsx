@@ -1,5 +1,6 @@
 'use client'
 
+import { useMemo, useState } from 'react'
 import type { MatchingStudioModel } from '@/lib/matching-studio-model'
 import { CallBuilder } from './CallBuilder'
 import { CandidateDock } from './CandidateDock'
@@ -16,15 +17,41 @@ export function MatchingStudio({ model }: { model: MatchingStudioModel }) {
   const google = useGoogleMapsApi()
   const canShowEvidence = state.scenarioStatus === 'original' || state.scenarioStatus === 'ready'
 
+  const [aspFilter, setAspFilter] = useState<string>('all')
+  const [dateFilter, setDateFilter] = useState<string>('all')
+
+  const uniqueAsps = useMemo(
+    () => [...new Set(model.callcards.map((c) => c.aspId).filter((v): v is number => v != null))].sort((a, b) => a - b),
+    [model.callcards],
+  )
+  const uniqueDates = useMemo(
+    () => [...new Set(model.callcards.map((c) => c.callDate).filter((v): v is string => v != null))].sort().reverse(),
+    [model.callcards],
+  )
+
+  const filteredCallcards = useMemo(
+    () => model.callcards.filter((c) =>
+      (aspFilter === 'all' || c.aspId === Number(aspFilter)) &&
+      (dateFilter === 'all' || c.callDate === dateFilter),
+    ),
+    [model.callcards, aspFilter, dateFilter],
+  )
+
   return (
     <div className={styles.workspace}>
       <StudioStatus model={model} candidateCount={state.rankedCandidates.length} />
       <div className={styles.mainGrid}>
         <CallBuilder
           google={google.google}
-          callcards={model.callcards}
+          callcards={filteredCallcards}
           selectedId={state.selectedCallcardId}
           selectedCallcard={state.selectedCallcard}
+          asps={uniqueAsps}
+          dates={uniqueDates}
+          selectedAsp={aspFilter}
+          selectedDate={dateFilter}
+          onAspChange={setAspFilter}
+          onDateChange={setDateFilter}
           scenarioOrigin={state.scenarioOrigin}
           scenarioDestination={state.scenarioDestination}
           scenarioOriginText={state.scenarioOriginText}

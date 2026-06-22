@@ -51,7 +51,10 @@ export function useRouteSummary(origin: ScenarioPointInput | null, destination: 
       })
 
     return () => controller.abort()
-  }, [destination, origin, requestKey])
+  // requestKey already encodes origin+destination as stable primitives; using the objects directly
+  // causes a new-reference re-trigger on every render (pointFromCallcard creates a new object each time)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestKey])
 
   return {
     state: hasRouteInput ? state : 'idle',

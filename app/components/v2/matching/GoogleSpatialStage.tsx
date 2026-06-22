@@ -1,14 +1,29 @@
 ﻿'use client'
 
 import type { ScenarioPointInput } from '@/lib/adapters/matching'
+import type { RouteApiState } from '@/lib/google-maps/route-types'
 import type { MatchingCallcardModel, MatchingCandidateModel } from '@/lib/matching-studio-model'
 import { estimateTaxiFare, VERIFIED_TAXI_FARE_POLICIES } from '@/lib/taxi-fare-estimator'
 import type { ScenarioStatus } from './useMatchingStudio'
-import { RouteSummaryPanel } from './RouteSummaryPanel'
 import { SpatialStage } from './SpatialStage'
 import { useGoogleMap } from './useGoogleMap'
 import { useRouteSummary } from './useRouteSummary'
+import { formatFare, formatMeter } from './formatters'
 import styles from './matchingStudio.module.css'
+
+function formatMinutes(seconds: number | null | undefined) {
+  if (seconds == null) return '-'
+  return `${Math.max(1, Math.round(seconds / 60))}분`
+}
+
+function routeStateLabel(state: RouteApiState) {
+  if (state === 'loading') return '경로 계산 중'
+  if (state === 'idle') return '출발·도착 선택 필요'
+  if (state === 'timeout') return '경로 시간 초과'
+  if (state === 'quota_or_permission_error') return 'API 설정 확인 필요'
+  if (state === 'no_route') return '경로 없음'
+  return '경로 계산 불가'
+}
 
 function pointFromCallcard(location: MatchingCallcardModel['route']['pickup'], label: string | null): ScenarioPointInput | null {
   if (location.lat == null || location.lng == null) return null
@@ -19,12 +34,6 @@ function pointFromCallcard(location: MatchingCallcardModel['route']['pickup'], l
   }
 }
 
-function dirtyPreviewNotice(status: ScenarioStatus) {
-  if (status === 'dirty') return '경로 미리보기 · 시나리오 매칭 미적용'
-  if (status === 'calculating') return '시나리오 Top 10 계산 중'
-  if (status === 'error') return '시나리오 계산 오류 · 이전 결과 미표시'
-  return null
-}
 
 export function GoogleSpatialStage({
   callcard,
@@ -57,7 +66,6 @@ export function GoogleSpatialStage({
     route: routeState.route,
   })
   const fare = estimateTaxiFare(routeState.route, callcard?.aspId, VERIFIED_TAXI_FARE_POLICIES)
-  const notice = dirtyPreviewNotice(scenarioStatus)
 
   if (mapLoadState === 'missing_config' || mapLoadState === 'load_error' || mapLoadState === 'unsupported_webgl') {
     return (
@@ -74,40 +82,36 @@ export function GoogleSpatialStage({
   return (
     <section className={styles.stage} aria-label="Google 지도 기반 공간 매칭 스튜디오">
       <div ref={containerRef} className={styles.googleMapCanvas} />
-      <div className={styles.stageHeader}>
-        <div>
-          <p className={styles.eyebrow}>GOOGLE SPATIAL MATCHING</p>
-          <h1>출발·도착 경로와 기사 선호 H3를 함께 봅니다</h1>
-          <p>{scenarioMode ? '시나리오 매칭: 선택 콜카드의 22D 성향 벡터는 유지하고, 출발지·도착지 H3만 바꿔 분석합니다.' : '원본 콜카드 매칭: 저장된 콜카드 벡터와 공간정보를 사용해 분석합니다.'}</p>
-          {notice ? <span className={styles.stageNotice}>{notice}</span> : null}
-        </div>
-      </div>
-
-      <div className={styles.winnerSummary}>
+      <div className={styles.mapTopBar}>
         <div>
           <span>최고 후보</span>
           <strong>{selectedCandidate?.driver.id ?? '후보 없음'}</strong>
         </div>
         <div>
-          <span>최종 추천점수</span>
+          <span>추천점수</span>
           <strong>{selectedCandidate ? `${Math.round(selectedCandidate.finalScore)}점` : '-'}</strong>
         </div>
         <div>
           <span>계산 기준</span>
-          <strong>성향 75 + H3 25</strong>
+          <strong>성향 75 · H3 25</strong>
         </div>
-      </div>
-
-      <RouteSummaryPanel
-        state={routeState.state}
-        route={routeState.route}
-        fare={fare}
-        message={routeState.message}
-        onRetry={routeState.retry}
-      />
-
-      <div className={styles.h3Meaning}>
-        기사 선호 H3 권역은 누적 운행 선호를 공간화한 분석이며 기사 현재 위치가 아닙니다.
+        <div>
+          <span>승객 이동 경로</span>
+          <strong>
+            {routeState.route
+              ? `${formatMeter(routeState.route.distanceMeters)} · ${formatMinutes(routeState.route.durationSeconds)}`
+              : routeStateLabel(routeState.state)}
+          </strong>
+          {routeState.state !== 'idle' && routeState.state !== 'loading' && routeState.state !== 'success' ? (
+            <button type="button" className={styles.topBarRetry} onClick={routeState.retry}>
+              {routeState.message ?? '다시 계산'}
+            </button>
+          ) : null}
+        </div>
+        <div>
+          <span>예상 요금</span>
+          <strong>{fare.status === 'estimated' ? formatFare(fare.fare) : '정책 미설정'}</strong>
+        </div>
       </div>
     </section>
   )
