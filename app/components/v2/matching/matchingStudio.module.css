@@ -16,11 +16,11 @@
 }
 
 .statusBar > div {
-  min-height: 72px;
-  padding: 12px 20px;
+  min-height: 90px;
+  padding: 16px 24px;
   display: grid;
   align-content: center;
-  gap: 4px;
+  gap: 6px;
   border-right: 1px solid var(--km-v2-border-subtle);
 }
 
@@ -31,7 +31,7 @@
 .statusBar span,
 .eyebrow {
   color: var(--km-v2-text-muted);
-  font-size: 12px;
+  font-size: 13.5px;
   font-weight: 850;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -39,7 +39,7 @@
 
 .statusBar strong {
   color: var(--km-v2-cyan);
-  font-size: clamp(26px, 3vw, 40px);
+  font-size: clamp(30px, 3.2vw, 46px);
   line-height: 0.95;
   letter-spacing: -0.055em;
 }
@@ -47,7 +47,7 @@
 .statusBar small,
 .muted {
   color: var(--km-v2-text-secondary);
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1.45;
 }
 
@@ -75,13 +75,13 @@
   position: absolute;
   top: 16px;
   z-index: 6;
-  width: 330px;
+  width: 372px;
   max-height: calc(100% - 32px);
   min-height: 0;
-  padding: 14px;
+  padding: 16px;
   display: grid;
   align-content: start;
-  gap: 10px;
+  gap: 11px;
   overflow: hidden;
   box-shadow: 0 18px 54px rgba(0, 0, 0, 0.34);
 }
@@ -92,14 +92,14 @@
 
 .candidateDock {
   right: 16px;
-  width: 360px;
+  width: 404px;
 }
 
 .callBuilder h2,
 .candidateDock h2 {
   margin: 2px 0 0;
   color: var(--km-v2-text-primary);
-  font-size: 18px;
+  font-size: 21px;
   line-height: 1.1;
   letter-spacing: -0.03em;
 }
@@ -111,19 +111,19 @@
 
 .field span {
   color: var(--km-v2-text-secondary);
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 800;
 }
 
 .field select {
-  min-height: 46px;
+  min-height: 50px;
   width: 100%;
   padding: 0 12px;
   color: var(--km-v2-text-primary);
   background: var(--km-v2-bg-interactive);
   border: 1px solid var(--km-v2-border-default);
   border-radius: var(--km-v2-radius-control);
-  font-size: 15px;
+  font-size: 16.5px;
 }
 
 .placeSearch {
@@ -292,13 +292,13 @@
 
 .callHero strong {
   color: var(--km-v2-text-primary);
-  font-size: 26px;
+  font-size: 30px;
   letter-spacing: -0.04em;
 }
 
 .callHero span {
   color: var(--km-v2-cyan);
-  font-size: 15px;
+  font-size: 16.5px;
   font-weight: 800;
 }
 
@@ -311,14 +311,14 @@
 .callMetrics span,
 .h3Grid span {
   min-width: 0;
-  padding: 10px;
+  padding: 12px;
   display: grid;
   gap: 4px;
   color: var(--km-v2-text-muted);
   background: rgba(6, 16, 24, 0.72);
   border: 1px solid var(--km-v2-border-subtle);
   border-radius: 8px;
-  font-size: 13px;
+  font-size: 14.5px;
 }
 
 .callMetrics b,
@@ -326,17 +326,17 @@
   min-width: 0;
   overflow-wrap: anywhere;
   color: var(--km-v2-text-primary);
-  font-size: 15px;
+  font-size: 17px;
 }
 
 .primaryAction {
-  min-height: 54px;
+  min-height: 58px;
   width: 100%;
   color: #031017;
   border: 0;
   border-radius: 12px;
   background: linear-gradient(90deg, var(--km-v2-cyan), var(--km-v2-violet));
-  font-size: 17px;
+  font-size: 19px;
   font-weight: 900;
   cursor: pointer;
   transition: transform var(--km-v2-motion-fast) var(--km-v2-ease-standard), filter var(--km-v2-motion-fast) var(--km-v2-ease-standard);
@@ -433,7 +433,7 @@
 .mapTopBar span {
   display: block;
   color: var(--km-v2-text-muted);
-  font-size: 11px;
+  font-size: 12.5px;
   font-weight: 850;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -441,9 +441,9 @@
 
 .mapTopBar strong {
   display: block;
-  margin-top: 3px;
+  margin-top: 4px;
   color: var(--km-v2-cyan);
-  font-size: 15px;
+  font-size: 18px;
   line-height: 1.1;
   white-space: nowrap;
   overflow: hidden;
@@ -636,17 +636,17 @@
 }
 
 .legend {
-  min-height: 36px;
-  padding: 0 12px;
+  min-height: 42px;
+  padding: 0 14px;
   border: 1px solid var(--km-v2-border-subtle);
   border-radius: var(--km-v2-radius-panel);
   background: rgba(6, 16, 24, 0.72);
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 16px;
+  gap: 18px;
   color: var(--km-v2-text-secondary);
-  font-size: 13px;
+  font-size: 14.5px;
   font-weight: 800;
 }
 
@@ -683,14 +683,14 @@
 
 .dockHeader > span {
   color: var(--km-v2-cyan);
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 900;
 }
 
 .candidateList {
   min-height: 0;
   display: grid;
-  gap: 4px;
+  gap: 6px;
   overflow: auto;
   padding-right: 2px;
 }
@@ -698,16 +698,16 @@
 .candidateRow {
   min-height: 0;
   width: 100%;
-  padding: 7px 10px;
+  padding: 10px 12px;
   display: grid;
-  grid-template-columns: 36px minmax(0, 1fr) 54px;
-  gap: 8px;
+  grid-template-columns: 38px minmax(0, 1fr) 62px;
+  gap: 10px;
   align-items: center;
   color: var(--km-v2-text-primary);
   text-align: left;
   background: rgba(7, 17, 28, 0.84);
   border: 1px solid var(--km-v2-border-subtle);
-  border-radius: 8px;
+  border-radius: 9px;
   cursor: pointer;
 }
 
@@ -718,26 +718,26 @@
 }
 
 .rank {
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
+  width: 38px;
+  height: 38px;
+  border-radius: 9px;
   display: grid;
   place-items: center;
   color: #031017;
   background: var(--km-v2-amber);
   font-weight: 950;
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .candidateRow b {
   display: block;
   overflow-wrap: anywhere;
-  font-size: 13px;
+  font-size: 16px;
 }
 
 .candidateRow > strong {
   color: var(--km-v2-cyan);
-  font-size: 20px;
+  font-size: 26px;
   text-align: right;
 }
 
@@ -1053,14 +1053,14 @@
 }
 
 .filterRow select {
-  min-height: 36px;
+  min-height: 42px;
   width: 100%;
   padding: 0 8px;
   color: var(--km-v2-text-primary);
   background: var(--km-v2-bg-interactive);
   border: 1px solid var(--km-v2-border-default);
   border-radius: 8px;
-  font-size: 13px;
+  font-size: 15px;
 }
 
 .formNotice {
