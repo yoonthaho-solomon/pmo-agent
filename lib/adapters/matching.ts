@@ -10,7 +10,7 @@ import {
   type DriverVectorRow,
   type VectorDimensionKey,
 } from '@/lib/matching-vector'
-import type { MatchingCallcardModel, MatchingDriverModel, MatchingStudioModel, MatchingStudioStatus } from '@/lib/matching-studio-model'
+import type { MatchingCallcardModel, MatchingDriverModel, MatchingFilterOptions, MatchingStudioModel, MatchingStudioStatus } from '@/lib/matching-studio-model'
 import { calculateMatchingCandidate, rankMatchingCandidates, type MatchingCandidateModel } from '@/lib/matching-studio-model'
 
 type DriverMbtiRow = Partial<Record<VectorDimensionKey, number | string | null>> & {
@@ -72,9 +72,20 @@ export type ScenarioMatchingResponse =
       message: string
     }
 
-const CALLCARD_LIMIT = 80
+const SLICE_LIMIT = 200
 const DRIVER_PAGE_SIZE = 1000
 const TOP_CANDIDATE_LIMIT = 10
+
+const CALLCARD_COLUMNS = [
+  'callcard_id', 'asp_id', 'call_date', 'hour_slot', 'weekday', 'expected_distance', 'expected_fare',
+  'eta_distance', 'is_paid', 'is_surge', 'status_group', 'passenger_addr', 'dest_addr',
+  'passenger_lat', 'passenger_lng', 'dest_lat', 'dest_lng', 's_hexagon', 'd_hexagon',
+].join(',')
+
+const DRIVER_COLUMNS = [
+  'driver_id', 'asp_id', 'data_days', 'reliability', 'pref_s_hexagons', 'pref_d_hexagons',
+  ...VECTOR_DIMENSIONS.map((dimension) => dimension.key),
+].join(',')
 
 function nullableNumber(value: unknown): number | null {
   if (value == null || value === '') return null
@@ -241,10 +252,11 @@ function emptyModel(status: MatchingStudioStatus, message: string): MatchingStud
     callcards: [],
     drivers: [],
     candidatesByCallcard: {},
+    filterOptions: { asps: [], dates: [] },
     driverCount: 0,
     callcardCount: 0,
     limits: {
-      callcards: CALLCARD_LIMIT,
+      callcards: SLICE_LIMIT,
       drivers: DRIVER_PAGE_SIZE,
       topCandidates: TOP_CANDIDATE_LIMIT,
     },
@@ -312,6 +324,26 @@ async function fetchDriversByAsp(
   return { data: drivers, count: totalCount || drivers.length, error: null }
 }
 
+// Driver vectors for an ASP only change when the pipeline refreshes, but every on-demand
+// callcard match needs the full ASP cohort. Cache each cohort briefly so repeat matches
+// within the same ASP skip the multi-page Supabase fetch entirely.
+const DRIVER_CACHE_TTL_MS = 5 * 60 * 1000
+type DriverGroup = { data: MatchingDriverModel[]; count: number; error: string | null }
+const driverGroupCache = new Map<number | null, { value: DriverGroup; expires: number }>()
+
+async function fetchDriversByAspCached(
+  supabase: SupabaseClient,
+  driverColumns: string,
+  aspId: number | null,
+): Promise<DriverGroup> {
+  const hit = driverGroupCache.get(aspId)
+  if (hit && hit.expires > Date.now()) return hit.value
+
+  const result = await fetchDriversByAsp(supabase, driverColumns, aspId)
+  if (!result.error) driverGroupCache.set(aspId, { value: result, expires: Date.now() + DRIVER_CACHE_TTL_MS })
+  return result
+}
+
 type DriverPrefCache = Map<MatchingDriverModel, { origin: string[]; destination: string[] }>
 
 // Driver preferred H3 cells are reused across every callcard in their ASP, so normalize
@@ -341,9 +373,134 @@ function buildCandidatesForCallcard(
   ).slice(0, TOP_CANDIDATE_LIMIT)
 }
 
-// The model build is expensive (fetch ~10k driver vectors + rank Top 10 for every callcard).
-// It only changes when the upstream pipelines refresh the tables, so a short in-memory TTL
-// keeps repeat loads instant without altering any matching score.
+async function fetchCallcardSlice(
+  supabase: SupabaseClient,
+  aspId: number | null,
+  date: string | null,
+): Promise<{ callcards: MatchingCallcardModel[]; error: string | null }> {
+  let query = supabase
+    .from('callcard_mbti')
+    .select(CALLCARD_COLUMNS)
+    .order('call_date', { ascending: false })
+    .order('hour_slot', { ascending: true })
+    .order('callcard_id', { ascending: true })
+    .limit(SLICE_LIMIT)
+
+  if (aspId != null) query = query.eq('asp_id', aspId)
+  if (date) query = query.eq('call_date', date)
+
+  const response = await query
+  if (response.error) return { callcards: [], error: response.error.message }
+
+  const callcards = (response.data ?? [])
+    .map((row) => callcardModel(row as unknown as CallcardRow))
+    .filter((row): row is MatchingCallcardModel => row != null)
+  return { callcards, error: null }
+}
+
+// PostgREST has no DISTINCT and caps rows at 1000, and ordering clusters identical values, so a
+// naive `select asp_id`/`select call_date` only ever returns one value. ASPs are low-cardinality,
+// so walk them with keyset paging; dates are daily-contiguous, so derive them from min..max.
+async function fetchDistinctAsps(supabase: SupabaseClient): Promise<number[]> {
+  const asps: number[] = []
+  let last: number | null = null
+
+  for (let guard = 0; guard < 100; guard++) {
+    let query = supabase.from('callcard_mbti').select('asp_id').not('asp_id', 'is', null).order('asp_id', { ascending: true }).limit(1)
+    if (last != null) query = query.gt('asp_id', last)
+
+    const response = await query
+    const value = nullableNumber((response.data?.[0] as { asp_id?: unknown } | undefined)?.asp_id)
+    if (value == null) break
+    asps.push(value)
+    last = value
+  }
+
+  return asps
+}
+
+function enumerateDatesDesc(minDate: string | null, maxDate: string | null): string[] {
+  if (!minDate || !maxDate) return maxDate ? [maxDate] : minDate ? [minDate] : []
+
+  const start = new Date(`${minDate}T00:00:00Z`)
+  const end = new Date(`${maxDate}T00:00:00Z`)
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) return [maxDate]
+
+  const dates: string[] = []
+  for (const cursor = new Date(end); cursor >= start && dates.length <= 400; cursor.setUTCDate(cursor.getUTCDate() - 1)) {
+    dates.push(cursor.toISOString().slice(0, 10))
+  }
+  return dates
+}
+
+async function fetchFilterOptions(supabase: SupabaseClient): Promise<MatchingFilterOptions> {
+  const [asps, minRes, maxRes] = await Promise.all([
+    fetchDistinctAsps(supabase),
+    supabase.from('callcard_mbti').select('call_date').not('call_date', 'is', null).order('call_date', { ascending: true }).limit(1),
+    supabase.from('callcard_mbti').select('call_date').not('call_date', 'is', null).order('call_date', { ascending: false }).limit(1),
+  ])
+
+  const minDate = cleanString((minRes.data?.[0] as { call_date?: string | null } | undefined)?.call_date)
+  const maxDate = cleanString((maxRes.data?.[0] as { call_date?: string | null } | undefined)?.call_date)
+  return { asps, dates: enumerateDatesDesc(minDate, maxDate) }
+}
+
+// The driver cohort for a callcard's ASP is the expensive part; cache it so on-demand
+// matches stay snappy. No matching score changes — this only reuses already-computed inputs.
+function buildOriginalCandidates(callcard: MatchingCallcardModel, drivers: MatchingDriverModel[]): MatchingCandidateModel[] {
+  return buildCandidatesForCallcard(callcard, drivers, buildDriverPrefCache(drivers))
+}
+
+export type CallcardSliceResponse =
+  | { ok: true; callcards: MatchingCallcardModel[] }
+  | { ok: false; message: string }
+
+export async function getCallcardSlice(aspId: number | null, date: string | null): Promise<CallcardSliceResponse> {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  if (!supabaseUrl || !supabaseKey) return { ok: false, message: '서버 설정이 필요합니다.' }
+
+  const supabase = createClient(supabaseUrl, supabaseKey)
+  const { callcards, error } = await fetchCallcardSlice(supabase, aspId, date)
+  if (error) return { ok: false, message: '콜카드 목록을 불러오지 못했습니다.' }
+  return { ok: true, callcards }
+}
+
+export type OriginalMatchingResponse =
+  | { ok: true; callcardId: string; candidates: MatchingCandidateModel[] }
+  | { ok: false; state: 'invalid_input' | 'not_found' | 'error'; message: string }
+
+export async function calculateOriginalMatching(callcardId: string): Promise<OriginalMatchingResponse> {
+  if (!isValidScenarioCallcardId(callcardId)) {
+    return { ok: false, state: 'invalid_input', message: '유효한 콜카드 ID가 필요합니다.' }
+  }
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  if (!supabaseUrl || !supabaseKey) return { ok: false, state: 'error', message: '매칭 서버 설정이 필요합니다.' }
+
+  const supabase = createClient(supabaseUrl, supabaseKey)
+  const callcardRes = await supabase
+    .from('callcard_mbti')
+    .select(CALLCARD_COLUMNS)
+    .eq('callcard_id', callcardId)
+    .limit(1)
+    .maybeSingle()
+
+  if (callcardRes.error) return { ok: false, state: 'error', message: '콜카드 조회에 실패했습니다.' }
+  if (!callcardRes.data) return { ok: false, state: 'not_found', message: '선택한 콜카드를 찾을 수 없습니다.' }
+
+  const callcard = callcardModel(callcardRes.data as unknown as CallcardRow)
+  if (!callcard) return { ok: false, state: 'error', message: '콜카드 데이터를 해석할 수 없습니다.' }
+
+  const driverGroup = await fetchDriversByAspCached(supabase, DRIVER_COLUMNS, callcard.aspId)
+  if (driverGroup.error) return { ok: false, state: 'error', message: '기사 벡터 조회에 실패했습니다.' }
+
+  return { ok: true, callcardId: callcard.id, candidates: buildOriginalCandidates(callcard, driverGroup.data) }
+}
+
+// The bootstrap build only fetches the default slice + first callcard's cohort now, so it is
+// far cheaper than the old precompute-all. A short TTL still keeps repeat loads instant.
 const MODEL_CACHE_TTL_MS = 5 * 60 * 1000
 let modelCache: { value: MatchingStudioModel; expires: number } | null = null
 
@@ -357,6 +514,9 @@ export async function getMatchingStudioModel(): Promise<MatchingStudioModel> {
   return model
 }
 
+// Bootstrap: load the filter options + the default callcard slice (newest date), then compute
+// Top 10 for only the first callcard. Every other callcard is matched lazily on demand, so we
+// no longer fetch all driver cohorts or rank all 80 callcards up front.
 async function buildMatchingStudioModel(): Promise<MatchingStudioModel> {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -365,72 +525,36 @@ async function buildMatchingStudioModel(): Promise<MatchingStudioModel> {
   }
 
   const supabase = createClient(supabaseUrl, supabaseKey)
-  const callcardColumns = [
-    'callcard_id', 'asp_id', 'call_date', 'hour_slot', 'weekday', 'expected_distance', 'expected_fare',
-    'eta_distance', 'is_paid', 'is_surge', 'status_group', 'passenger_addr', 'dest_addr',
-    'passenger_lat', 'passenger_lng', 'dest_lat', 'dest_lng', 's_hexagon', 'd_hexagon',
-  ].join(',')
-  const driverColumns = [
-    'driver_id', 'asp_id', 'data_days', 'reliability', 'pref_s_hexagons', 'pref_d_hexagons',
-    ...VECTOR_DIMENSIONS.map((dimension) => dimension.key),
-  ].join(',')
 
-  const callcardsRes = await supabase
-    .from('callcard_mbti')
-    .select(callcardColumns, { count: 'planned' })
-    .order('call_date', { ascending: false })
-    .limit(CALLCARD_LIMIT)
+  const [filterOptions, totalRes, slice] = await Promise.all([
+    fetchFilterOptions(supabase),
+    supabase.from('callcard_mbti').select('callcard_id', { count: 'estimated', head: true }),
+    fetchCallcardSlice(supabase, null, null),
+  ])
 
-  if (callcardsRes.error) {
+  if (slice.error) {
     return emptyModel('error', 'Matching Studio could not load callcard rows.')
   }
 
-  const callcards = (callcardsRes.data ?? [])
-    .map((row) => callcardModel(row as unknown as CallcardRow))
-    .filter((row): row is MatchingCallcardModel => row != null)
+  const callcards = slice.callcards
+  const totalCount = totalRes.count ?? callcards.length
 
   if (!callcards.length) {
     return {
       ...emptyModel('empty', 'Matching Studio needs at least one callcard.'),
-      callcards,
-      callcardCount: callcardsRes.count ?? callcards.length,
+      filterOptions,
+      callcardCount: totalCount,
       source: source(),
     }
   }
 
-  const aspIds = [...new Set(callcards.map((callcard) => callcard.aspId).filter((aspId): aspId is number => aspId != null))]
-  const driverGroups = await Promise.all(aspIds.length ? aspIds.map((aspId) => fetchDriversByAsp(supabase, driverColumns, aspId)) : [fetchDriversByAsp(supabase, driverColumns, null)])
-  const driverError = driverGroups.find((group) => group.error)?.error ?? null
-  const driversByAsp = new Map<number | null, MatchingDriverModel[]>()
-  let driverCount = 0
-
-  for (const [index, group] of driverGroups.entries()) {
-    const aspId = aspIds.length ? aspIds[index] : null
-    driversByAsp.set(aspId, group.data)
-    driverCount += group.count
-  }
-
-  const prefCache = buildDriverPrefCache([...driversByAsp.values()].flat())
-  const candidatesByCallcard = Object.fromEntries(callcards.map((callcard) => {
-    const sameAspDrivers = driversByAsp.get(callcard.aspId) ?? driversByAsp.get(null) ?? []
-    return [callcard.id, buildCandidatesForCallcard(callcard, sameAspDrivers, prefCache)]
-  }))
-  const topCandidateDrivers = new Map<string, MatchingDriverModel>()
-  for (const candidates of Object.values(candidatesByCallcard)) {
-    for (const candidate of candidates) topCandidateDrivers.set(candidate.driver.id, candidate.driver)
-  }
-  const drivers = [...topCandidateDrivers.values()]
-
-  if (!drivers.length) {
-    return {
-      ...emptyModel(driverError ? 'partial' : 'empty', driverError ? 'Driver vectors were unavailable. Callcards loaded, but candidate ranking could not be completed.' : 'Matching Studio needs driver vectors for the selected callcard region.'),
-      callcards,
-      candidatesByCallcard,
-      callcardCount: callcardsRes.count ?? callcards.length,
-      driverCount,
-      source: source(),
-    }
-  }
+  // Eagerly match only the first (default-selected) callcard so the initial view is populated.
+  const firstCallcard = callcards[0]
+  const driverGroup = await fetchDriversByAspCached(supabase, DRIVER_COLUMNS, firstCallcard.aspId)
+  const driverError = driverGroup.error
+  const firstCandidates = driverError ? [] : buildOriginalCandidates(firstCallcard, driverGroup.data)
+  const candidatesByCallcard = firstCandidates.length ? { [firstCallcard.id]: firstCandidates } : {}
+  const drivers = firstCandidates.map((candidate) => candidate.driver)
 
   return {
     status: driverError ? 'partial' : 'success',
@@ -441,10 +565,11 @@ async function buildMatchingStudioModel(): Promise<MatchingStudioModel> {
     callcards,
     drivers,
     candidatesByCallcard,
-    driverCount,
-    callcardCount: callcardsRes.count ?? callcards.length,
+    filterOptions,
+    driverCount: driverGroup.count,
+    callcardCount: totalCount,
     limits: {
-      callcards: CALLCARD_LIMIT,
+      callcards: SLICE_LIMIT,
       drivers: DRIVER_PAGE_SIZE,
       topCandidates: TOP_CANDIDATE_LIMIT,
     },
@@ -502,19 +627,10 @@ export async function calculateScenarioMatching(request: ScenarioMatchingRequest
   }
 
   const supabase = createClient(supabaseUrl, supabaseKey)
-  const callcardColumns = [
-    'callcard_id', 'asp_id', 'call_date', 'hour_slot', 'weekday', 'expected_distance', 'expected_fare',
-    'eta_distance', 'is_paid', 'is_surge', 'status_group', 'passenger_addr', 'dest_addr',
-    'passenger_lat', 'passenger_lng', 'dest_lat', 'dest_lng', 's_hexagon', 'd_hexagon',
-  ].join(',')
-  const driverColumns = [
-    'driver_id', 'asp_id', 'data_days', 'reliability', 'pref_s_hexagons', 'pref_d_hexagons',
-    ...VECTOR_DIMENSIONS.map((dimension) => dimension.key),
-  ].join(',')
 
   const callcardRes = await supabase
     .from('callcard_mbti')
-    .select(callcardColumns)
+    .select(CALLCARD_COLUMNS)
     .eq('callcard_id', request.callcardId)
     .limit(1)
     .maybeSingle()
@@ -531,7 +647,7 @@ export async function calculateScenarioMatching(request: ScenarioMatchingRequest
     return { ok: false, state: 'invalid_input', message: '출발지와 도착지를 H3로 변환할 수 없습니다.' }
   }
 
-  const driverGroup = await fetchDriversByAsp(supabase, driverColumns, callcard.aspId)
+  const driverGroup = await fetchDriversByAspCached(supabase, DRIVER_COLUMNS, callcard.aspId)
   if (driverGroup.error) {
     return { ok: false, state: 'error', message: '기사 벡터 조회에 실패했습니다.' }
   }
@@ -541,7 +657,7 @@ export async function calculateScenarioMatching(request: ScenarioMatchingRequest
     mode: 'scenario',
     callcardId: callcard.id,
     route: callcard.route,
-    candidates: buildCandidatesForCallcard(callcard, driverGroup.data, buildDriverPrefCache(driverGroup.data)),
+    candidates: buildOriginalCandidates(callcard, driverGroup.data),
     formula: formula(),
   }
 }

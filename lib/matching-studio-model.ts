@@ -50,6 +50,11 @@ export type MatchingCandidateModel = {
   }
 }
 
+export type MatchingFilterOptions = {
+  asps: number[]
+  dates: string[]
+}
+
 export type MatchingStudioModel = {
   status: MatchingStudioStatus
   message: string
@@ -57,6 +62,7 @@ export type MatchingStudioModel = {
   callcards: MatchingCallcardModel[]
   drivers: MatchingDriverModel[]
   candidatesByCallcard: Record<string, MatchingCandidateModel[]>
+  filterOptions: MatchingFilterOptions
   driverCount: number
   callcardCount: number
   limits: {

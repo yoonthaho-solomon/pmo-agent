@@ -16,6 +16,7 @@ export function CallBuilder({
   dates,
   selectedAsp,
   selectedDate,
+  sliceLoading,
   onAspChange,
   onDateChange,
   scenarioOrigin,
@@ -43,6 +44,7 @@ export function CallBuilder({
   dates: string[]
   selectedAsp: string
   selectedDate: string
+  sliceLoading: boolean
   onAspChange: (v: string) => void
   onDateChange: (v: string) => void
   scenarioOrigin: ScenarioPointInput | null
@@ -79,7 +81,7 @@ export function CallBuilder({
       <div className={styles.filterRow}>
         <label>
           <span>ASP 지역</span>
-          <select value={selectedAsp} onChange={(e) => onAspChange(e.target.value)}>
+          <select value={selectedAsp} disabled={sliceLoading} onChange={(e) => onAspChange(e.target.value)}>
             <option value="all">전체</option>
             {asps.map((asp) => (
               <option key={asp} value={String(asp)}>ASP {asp}</option>
@@ -87,8 +89,8 @@ export function CallBuilder({
           </select>
         </label>
         <label>
-          <span>날짜</span>
-          <select value={selectedDate} onChange={(e) => onDateChange(e.target.value)}>
+          <span>날짜{sliceLoading ? ' · 불러오는 중' : ''}</span>
+          <select value={selectedDate} disabled={sliceLoading} onChange={(e) => onDateChange(e.target.value)}>
             <option value="all">전체</option>
             {dates.map((d) => (
               <option key={d} value={d}>{d.slice(5)}</option>

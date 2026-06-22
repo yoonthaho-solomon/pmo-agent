@@ -1,6 +1,5 @@
 'use client'
 
-import { useMemo, useState } from 'react'
 import type { MatchingStudioModel } from '@/lib/matching-studio-model'
 import { CallBuilder } from './CallBuilder'
 import { CandidateDock } from './CandidateDock'
@@ -17,41 +16,22 @@ export function MatchingStudio({ model }: { model: MatchingStudioModel }) {
   const google = useGoogleMapsApi()
   const canShowEvidence = state.scenarioStatus === 'original' || state.scenarioStatus === 'ready'
 
-  const [aspFilter, setAspFilter] = useState<string>('all')
-  const [dateFilter, setDateFilter] = useState<string>('all')
-
-  const uniqueAsps = useMemo(
-    () => [...new Set(model.callcards.map((c) => c.aspId).filter((v): v is number => v != null))].sort((a, b) => a - b),
-    [model.callcards],
-  )
-  const uniqueDates = useMemo(
-    () => [...new Set(model.callcards.map((c) => c.callDate).filter((v): v is string => v != null))].sort().reverse(),
-    [model.callcards],
-  )
-
-  const filteredCallcards = useMemo(
-    () => model.callcards.filter((c) =>
-      (aspFilter === 'all' || c.aspId === Number(aspFilter)) &&
-      (dateFilter === 'all' || c.callDate === dateFilter),
-    ),
-    [model.callcards, aspFilter, dateFilter],
-  )
-
   return (
     <div className={styles.workspace}>
-      <StudioStatus model={model} candidateCount={state.rankedCandidates.length} />
+      <StudioStatus model={model} sliceCount={state.callcards.length} candidateCount={state.rankedCandidates.length} />
       <div className={styles.mainGrid}>
         <CallBuilder
           google={google.google}
-          callcards={filteredCallcards}
+          callcards={state.callcards}
           selectedId={state.selectedCallcardId}
           selectedCallcard={state.selectedCallcard}
-          asps={uniqueAsps}
-          dates={uniqueDates}
-          selectedAsp={aspFilter}
-          selectedDate={dateFilter}
-          onAspChange={setAspFilter}
-          onDateChange={setDateFilter}
+          asps={state.filterOptions.asps}
+          dates={state.filterOptions.dates}
+          selectedAsp={state.aspFilter}
+          selectedDate={state.dateFilter}
+          sliceLoading={state.sliceLoading}
+          onAspChange={state.setAspFilter}
+          onDateChange={state.setDateFilter}
           scenarioOrigin={state.scenarioOrigin}
           scenarioDestination={state.scenarioDestination}
           scenarioOriginText={state.scenarioOriginText}
@@ -80,13 +60,13 @@ export function MatchingStudio({ model }: { model: MatchingStudioModel }) {
             scenarioStatus={state.scenarioStatus}
           />
           <StudioLegend />
-          {state.hasRun && !state.rankedCandidates.length && state.scenarioStatus === 'original' ? (
+          {state.hasRun && !state.rankedCandidates.length && state.candidateState === 'original' ? (
             <div className={styles.softNotice}>비교 가능한 후보 기사가 없습니다. 벡터 또는 기사 선호 H3 데이터 상태를 확인해 주세요.</div>
           ) : null}
         </div>
         <CandidateDock
           candidates={state.rankedCandidates}
-          state={state.scenarioStatus}
+          state={state.candidateState}
           selectedId={state.selectedCandidate?.driver.id ?? ''}
           onSelect={state.selectCandidate}
         />

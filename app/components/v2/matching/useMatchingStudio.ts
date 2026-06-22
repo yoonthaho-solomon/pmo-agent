@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
-import type { ScenarioMatchingResponse, ScenarioPointInput } from '@/lib/adapters/matching'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import type { CallcardSliceResponse, OriginalMatchingResponse, ScenarioMatchingResponse, ScenarioPointInput } from '@/lib/adapters/matching'
 import type { MatchingCallcardModel, MatchingCandidateModel, MatchingStudioModel } from '@/lib/matching-studio-model'
 
 export type ScenarioStatus = 'original' | 'dirty' | 'calculating' | 'ready' | 'error'
@@ -16,11 +16,23 @@ function sameScenarioPoint(a: ScenarioPointInput | null, b: ScenarioPointInput |
 }
 
 export function useMatchingStudio(model: MatchingStudioModel) {
+  const [callcards, setCallcards] = useState<MatchingCallcardModel[]>(model.callcards)
+  const [aspFilter, setAspFilter] = useState<string>('all')
+  const [dateFilter, setDateFilter] = useState<string>('all')
+  const [sliceLoading, setSliceLoading] = useState(false)
   const [selectedCallcardId, setSelectedCallcardId] = useState(model.callcards[0]?.id ?? '')
   const [selectedCandidateId, setSelectedCandidateId] = useState('')
   const [showEvidence, setShowEvidence] = useState(false)
   const [hasRun, setHasRun] = useState(Boolean(model.callcards[0]))
-  const [isPending, startTransition] = useTransition()
+  // Top 10 per callcard is computed lazily on demand; this cache is seeded with the first
+  // callcard the server matched eagerly so the initial view is populated without a round-trip.
+  const [originalCache, setOriginalCache] = useState<Map<string, MatchingCandidateModel[]>>(
+    () => new Map(Object.entries(model.candidatesByCallcard)),
+  )
+  const [originalLoading, setOriginalLoading] = useState(false)
+  const [originalError, setOriginalError] = useState<string | null>(null)
+  const sliceRequestRef = useRef(0)
+  const originalRequestRef = useRef(0)
   const [scenarioOrigin, setScenarioOriginState] = useState<ScenarioPointInput | null>(null)
   const [scenarioDestination, setScenarioDestinationState] = useState<ScenarioPointInput | null>(null)
   const [scenarioOriginText, setScenarioOriginTextState] = useState('')
@@ -55,8 +67,8 @@ export function useMatchingStudio(model: MatchingStudioModel) {
   }, [])
 
   const selectedCallcard = useMemo<MatchingCallcardModel | null>(
-    () => model.callcards.find((callcard) => callcard.id === selectedCallcardId) ?? model.callcards[0] ?? null,
-    [model.callcards, selectedCallcardId],
+    () => callcards.find((callcard) => callcard.id === selectedCallcardId) ?? callcards[0] ?? null,
+    [callcards, selectedCallcardId],
   )
 
   const activeCallcard = useMemo<MatchingCallcardModel | null>(() => {
@@ -82,8 +94,8 @@ export function useMatchingStudio(model: MatchingStudioModel) {
     if (!selectedCallcard || !hasRun) return []
     if (scenarioStatus === 'dirty' || scenarioStatus === 'calculating' || scenarioStatus === 'error') return []
     if (scenarioStatus === 'ready' && scenarioCandidates) return scenarioCandidates
-    return model.candidatesByCallcard[selectedCallcard.id] ?? []
-  }, [hasRun, model.candidatesByCallcard, scenarioCandidates, scenarioStatus, selectedCallcard])
+    return originalCache.get(selectedCallcard.id) ?? []
+  }, [hasRun, originalCache, scenarioCandidates, scenarioStatus, selectedCallcard])
 
   const selectedCandidate = useMemo(
     () => rankedCandidates.find((candidate) => candidate.driver.id === selectedCandidateId) ?? rankedCandidates[0] ?? null,
@@ -111,15 +123,95 @@ export function useMatchingStudio(model: MatchingStudioModel) {
     setSelectedCallcardId(id)
     setSelectedCandidateId('')
     setHasRun(false)
+    setOriginalError(null)
     clearScenario()
   }
 
-  function runSimulation() {
-    startTransition(() => {
+  // Lazily fetch and cache a callcard's original Top 10, then reveal it. Guarded by a request
+  // id so a slow response for a previously selected callcard cannot overwrite the current one.
+  async function ensureOriginal(callcardId: string) {
+    if (!callcardId) {
+      setHasRun(false)
+      return
+    }
+    if (originalCache.has(callcardId)) {
+      setOriginalError(null)
       setHasRun(true)
+      return
+    }
+
+    const requestId = originalRequestRef.current + 1
+    originalRequestRef.current = requestId
+    setOriginalLoading(true)
+    setOriginalError(null)
+
+    try {
+      const response = await fetch('/api/matching-studio/original', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ callcardId }),
+      })
+      const result = await response.json() as OriginalMatchingResponse
+      if (originalRequestRef.current !== requestId) return
+      if (!result.ok) {
+        setOriginalError(result.message)
+        return
+      }
+      setOriginalCache((prev) => new Map(prev).set(callcardId, result.candidates))
+      setHasRun(true)
+    } catch {
+      if (originalRequestRef.current !== requestId) return
+      setOriginalError('후보 계산에 실패했습니다.')
+    } finally {
+      if (originalRequestRef.current === requestId) setOriginalLoading(false)
+    }
+  }
+
+  function runSimulation() {
+    if (!selectedCallcard) return
+    setSelectedCandidateId('')
+    if (scenarioStatus !== 'ready') setScenarioStatus('original')
+    void ensureOriginal(selectedCallcard.id)
+  }
+
+  // Filter changes drive a fresh server slice (any of the ~440k callcards is reachable this way),
+  // then auto-select and match the first result so the studio is never left empty.
+  async function loadSlice(asp: string, date: string) {
+    const requestId = sliceRequestRef.current + 1
+    sliceRequestRef.current = requestId
+    setSliceLoading(true)
+    setOriginalError(null)
+
+    try {
+      const params = new URLSearchParams({ asp, date })
+      const response = await fetch(`/api/matching-studio/callcards?${params.toString()}`)
+      const result = await response.json() as CallcardSliceResponse
+      if (sliceRequestRef.current !== requestId) return
+      if (!result.ok) return
+
+      setCallcards(result.callcards)
+      clearScenario()
+      const first = result.callcards[0]
+      setSelectedCallcardId(first?.id ?? '')
       setSelectedCandidateId('')
-      if (scenarioStatus !== 'ready') setScenarioStatus('original')
-    })
+      if (first) {
+        await ensureOriginal(first.id)
+      } else {
+        setHasRun(false)
+      }
+    } finally {
+      if (sliceRequestRef.current === requestId) setSliceLoading(false)
+    }
+  }
+
+  function changeAspFilter(value: string) {
+    setAspFilter(value)
+    void loadSlice(value, dateFilter)
+  }
+
+  function changeDateFilter(value: string) {
+    setDateFilter(value)
+    void loadSlice(aspFilter, value)
   }
 
   function clearScenario() {
@@ -246,15 +338,30 @@ export function useMatchingStudio(model: MatchingStudioModel) {
     }
   }
 
+  // Candidate dock state: surface lazy original loading/errors through the same status the
+  // dock already understands, without disturbing the scenario flow.
+  const candidateState: ScenarioStatus = scenarioStatus === 'original'
+    ? (originalLoading ? 'calculating' : originalError ? 'error' : 'original')
+    : scenarioStatus
+
   return {
+    callcards,
+    filterOptions: model.filterOptions,
+    aspFilter,
+    dateFilter,
+    setAspFilter: changeAspFilter,
+    setDateFilter: changeDateFilter,
+    sliceLoading,
     selectedCallcard: activeCallcard,
     originalCallcard: selectedCallcard,
     selectedCallcardId,
     selectedCandidate,
     selectedCandidateId,
     rankedCandidates,
+    candidateState,
     hasRun,
-    isPending: isPending || isScenarioPending,
+    isPending: originalLoading || isScenarioPending || sliceLoading,
+    originalError,
     showEvidence,
     scenarioOrigin,
     scenarioDestination,

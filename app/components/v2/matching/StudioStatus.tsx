@@ -2,13 +2,13 @@
 import { formatNumber } from './formatters'
 import styles from './matchingStudio.module.css'
 
-export function StudioStatus({ model, candidateCount }: { model: MatchingStudioModel; candidateCount: number }) {
+export function StudioStatus({ model, sliceCount, candidateCount }: { model: MatchingStudioModel; sliceCount: number; candidateCount: number }) {
   return (
     <section className={styles.statusBar} aria-label="매칭 스튜디오 데이터 상태">
       <div>
         <span>콜카드 표본</span>
-        <strong>{formatNumber(model.callcards.length)}</strong>
-        <small>최대 {formatNumber(model.limits.callcards)}건 조회</small>
+        <strong>{formatNumber(sliceCount)}</strong>
+        <small>전체 {formatNumber(model.callcardCount)}건 중 (필터 슬라이스)</small>
       </div>
       <div>
         <span>계산 기사군</span>
