@@ -167,6 +167,7 @@
   min-height: 0;
   padding: 12px;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   align-content: start;
   gap: 8px;
   overflow-x: hidden;
@@ -174,6 +175,14 @@
   backdrop-filter: blur(20px) saturate(135%);
   -webkit-backdrop-filter: blur(20px) saturate(135%);
   box-shadow: 0 28px 64px rgba(0, 0, 0, 0.55);
+}
+
+/* Let every panel child shrink to the column instead of widening it (prevents the
+   right edge from being clipped by overflow-x:hidden). */
+.callBuilder > *,
+.candidateDock > * {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .callBuilder {
@@ -440,7 +449,7 @@
 }
 
 .callMetrics {
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 }
 
 .callMetrics span,
@@ -1253,6 +1262,7 @@
 .filterRow label {
   display: grid;
   gap: 4px;
+  min-width: 0;
 }
 
 .filterRow > label > span {
@@ -1266,6 +1276,7 @@
 .filterRow select {
   min-height: 32px;
   width: 100%;
+  min-width: 0;
   padding: 0 6px;
   color: var(--km-v2-text-primary);
   background: var(--km-v2-bg-interactive);
