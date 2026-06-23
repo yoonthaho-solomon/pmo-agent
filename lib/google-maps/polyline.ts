@@ -3,6 +3,34 @@ export type DecodedPolylinePoint = {
   lng: number
 }
 
+// Encode a lat/lng path into a Google "encoded polyline" string so providers that return raw
+// coordinates (e.g. TMap GeoJSON) can flow through the same decode path the map trail uses.
+export function encodePolyline(points: DecodedPolylinePoint[]): string {
+  let lastLat = 0
+  let lastLng = 0
+  let result = ''
+  for (const point of points) {
+    const lat = Math.round(point.lat * 1e5)
+    const lng = Math.round(point.lng * 1e5)
+    result += encodeSignedNumber(lat - lastLat)
+    result += encodeSignedNumber(lng - lastLng)
+    lastLat = lat
+    lastLng = lng
+  }
+  return result
+}
+
+function encodeSignedNumber(value: number): string {
+  let v = value < 0 ? ~(value << 1) : value << 1
+  let output = ''
+  while (v >= 0x20) {
+    output += String.fromCharCode((0x20 | (v & 0x1f)) + 63)
+    v >>= 5
+  }
+  output += String.fromCharCode(v + 63)
+  return output
+}
+
 export function decodeEncodedPolyline(encoded: string | null | undefined): DecodedPolylinePoint[] {
   if (!encoded) return []
 

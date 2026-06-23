@@ -21,8 +21,8 @@ export type RouteSummary = {
   staticDurationSeconds?: number
   encodedPolyline: string
   viewport?: GoogleRouteViewport
-  source: 'google-routes'
-  trafficAware: true
+  source: 'google-routes' | 'tmap'
+  trafficAware: boolean
 }
 
 export type RouteApiState =

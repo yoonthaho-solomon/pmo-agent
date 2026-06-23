@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import type { RoutePoint } from '@/lib/google-maps/route-types'
-import { fetchGoogleRouteSummary } from '@/lib/server/google-routes'
+import { fetchTmapRouteSummary } from '@/lib/server/tmap-routes'
 
 export const dynamic = 'force-dynamic'
 
@@ -49,7 +49,7 @@ export async function POST(request: Request) {
     )
   }
 
-  const result = await fetchGoogleRouteSummary(body.origin, body.destination)
+  const result = await fetchTmapRouteSummary(body.origin, body.destination)
   const status = result.ok ? 200 : result.state === 'invalid_input' ? 400 : 502
   return NextResponse.json(result, { status })
 }

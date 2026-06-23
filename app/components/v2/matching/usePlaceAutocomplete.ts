@@ -60,7 +60,10 @@ export function usePlaceAutocomplete(
         setSuggestions(next)
         setActiveIndex(0)
         setState(next.length ? 'success' : 'empty')
-      } catch {
+      } catch (error) {
+        // Surface the real Google error (e.g. Places API (New) not enabled, key restriction)
+        // instead of swallowing it — diagnostic for the "no POI list" regression.
+        console.error('[place-autocomplete] fetchAutocompleteSuggestions failed:', error)
         if (requestId !== requestIdRef.current) return
         setSuggestions([])
         setState('error')
