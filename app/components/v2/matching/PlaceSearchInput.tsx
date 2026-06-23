@@ -121,8 +121,12 @@ export function PlaceSearchInput({
               aria-label={`${label} 검색 결과`}
               style={{
                 position: 'fixed',
-                top: dropdownRect.top,
-                bottom: dropdownRect.bottom,
+                // Explicit auto fallbacks: the .placeSuggestions class sets top:calc(100%+4px).
+                // For the upward (bottom-anchored) variant we only set bottom, so without
+                // top:'auto' the class's top wins and pushes the menu off-screen — which is why
+                // the lower (destination) field's dropdown never appeared.
+                top: dropdownRect.top ?? 'auto',
+                bottom: dropdownRect.bottom ?? 'auto',
                 left: dropdownRect.left,
                 width: dropdownRect.width,
                 right: 'auto',
