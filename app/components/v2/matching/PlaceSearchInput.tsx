@@ -89,27 +89,38 @@ export function PlaceSearchInput({
 
   return (
     <div className={styles.placeSearch} ref={containerRef}>
-      <label>
-        <span>{label}</span>
-        <input
-          value={autocomplete.query}
-          placeholder={placeholder}
-          aria-label={label}
-          onChange={(event) => autocomplete.setQuery(event.target.value)}
-          onKeyDown={onKeyDown}
-        />
-      </label>
+      <span className={styles.placeSearchLabel}>{label}</span>
       {value ? (
         <div className={styles.selectedPlace}>
-          <b>{value.label}</b>
-          <small>{value.lat.toFixed(5)}, {value.lng.toFixed(5)}</small>
+          <div className={styles.selectedPlaceText}>
+            <b>{value.label}</b>
+            <small>{value.lat.toFixed(5)}, {value.lng.toFixed(5)}</small>
+          </div>
+          <button
+            type="button"
+            className={styles.selectedPlaceClear}
+            onClick={clearAll}
+            aria-label={`${label} 변경`}
+            title="변경"
+          >
+            ✕
+          </button>
         </div>
-      ) : text.trim() ? (
-        <div className={styles.placeStatus}>검색 결과에서 장소를 선택해야 계산할 수 있습니다.</div>
-      ) : null}
-      {autocomplete.state === 'searching' ? <div className={styles.placeStatus}>검색 중</div> : null}
-      {autocomplete.state === 'empty' ? <div className={styles.placeStatus}>검색 결과 없음</div> : null}
-      {autocomplete.state === 'error' ? <div className={styles.placeStatus}>장소 검색 오류</div> : null}
+      ) : (
+        <>
+          <input
+            value={autocomplete.query}
+            placeholder={placeholder}
+            aria-label={label}
+            onChange={(event) => autocomplete.setQuery(event.target.value)}
+            onKeyDown={onKeyDown}
+          />
+          {text.trim() ? <div className={styles.placeStatus}>검색 결과에서 장소를 선택해야 계산할 수 있습니다.</div> : null}
+          {autocomplete.state === 'searching' ? <div className={styles.placeStatus}>검색 중</div> : null}
+          {autocomplete.state === 'empty' ? <div className={styles.placeStatus}>검색 결과 없음</div> : null}
+          {autocomplete.state === 'error' ? <div className={styles.placeStatus}>장소 검색 오류</div> : null}
+        </>
+      )}
       {autocomplete.suggestions.length && dropdownRect && typeof document !== 'undefined'
         ? createPortal(
           (

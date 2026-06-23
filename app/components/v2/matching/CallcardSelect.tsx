@@ -5,13 +5,14 @@ import type { MatchingCallcardModel } from '@/lib/matching-studio-model'
 import styles from './matchingStudio.module.css'
 
 function formatOption(callcard: MatchingCallcardModel): string {
-  const date = callcard.callDate ?? '날짜 없음'
-  const hour = callcard.hourSlot !== null ? `${callcard.hourSlot}시` : '-'
   const kind = callcard.isPaid ? '유료호출' : '일반호출'
   const origin = callcard.passengerAddress?.trim()
-  // The raw callcard id is a precision-lost big integer (shows as 2.02e+24) — useless to a human,
-  // so surface the date/time/kind/origin instead.
-  return origin ? `${date} ${hour} · ${kind} · ${origin}` : `${date} ${hour} · ${kind}`
+  // Date/hour are already pinned by the data filter above, so keep the label short (kind · origin)
+  // to fit the panel. Fall back to date/hour only when there's no origin address.
+  if (origin) return `${kind} · ${origin}`
+  const date = callcard.callDate ?? '날짜 없음'
+  const hour = callcard.hourSlot !== null ? `${callcard.hourSlot}시` : '-'
+  return `${kind} · ${date} ${hour}`
 }
 
 export function CallcardSelect({
