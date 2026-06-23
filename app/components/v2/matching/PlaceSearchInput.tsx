@@ -30,23 +30,21 @@ export function PlaceSearchInput({
   onClear: () => void
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const [dropdownRect, setDropdownRect] = useState<{ top?: number; bottom?: number; left: number; width: number } | null>(null)
+  const [dropdownRect, setDropdownRect] = useState<{ top: number; left: number; width: number; maxHeight: number } | null>(null)
   const autocomplete = usePlaceAutocomplete(google, center, text, onTextChange)
 
   useEffect(() => {
     if (!autocomplete.suggestions.length) { setDropdownRect(null); return }
     const rect = containerRef.current?.getBoundingClientRect()
     if (!rect) return
-    const estimatedHeight = Math.min(autocomplete.suggestions.length * 56, 280)
-    const spaceBelow = window.innerHeight - rect.bottom - 4
-    if (spaceBelow < estimatedHeight && rect.top > spaceBelow) {
-      setDropdownRect({ bottom: window.innerHeight - rect.top + 4, left: rect.left, width: rect.width })
-    } else {
-      setDropdownRect({ top: rect.bottom + 4, left: rect.left, width: rect.width })
-    }
+    // Always open downward (consistent for origin AND destination); clamp the height to the
+    // space remaining below so a low field's list scrolls internally instead of running off-screen.
+    // Width matches the input container so the list lines up with the panel.
+    const spaceBelow = window.innerHeight - rect.bottom - 12
+    const maxHeight = Math.max(140, Math.min(280, spaceBelow))
+    setDropdownRect({ top: rect.bottom + 4, left: rect.left, width: rect.width, maxHeight })
     // Depend on the suggestions array (not just its length): consecutive searches often return
-    // the same count (e.g. 천안 → 천안역, both 5), and keying on length alone skips the recompute,
-    // leaving the fixed-position dropdown unplaced so the panel's overflow clips it out of view.
+    // the same count (e.g. 천안 → 천안역, both 5), and keying on length alone skips the recompute.
   }, [autocomplete.suggestions])
 
   async function choose(index: number) {
@@ -121,14 +119,11 @@ export function PlaceSearchInput({
               aria-label={`${label} 검색 결과`}
               style={{
                 position: 'fixed',
-                // Explicit auto fallbacks: the .placeSuggestions class sets top:calc(100%+4px).
-                // For the upward (bottom-anchored) variant we only set bottom, so without
-                // top:'auto' the class's top wins and pushes the menu off-screen — which is why
-                // the lower (destination) field's dropdown never appeared.
-                top: dropdownRect.top ?? 'auto',
-                bottom: dropdownRect.bottom ?? 'auto',
+                top: dropdownRect.top,
+                bottom: 'auto',
                 left: dropdownRect.left,
                 width: dropdownRect.width,
+                maxHeight: dropdownRect.maxHeight,
                 right: 'auto',
               }}
             >
