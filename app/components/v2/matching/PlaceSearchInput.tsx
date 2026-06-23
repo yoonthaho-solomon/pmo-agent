@@ -2,6 +2,7 @@
 
 import type { KeyboardEvent } from 'react'
 import { useRef, useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { GoogleMapsGlobal } from '@/lib/google-maps/client-loader'
 import type { ScenarioPointInput } from '@/lib/adapters/matching'
 import { usePlaceAutocomplete } from './usePlaceAutocomplete'
@@ -43,7 +44,10 @@ export function PlaceSearchInput({
     } else {
       setDropdownRect({ top: rect.bottom + 4, left: rect.left, width: rect.width })
     }
-  }, [autocomplete.suggestions.length])
+    // Depend on the suggestions array (not just its length): consecutive searches often return
+    // the same count (e.g. 천안 → 천안역, both 5), and keying on length alone skips the recompute,
+    // leaving the fixed-position dropdown unplaced so the panel's overflow clips it out of view.
+  }, [autocomplete.suggestions])
 
   async function choose(index: number) {
     const suggestion = autocomplete.suggestions[index]
@@ -108,36 +112,41 @@ export function PlaceSearchInput({
       {autocomplete.state === 'searching' ? <div className={styles.placeStatus}>검색 중</div> : null}
       {autocomplete.state === 'empty' ? <div className={styles.placeStatus}>검색 결과 없음</div> : null}
       {autocomplete.state === 'error' ? <div className={styles.placeStatus}>장소 검색 오류</div> : null}
-      {autocomplete.suggestions.length ? (
-        <div
-          className={styles.placeSuggestions}
-          role="listbox"
-          aria-label={`${label} 검색 결과`}
-          style={dropdownRect ? {
-            position: 'fixed',
-            top: dropdownRect.top,
-            bottom: dropdownRect.bottom,
-            left: dropdownRect.left,
-            width: dropdownRect.width,
-            right: 'auto',
-          } : undefined}
-        >
-          {autocomplete.suggestions.map((suggestion, index) => (
-            <button
-              key={suggestion.id}
-              type="button"
-              role="option"
-              aria-selected={index === autocomplete.activeIndex}
-              data-active={index === autocomplete.activeIndex}
-              onMouseEnter={() => autocomplete.setActiveIndex(index)}
-              onClick={() => void choose(index)}
+      {autocomplete.suggestions.length && dropdownRect && typeof document !== 'undefined'
+        ? createPortal(
+          (
+            <div
+              className={styles.placeSuggestions}
+              role="listbox"
+              aria-label={`${label} 검색 결과`}
+              style={{
+                position: 'fixed',
+                top: dropdownRect.top,
+                bottom: dropdownRect.bottom,
+                left: dropdownRect.left,
+                width: dropdownRect.width,
+                right: 'auto',
+              }}
             >
-              <b>{suggestion.label}</b>
-              {suggestion.secondaryText ? <small>{suggestion.secondaryText}</small> : null}
-            </button>
-          ))}
-        </div>
-      ) : null}
+              {autocomplete.suggestions.map((suggestion, index) => (
+                <button
+                  key={suggestion.id}
+                  type="button"
+                  role="option"
+                  aria-selected={index === autocomplete.activeIndex}
+                  data-active={index === autocomplete.activeIndex}
+                  onMouseEnter={() => autocomplete.setActiveIndex(index)}
+                  onClick={() => void choose(index)}
+                >
+                  <b>{suggestion.label}</b>
+                  {suggestion.secondaryText ? <small>{suggestion.secondaryText}</small> : null}
+                </button>
+              ))}
+            </div>
+          ),
+          document.body,
+        )
+        : null}
     </div>
   )
 }

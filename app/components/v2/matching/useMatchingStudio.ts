@@ -278,16 +278,29 @@ export function useMatchingStudio(model: MatchingStudioModel) {
     invalidateScenario(scenarioOrigin || point ? 'dirty' : 'original')
   }
 
+  // Typing in the search box must not tear down scenario state on every keystroke — that cascade
+  // (route/candidates/status resets) re-renders the whole studio and thrashes the map layers each
+  // character, which is what made the map "zoom" on input and disrupted the suggestions dropdown.
+  // Only invalidate when it actually matters: a confirmed point is being edited away, or a computed
+  // result is currently on screen.
   function setScenarioOriginText(text: string) {
     setScenarioOriginTextState(text)
-    if (scenarioOrigin != null) setScenarioOriginState(null)
-    invalidateScenario(text.trim() || scenarioDestinationText.trim() ? 'dirty' : 'original')
+    if (scenarioOrigin != null) {
+      setScenarioOriginState(null)
+      invalidateScenario('dirty')
+    } else if (scenarioStatus === 'ready' || scenarioStatus === 'calculating' || scenarioStatus === 'error') {
+      invalidateScenario(text.trim() || scenarioDestinationText.trim() ? 'dirty' : 'original')
+    }
   }
 
   function setScenarioDestinationText(text: string) {
     setScenarioDestinationTextState(text)
-    if (scenarioDestination != null) setScenarioDestinationState(null)
-    invalidateScenario(scenarioOriginText.trim() || text.trim() ? 'dirty' : 'original')
+    if (scenarioDestination != null) {
+      setScenarioDestinationState(null)
+      invalidateScenario('dirty')
+    } else if (scenarioStatus === 'ready' || scenarioStatus === 'calculating' || scenarioStatus === 'error') {
+      invalidateScenario(scenarioOriginText.trim() || text.trim() ? 'dirty' : 'original')
+    }
   }
 
   function swapScenarioPoints() {
