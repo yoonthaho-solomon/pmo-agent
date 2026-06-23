@@ -16,7 +16,7 @@ export function ScoreBreakdown({
         <div>
           <span>최종 추천점수</span>
           <strong>{formatScore(candidate?.finalScore)}</strong>
-          <small>성향 {formula.similarityWeight * 100}% + 공간 {formula.spatialWeight * 100}%</small>
+          <small>성향 {Math.round(formula.similarityWeight * 100)}% + 공간 {Math.round(formula.spatialWeight * 100)}%</small>
         </div>
         <div>
           <span>성향 유사도</span>
@@ -26,7 +26,7 @@ export function ScoreBreakdown({
         <div>
           <span>공간 적합도</span>
           <strong>{formatPercent(candidate?.spatial.spatialScore)}</strong>
-          <small>출발 H3 {formula.originSpatialWeight * 100}% · 도착 H3 {formula.destinationSpatialWeight * 100}%</small>
+          <small>출발 H3 {Math.round(formula.originSpatialWeight * 100)}% · 도착 H3 {Math.round(formula.destinationSpatialWeight * 100)}%</small>
         </div>
         <div>
           <span>데이터 신뢰도</span>

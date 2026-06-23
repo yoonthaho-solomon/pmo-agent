@@ -107,7 +107,7 @@
 }
 
 .kpiNumber {
-  font-family: var(--km-v2-font-mono, 'JetBrains Mono', monospace);
+  font-family: var(--km-font-mono, 'JetBrains Mono', monospace);
   font-size: 32px;
   font-weight: 700;
   line-height: 1;

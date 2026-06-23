@@ -7,7 +7,11 @@ import styles from './matchingStudio.module.css'
 function formatOption(callcard: MatchingCallcardModel): string {
   const date = callcard.callDate ?? '날짜 없음'
   const hour = callcard.hourSlot !== null ? `${callcard.hourSlot}시` : '-'
-  return `${date} ${hour} / ${callcard.id}`
+  const kind = callcard.isPaid ? '유료호출' : '일반호출'
+  const origin = callcard.passengerAddress?.trim()
+  // The raw callcard id is a precision-lost big integer (shows as 2.02e+24) — useless to a human,
+  // so surface the date/time/kind/origin instead.
+  return origin ? `${date} ${hour} · ${kind} · ${origin}` : `${date} ${hour} · ${kind}`
 }
 
 export function CallcardSelect({
