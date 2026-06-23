@@ -94,19 +94,7 @@ export function GoogleSpatialStage({
       <StudioLegend />
       <div className={styles.mapTopBar}>
         <div>
-          <span>최고 후보</span>
-          <strong>{selectedCandidate?.driver.id ?? '후보 없음'}</strong>
-        </div>
-        <div>
-          <span>추천점수</span>
-          <strong>{selectedCandidate ? `${Math.round(selectedCandidate.finalScore)}점` : '-'}</strong>
-        </div>
-        <div>
-          <span>계산 기준</span>
-          <strong>성향 75 · H3 25</strong>
-        </div>
-        <div>
-          <span>승객 이동 경로</span>
+          <span>승객 이동 경로 · TMap</span>
           <strong>
             {routeState.route
               ? `${formatMeter(routeState.route.distanceMeters)} · ${formatMinutes(routeState.route.durationSeconds)}`

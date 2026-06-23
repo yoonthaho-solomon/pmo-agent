@@ -17,9 +17,23 @@ export function MatchingStudio({ model }: { model: MatchingStudioModel }) {
 
   return (
     <div className={styles.workspace}>
-      <StudioStatus model={model} sliceCount={state.callcards.length} candidateCount={state.rankedCandidates.length} />
-      <div className={styles.mainGrid}>
-        <CallBuilder
+      <GoogleSpatialStage
+        callcard={state.selectedCallcard}
+        selectedCandidate={state.selectedCandidate}
+        candidates={state.rankedCandidates}
+        scenarioOrigin={state.scenarioOrigin}
+        scenarioDestination={state.scenarioDestination}
+        scenarioMode={state.scenarioMode}
+        scenarioStatus={state.scenarioStatus}
+        inputMode={state.inputMode}
+      />
+      <StudioStatus
+        model={model}
+        sliceCount={state.callcards.length}
+        selectedCallcard={state.selectedCallcard}
+        selectedCandidate={state.selectedCandidate}
+      />
+      <CallBuilder
           google={google.google}
           callcards={state.callcards}
           selectedId={state.selectedCallcardId}
@@ -56,28 +70,15 @@ export function MatchingStudio({ model }: { model: MatchingStudioModel }) {
           onInputModeChange={state.setInputMode}
           isPending={state.isPending}
         />
-        <div className={styles.centerPane}>
-          <GoogleSpatialStage
-            callcard={state.selectedCallcard}
-            selectedCandidate={state.selectedCandidate}
-            candidates={state.rankedCandidates}
-            scenarioOrigin={state.scenarioOrigin}
-            scenarioDestination={state.scenarioDestination}
-            scenarioMode={state.scenarioMode}
-            scenarioStatus={state.scenarioStatus}
-            inputMode={state.inputMode}
-          />
-          {state.hasRun && !state.rankedCandidates.length && state.candidateState === 'original' ? (
-            <div className={styles.softNotice}>비교 가능한 후보 기사가 없습니다. 벡터 또는 기사 선호 H3 데이터 상태를 확인해 주세요.</div>
-          ) : null}
-        </div>
+        {state.hasRun && !state.rankedCandidates.length && state.candidateState === 'original' ? (
+          <div className={styles.softNotice}>비교 가능한 후보 기사가 없습니다. 벡터 또는 기사 선호 H3 데이터 상태를 확인해 주세요.</div>
+        ) : null}
         <CandidateDock
           candidates={state.rankedCandidates}
           state={state.candidateState}
           selectedId={state.selectedCandidate?.driver.id ?? ''}
           onSelect={state.selectCandidate}
         />
-      </div>
       <EvidenceDrawer
         open={state.showEvidence && canShowEvidence}
         onToggle={state.setShowEvidence}

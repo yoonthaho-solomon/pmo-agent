@@ -1,8 +1,6 @@
 .workspace {
+  position: relative;
   height: calc(100dvh - var(--km-v2-header-height));
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
-  gap: 8px;
   overflow: hidden;
 }
 
@@ -51,6 +49,95 @@
   line-height: 1.45;
 }
 
+/* ===== Floating glass KPI chip row (mockup) ===== */
+.kpiRow {
+  position: absolute;
+  top: 12px;
+  left: 16px;
+  right: 16px;
+  z-index: 30;
+  display: flex;
+  gap: 12px;
+  align-items: stretch;
+  pointer-events: none;
+}
+
+.kpiChip {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 16px;
+  border-radius: 15px;
+  border: 1px solid var(--km-v2-border-subtle);
+  background: rgba(10, 15, 25, 0.66);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.45);
+}
+
+.kpiChip[data-variant="wide"] {
+  flex: 1.6;
+}
+
+.kpiChip[data-accent="cyan"] {
+  border-color: rgba(67, 214, 239, 0.32);
+  background: linear-gradient(160deg, rgba(20, 36, 46, 0.7), rgba(10, 15, 25, 0.66));
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.45), 0 0 28px rgba(67, 214, 239, 0.1);
+}
+
+.kpiLabel {
+  color: var(--km-v2-text-muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.kpiHeadline {
+  color: var(--km-v2-text-primary);
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.kpiNumber {
+  font-family: var(--km-v2-font-mono, 'JetBrains Mono', monospace);
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--km-v2-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.kpiNumber[data-accent="cyan"] {
+  color: var(--km-v2-cyan);
+  text-shadow: 0 0 22px rgba(67, 214, 239, 0.4);
+}
+
+.kpiNumber[data-accent="violet"] {
+  color: #c3acff;
+}
+
+.kpiNumber[data-accent="green"] {
+  color: #7ee0a3;
+}
+
+.kpiSub {
+  color: var(--km-v2-text-secondary);
+  font-size: 12px;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .mainGrid {
   position: relative;
   min-height: 0;
@@ -73,17 +160,19 @@
 .callBuilder,
 .candidateDock {
   position: absolute;
-  top: 16px;
-  z-index: 6;
-  width: 348px;
-  max-height: calc(100% - 32px);
+  top: 100px;
+  bottom: 92px;
+  z-index: 30;
+  width: 332px;
   min-height: 0;
-  padding: 10px;
+  padding: 12px;
   display: grid;
   align-content: start;
-  gap: 7px;
+  gap: 8px;
   overflow-y: auto;
-  box-shadow: 0 18px 54px rgba(0, 0, 0, 0.34);
+  backdrop-filter: blur(20px) saturate(135%);
+  -webkit-backdrop-filter: blur(20px) saturate(135%);
+  box-shadow: 0 28px 64px rgba(0, 0, 0, 0.55);
 }
 
 .callBuilder {
@@ -428,8 +517,12 @@
 }
 
 .stage {
-  position: relative;
-  padding: 16px;
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
   overflow: hidden;
 }
 
@@ -473,25 +566,25 @@
 
 .mapTopBar {
   position: absolute;
-  left: 372px;
-  right: 404px;
-  top: 12px;
-  z-index: 5;
+  left: 360px;
+  right: 360px;
+  top: 100px;
+  z-index: 25;
   display: flex;
-  gap: 6px;
+  gap: 10px;
+  justify-content: center;
+  pointer-events: none;
 }
 
 .mapTopBar > div {
-  flex: 1;
   min-width: 0;
-  padding: 8px 12px;
-  border: 1px solid rgba(67, 214, 239, 0.18);
-  border-radius: 10px;
-  background: rgba(6, 16, 24, 0.86);
-}
-
-.mapTopBar > div:first-child {
-  flex: 1.8;
+  padding: 9px 16px;
+  border: 1px solid rgba(67, 214, 239, 0.22);
+  border-radius: 12px;
+  background: rgba(10, 15, 25, 0.66);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 16px 38px rgba(0, 0, 0, 0.4);
 }
 
 .mapTopBar span {
@@ -838,13 +931,21 @@
 }
 
 .evidenceDrawer {
-  min-height: 62px;
-  max-height: 68px;
+  position: absolute;
+  bottom: 16px;
+  left: 360px;
+  right: 360px;
+  z-index: 30;
+  min-height: 60px;
+  max-height: 64px;
   overflow: hidden;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 24px 56px rgba(0, 0, 0, 0.5);
 }
 
 .evidenceDrawer[data-open="true"] {
-  max-height: 320px;
+  max-height: 60vh;
   overflow: auto;
 }
 
@@ -997,6 +1098,19 @@
   border-radius: 12px;
   background: rgba(42, 28, 11, 0.45);
   color: var(--km-v2-text-primary);
+}
+
+.workspace > .softNotice {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 25;
+  max-width: 460px;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  background: rgba(42, 28, 11, 0.82);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
 .retryState {
