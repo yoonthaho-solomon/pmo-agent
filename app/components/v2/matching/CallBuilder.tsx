@@ -4,8 +4,21 @@ import type { GoogleMapsGlobal } from '@/lib/google-maps/client-loader'
 import type { MatchingCallcardModel } from '@/lib/matching-studio-model'
 import type { ScenarioStatus } from './useMatchingStudio'
 import { formatFare, formatMeter } from './formatters'
+import { CallcardSelect } from './CallcardSelect'
 import { PlaceSearchInput } from './PlaceSearchInput'
 import styles from './matchingStudio.module.css'
+
+const STATUS_LABELS: Record<string, string> = {
+  accepted: '배차 성공',
+  expired: '미배차',
+  canceled: '호출 취소',
+}
+
+const STATUS_META: Record<string, { label: string; tone: string }> = {
+  accepted: { label: '배차 성공', tone: 'green' },
+  expired: { label: '미배차', tone: 'amber' },
+  canceled: { label: '호출 취소', tone: 'muted' },
+}
 
 export function CallBuilder({
   google,
@@ -14,11 +27,17 @@ export function CallBuilder({
   selectedCallcard,
   asps,
   dates,
+  hours,
+  statuses,
   selectedAsp,
   selectedDate,
+  selectedHour,
+  selectedStatus,
   sliceLoading,
   onAspChange,
   onDateChange,
+  onHourChange,
+  onStatusChange,
   scenarioOrigin,
   scenarioDestination,
   scenarioOriginText,
@@ -42,11 +61,17 @@ export function CallBuilder({
   selectedCallcard: MatchingCallcardModel | null
   asps: number[]
   dates: string[]
+  hours: number[]
+  statuses: string[]
   selectedAsp: string
   selectedDate: string
+  selectedHour: string
+  selectedStatus: string
   sliceLoading: boolean
   onAspChange: (v: string) => void
   onDateChange: (v: string) => void
+  onHourChange: (v: string) => void
+  onStatusChange: (v: string) => void
   scenarioOrigin: ScenarioPointInput | null
   scenarioDestination: ScenarioPointInput | null
   scenarioOriginText: string
@@ -73,57 +98,83 @@ export function CallBuilder({
 
   return (
     <aside className={styles.callBuilder} aria-label="콜카드 입력 패널">
-      <div>
-        <p className={styles.eyebrow}>CALL BUILDER</p>
-        <h2>콜카드 조건</h2>
-      </div>
-
-      <div className={styles.filterRow}>
-        <label>
-          <span>ASP 지역</span>
-          <select value={selectedAsp} disabled={sliceLoading} onChange={(e) => onAspChange(e.target.value)}>
-            <option value="all">전체</option>
-            {asps.map((asp) => (
-              <option key={asp} value={String(asp)}>ASP {asp}</option>
-            ))}
-          </select>
-        </label>
-        <label>
-          <span>날짜{sliceLoading ? ' · 불러오는 중' : ''}</span>
-          <select value={selectedDate} disabled={sliceLoading} onChange={(e) => onDateChange(e.target.value)}>
-            <option value="all">전체</option>
-            {dates.map((d) => (
-              <option key={d} value={d}>{d.slice(5)}</option>
-            ))}
-          </select>
-        </label>
-      </div>
-
-      <label className={styles.field}>
-        <span>기준 콜카드</span>
-        <select value={selectedId} onChange={(event) => onSelect(event.target.value)} aria-label="분석할 콜카드 선택">
-          {callcards.map((callcard) => (
-            <option key={callcard.id} value={callcard.id}>
-              {callcard.callDate ?? '날짜 없음'} / {callcard.id}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      {selectedCallcard ? (
-        <div className={styles.callCard}>
-          <div className={styles.callHero}>
-            <strong>{selectedCallcard.callDate ?? '날짜 없음'}</strong>
-            <span>{selectedCallcard.hourSlot ?? '-'}시 · {selectedCallcard.isPaid ? '유료호출' : '일반호출'}</span>
-          </div>
-          <div className={styles.callMetrics}>
-            <span>예상거리 <b>{formatMeter(selectedCallcard.expectedDistance)}</b></span>
-            <span>예상요금 <b>{formatFare(selectedCallcard.expectedFare)}</b></span>
-          </div>
+      <header className={styles.builderHead}>
+        <span className={styles.builderAccent} aria-hidden />
+        <div className={styles.builderHeadText}>
+          <p className={styles.eyebrow}>CALL BUILDER</p>
+          <h2>콜카드 조건</h2>
         </div>
-      ) : (
-        <div className={styles.softNotice}>선택 가능한 콜카드가 없습니다.</div>
-      )}
+        <span className={styles.builderCount}>{sliceLoading ? '…' : `${callcards.length}건`}</span>
+      </header>
+
+      <section className={styles.builderSection}>
+        <p className={styles.sectionLabel}>데이터 필터</p>
+        <div className={styles.filterRow}>
+          <label>
+            <span>ASP 지역</span>
+            <select value={selectedAsp} disabled={sliceLoading} onChange={(e) => onAspChange(e.target.value)}>
+              <option value="all">전체</option>
+              {asps.map((asp) => (
+                <option key={asp} value={String(asp)}>ASP {asp}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>날짜{sliceLoading ? ' · 로딩중' : ''}</span>
+            <select value={selectedDate} disabled={sliceLoading} onChange={(e) => onDateChange(e.target.value)}>
+              <option value="all">전체</option>
+              {dates.map((d) => (
+                <option key={d} value={d}>{d.slice(5)}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>시간대</span>
+            <select value={selectedHour} disabled={sliceLoading} onChange={(e) => onHourChange(e.target.value)}>
+              <option value="all">전체</option>
+              {hours.map((h) => (
+                <option key={h} value={String(h)}>{h}시</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>상태</span>
+            <select value={selectedStatus} disabled={sliceLoading} onChange={(e) => onStatusChange(e.target.value)}>
+              <option value="all">전체</option>
+              {statuses.map((s) => (
+                <option key={s} value={s}>{STATUS_LABELS[s] ?? s}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+      </section>
+
+      <section className={styles.builderSection}>
+        <p className={styles.sectionLabel}>기준 콜카드</p>
+        <CallcardSelect callcards={callcards} selectedId={selectedId} onSelect={onSelect} />
+
+        {selectedCallcard ? (
+          <div className={styles.callCard}>
+            <div className={styles.callHero}>
+              <div className={styles.callHeroMain}>
+                <strong>{selectedCallcard.callDate ?? '날짜 없음'}</strong>
+                <span>{selectedCallcard.hourSlot ?? '-'}시 · {selectedCallcard.isPaid ? '유료호출' : '일반호출'}</span>
+              </div>
+              {selectedCallcard.statusGroup && STATUS_META[selectedCallcard.statusGroup] ? (
+                <span className={styles.statusChip} data-tone={STATUS_META[selectedCallcard.statusGroup].tone}>
+                  {STATUS_META[selectedCallcard.statusGroup].label}
+                </span>
+              ) : null}
+            </div>
+            <div className={styles.callMetrics}>
+              <span>예상거리 <b>{formatMeter(selectedCallcard.expectedDistance)}</b></span>
+              <span>예상요금 <b>{formatFare(selectedCallcard.expectedFare)}</b></span>
+            </div>
+          </div>
+        ) : (
+          <div className={styles.softNotice}>선택 가능한 콜카드가 없습니다.</div>
+        )}
+      </section>
 
       <div className={styles.scenarioBox}>
         <button type="button" className={styles.scenarioToggle} onClick={() => setScenarioOpen((o) => !o)}>
@@ -154,10 +205,11 @@ export function CallBuilder({
               onSelect={onScenarioDestination}
               onClear={() => onScenarioDestination(null)}
             />
-            <div className={styles.scenarioActions}>
-              <button type="button" onClick={onSwapScenario} disabled={!scenarioOrigin && !scenarioDestination}>맞바꾸기</button>
-              <button type="button" onClick={onClearScenario}>원본 위치</button>
-            </div>
+            {hasScenarioInput ? (
+              <div className={styles.scenarioActions}>
+                <button type="button" onClick={onClearScenario}>원본 콜카드로</button>
+              </div>
+            ) : null}
             {scenarioStatus === 'dirty' ? <p className={styles.formNotice}>시나리오 재계산이 필요합니다.</p> : null}
             {hasScenarioInput && !canRunScenario ? <p className={styles.formNotice}>출발지와 도착지를 검색 결과에서 모두 선택해야 계산할 수 있습니다.</p> : null}
             {scenarioError ? <p className={styles.formError}>{scenarioError}</p> : null}

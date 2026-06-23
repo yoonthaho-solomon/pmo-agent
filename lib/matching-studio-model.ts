@@ -53,6 +53,8 @@ export type MatchingCandidateModel = {
 export type MatchingFilterOptions = {
   asps: number[]
   dates: string[]
+  hours: number[]
+  statuses: string[]
 }
 
 export type MatchingStudioModel = {

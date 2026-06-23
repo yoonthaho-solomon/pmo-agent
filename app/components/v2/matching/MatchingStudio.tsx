@@ -27,11 +27,17 @@ export function MatchingStudio({ model }: { model: MatchingStudioModel }) {
           selectedCallcard={state.selectedCallcard}
           asps={state.filterOptions.asps}
           dates={state.filterOptions.dates}
+          hours={state.filterOptions.hours}
+          statuses={state.filterOptions.statuses}
           selectedAsp={state.aspFilter}
           selectedDate={state.dateFilter}
+          selectedHour={state.hourFilter}
+          selectedStatus={state.statusFilter}
           sliceLoading={state.sliceLoading}
           onAspChange={state.setAspFilter}
           onDateChange={state.setDateFilter}
+          onHourChange={state.setHourFilter}
+          onStatusChange={state.setStatusFilter}
           scenarioOrigin={state.scenarioOrigin}
           scenarioDestination={state.scenarioDestination}
           scenarioOriginText={state.scenarioOriginText}

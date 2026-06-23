@@ -73,6 +73,7 @@ export type ScenarioMatchingResponse =
     }
 
 const SLICE_LIMIT = 200
+const CALLCARD_STATUS_GROUPS = ['accepted', 'expired', 'canceled']
 const DRIVER_PAGE_SIZE = 1000
 const TOP_CANDIDATE_LIMIT = 10
 
@@ -252,7 +253,7 @@ function emptyModel(status: MatchingStudioStatus, message: string): MatchingStud
     callcards: [],
     drivers: [],
     candidatesByCallcard: {},
-    filterOptions: { asps: [], dates: [] },
+    filterOptions: { asps: [], dates: [], hours: Array.from({ length: 24 }, (_, i) => i), statuses: CALLCARD_STATUS_GROUPS },
     driverCount: 0,
     callcardCount: 0,
     limits: {
@@ -377,6 +378,8 @@ async function fetchCallcardSlice(
   supabase: SupabaseClient,
   aspId: number | null,
   date: string | null,
+  hour: number | null,
+  status: string | null,
 ): Promise<{ callcards: MatchingCallcardModel[]; error: string | null }> {
   let query = supabase
     .from('callcard_mbti')
@@ -388,6 +391,8 @@ async function fetchCallcardSlice(
 
   if (aspId != null) query = query.eq('asp_id', aspId)
   if (date) query = query.eq('call_date', date)
+  if (hour != null) query = query.eq('hour_slot', hour)
+  if (status) query = query.eq('status_group', status)
 
   const response = await query
   if (response.error) return { callcards: [], error: response.error.message }
@@ -442,7 +447,12 @@ async function fetchFilterOptions(supabase: SupabaseClient): Promise<MatchingFil
 
   const minDate = cleanString((minRes.data?.[0] as { call_date?: string | null } | undefined)?.call_date)
   const maxDate = cleanString((maxRes.data?.[0] as { call_date?: string | null } | undefined)?.call_date)
-  return { asps, dates: enumerateDatesDesc(minDate, maxDate) }
+  return {
+    asps,
+    dates: enumerateDatesDesc(minDate, maxDate),
+    hours: Array.from({ length: 24 }, (_, i) => i),
+    statuses: CALLCARD_STATUS_GROUPS,
+  }
 }
 
 // The driver cohort for a callcard's ASP is the expensive part; cache it so on-demand
@@ -455,13 +465,13 @@ export type CallcardSliceResponse =
   | { ok: true; callcards: MatchingCallcardModel[] }
   | { ok: false; message: string }
 
-export async function getCallcardSlice(aspId: number | null, date: string | null): Promise<CallcardSliceResponse> {
+export async function getCallcardSlice(aspId: number | null, date: string | null, hour: number | null, status: string | null): Promise<CallcardSliceResponse> {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   if (!supabaseUrl || !supabaseKey) return { ok: false, message: '서버 설정이 필요합니다.' }
 
   const supabase = createClient(supabaseUrl, supabaseKey)
-  const { callcards, error } = await fetchCallcardSlice(supabase, aspId, date)
+  const { callcards, error } = await fetchCallcardSlice(supabase, aspId, date, hour, status)
   if (error) return { ok: false, message: '콜카드 목록을 불러오지 못했습니다.' }
   return { ok: true, callcards }
 }
@@ -529,7 +539,7 @@ async function buildMatchingStudioModel(): Promise<MatchingStudioModel> {
   const [filterOptions, totalRes, slice] = await Promise.all([
     fetchFilterOptions(supabase),
     supabase.from('callcard_mbti').select('callcard_id', { count: 'estimated', head: true }),
-    fetchCallcardSlice(supabase, null, null),
+    fetchCallcardSlice(supabase, null, null, null, null),
   ])
 
   if (slice.error) {

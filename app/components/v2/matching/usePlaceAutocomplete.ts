@@ -29,7 +29,10 @@ export function usePlaceAutocomplete(
 
   useEffect(() => {
     const normalized = query.trim()
-    if (!google || normalized.length < 2) {
+    // After a selection the query is set to the chosen place's label. Don't re-search it —
+    // otherwise the dropdown reopens with the same result right after the user picks one.
+    const selectedLabel = selectedPlace ? (selectedPlace.address ?? selectedPlace.name) : null
+    if (!google || normalized.length < 2 || (selectedLabel && normalized === selectedLabel)) {
       requestIdRef.current += 1
       lastRequestRef.current = ''
       const resetTimer = window.setTimeout(() => {
@@ -65,7 +68,7 @@ export function usePlaceAutocomplete(
     }, 300)
 
     return () => window.clearTimeout(timer)
-  }, [center, google, query])
+  }, [center, google, query, selectedPlace])
 
   async function selectSuggestion(suggestion: PlaceSuggestion): Promise<ResolvedPlace | null> {
     try {

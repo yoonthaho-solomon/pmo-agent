@@ -1,6 +1,7 @@
 ﻿'use client'
 
 import type { KeyboardEvent } from 'react'
+import { useRef, useEffect, useState } from 'react'
 import type { GoogleMapsGlobal } from '@/lib/google-maps/client-loader'
 import type { ScenarioPointInput } from '@/lib/adapters/matching'
 import { usePlaceAutocomplete } from './usePlaceAutocomplete'
@@ -27,7 +28,22 @@ export function PlaceSearchInput({
   onSelect: (point: ScenarioPointInput) => void
   onClear: () => void
 }) {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [dropdownRect, setDropdownRect] = useState<{ top?: number; bottom?: number; left: number; width: number } | null>(null)
   const autocomplete = usePlaceAutocomplete(google, center, text, onTextChange)
+
+  useEffect(() => {
+    if (!autocomplete.suggestions.length) { setDropdownRect(null); return }
+    const rect = containerRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const estimatedHeight = Math.min(autocomplete.suggestions.length * 56, 280)
+    const spaceBelow = window.innerHeight - rect.bottom - 4
+    if (spaceBelow < estimatedHeight && rect.top > spaceBelow) {
+      setDropdownRect({ bottom: window.innerHeight - rect.top + 4, left: rect.left, width: rect.width })
+    } else {
+      setDropdownRect({ top: rect.bottom + 4, left: rect.left, width: rect.width })
+    }
+  }, [autocomplete.suggestions.length])
 
   async function choose(index: number) {
     const suggestion = autocomplete.suggestions[index]
@@ -70,7 +86,7 @@ export function PlaceSearchInput({
   }
 
   return (
-    <div className={styles.placeSearch}>
+    <div className={styles.placeSearch} ref={containerRef}>
       <label>
         <span>{label}</span>
         <input
@@ -85,7 +101,6 @@ export function PlaceSearchInput({
         <div className={styles.selectedPlace}>
           <b>{value.label}</b>
           <small>{value.lat.toFixed(5)}, {value.lng.toFixed(5)}</small>
-          <button type="button" onClick={clearAll}>초기화</button>
         </div>
       ) : text.trim() ? (
         <div className={styles.placeStatus}>검색 결과에서 장소를 선택해야 계산할 수 있습니다.</div>
@@ -94,7 +109,19 @@ export function PlaceSearchInput({
       {autocomplete.state === 'empty' ? <div className={styles.placeStatus}>검색 결과 없음</div> : null}
       {autocomplete.state === 'error' ? <div className={styles.placeStatus}>장소 검색 오류</div> : null}
       {autocomplete.suggestions.length ? (
-        <div className={styles.placeSuggestions} role="listbox" aria-label={`${label} 검색 결과`}>
+        <div
+          className={styles.placeSuggestions}
+          role="listbox"
+          aria-label={`${label} 검색 결과`}
+          style={dropdownRect ? {
+            position: 'fixed',
+            top: dropdownRect.top,
+            bottom: dropdownRect.bottom,
+            left: dropdownRect.left,
+            width: dropdownRect.width,
+            right: 'auto',
+          } : undefined}
+        >
           {autocomplete.suggestions.map((suggestion, index) => (
             <button
               key={suggestion.id}

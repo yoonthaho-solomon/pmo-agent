@@ -19,6 +19,8 @@ export function useMatchingStudio(model: MatchingStudioModel) {
   const [callcards, setCallcards] = useState<MatchingCallcardModel[]>(model.callcards)
   const [aspFilter, setAspFilter] = useState<string>('all')
   const [dateFilter, setDateFilter] = useState<string>('all')
+  const [hourFilter, setHourFilter] = useState<string>('all')
+  const [statusFilter, setStatusFilter] = useState<string>('all')
   const [sliceLoading, setSliceLoading] = useState(false)
   const [selectedCallcardId, setSelectedCallcardId] = useState(model.callcards[0]?.id ?? '')
   const [selectedCandidateId, setSelectedCandidateId] = useState('')
@@ -176,14 +178,14 @@ export function useMatchingStudio(model: MatchingStudioModel) {
 
   // Filter changes drive a fresh server slice (any of the ~440k callcards is reachable this way),
   // then auto-select and match the first result so the studio is never left empty.
-  async function loadSlice(asp: string, date: string) {
+  async function loadSlice(asp: string, date: string, hour: string, status: string) {
     const requestId = sliceRequestRef.current + 1
     sliceRequestRef.current = requestId
     setSliceLoading(true)
     setOriginalError(null)
 
     try {
-      const params = new URLSearchParams({ asp, date })
+      const params = new URLSearchParams({ asp, date, hour, status })
       const response = await fetch(`/api/matching-studio/callcards?${params.toString()}`)
       const result = await response.json() as CallcardSliceResponse
       if (sliceRequestRef.current !== requestId) return
@@ -206,12 +208,22 @@ export function useMatchingStudio(model: MatchingStudioModel) {
 
   function changeAspFilter(value: string) {
     setAspFilter(value)
-    void loadSlice(value, dateFilter)
+    void loadSlice(value, dateFilter, hourFilter, statusFilter)
   }
 
   function changeDateFilter(value: string) {
     setDateFilter(value)
-    void loadSlice(aspFilter, value)
+    void loadSlice(aspFilter, value, hourFilter, statusFilter)
+  }
+
+  function changeHourFilter(value: string) {
+    setHourFilter(value)
+    void loadSlice(aspFilter, dateFilter, value, statusFilter)
+  }
+
+  function changeStatusFilter(value: string) {
+    setStatusFilter(value)
+    void loadSlice(aspFilter, dateFilter, hourFilter, value)
   }
 
   function clearScenario() {
@@ -349,8 +361,12 @@ export function useMatchingStudio(model: MatchingStudioModel) {
     filterOptions: model.filterOptions,
     aspFilter,
     dateFilter,
+    hourFilter,
+    statusFilter,
     setAspFilter: changeAspFilter,
     setDateFilter: changeDateFilter,
+    setHourFilter: changeHourFilter,
+    setStatusFilter: changeStatusFilter,
     sliceLoading,
     selectedCallcard: activeCallcard,
     originalCallcard: selectedCallcard,

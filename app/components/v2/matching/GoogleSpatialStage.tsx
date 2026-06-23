@@ -57,12 +57,11 @@ export function GoogleSpatialStage({
   const effectiveOrigin = scenarioOrigin ?? originalOrigin
   const effectiveDestination = scenarioDestination ?? originalDestination
   const routeState = useRouteSummary(effectiveOrigin, effectiveDestination)
-  const activeMatchingCallcard = scenarioStatus === 'dirty' || scenarioStatus === 'calculating' || scenarioStatus === 'error' ? null : callcard
+  const showCandidate = scenarioStatus !== 'dirty' && scenarioStatus !== 'calculating' && scenarioStatus !== 'error'
   const { containerRef, state: mapLoadState } = useGoogleMap({
     effectiveOrigin,
     effectiveDestination,
-    activeMatchingCallcard,
-    candidate: activeMatchingCallcard ? selectedCandidate : null,
+    candidate: showCandidate ? selectedCandidate : null,
     route: routeState.route,
   })
   const fare = estimateTaxiFare(routeState.route, callcard?.aspId, VERIFIED_TAXI_FARE_POLICIES)
@@ -70,7 +69,7 @@ export function GoogleSpatialStage({
   if (mapLoadState === 'missing_config' || mapLoadState === 'load_error' || mapLoadState === 'unsupported_webgl') {
     return (
       <div className={styles.googleFallback}>
-        <SpatialStage callcard={callcard} selectedCandidate={activeMatchingCallcard ? selectedCandidate : null} candidates={activeMatchingCallcard ? candidates : []} />
+        <SpatialStage callcard={callcard} selectedCandidate={showCandidate ? selectedCandidate : null} candidates={showCandidate ? candidates : []} />
         <div className={styles.mapConfigNotice}>
           <b>{mapLoadState === 'missing_config' ? 'Google 지도 설정 필요' : 'Google 지도 fallback'}</b>
           <span>지도 설정이 없거나 로드할 수 없어 Phase 4 공간 캔버스를 표시합니다. Top 10과 Evidence는 계속 사용할 수 있습니다.</span>
@@ -102,11 +101,6 @@ export function GoogleSpatialStage({
               ? `${formatMeter(routeState.route.distanceMeters)} · ${formatMinutes(routeState.route.durationSeconds)}`
               : routeStateLabel(routeState.state)}
           </strong>
-          {routeState.state !== 'idle' && routeState.state !== 'loading' && routeState.state !== 'success' ? (
-            <button type="button" className={styles.topBarRetry} onClick={routeState.retry}>
-              {routeState.message ?? '다시 계산'}
-            </button>
-          ) : null}
         </div>
         <div>
           <span>예상 요금</span>

@@ -26,7 +26,7 @@ export type GoogleLatLngBoundsConstructor = new (
 
 export type GoogleMapInstance = {
   setCenter: (latLng: { lat: number; lng: number }) => void
-  fitBounds: (bounds: GoogleLatLngBounds) => void
+  fitBounds: (bounds: GoogleLatLngBounds, padding?: number) => void
 }
 
 export type GoogleLatLngBounds = {
