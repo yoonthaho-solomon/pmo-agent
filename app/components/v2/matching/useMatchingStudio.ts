@@ -68,6 +68,22 @@ export function useMatchingStudio(model: MatchingStudioModel) {
     }
   }, [])
 
+  // Auto-run original Top 10 whenever a callcard is selected and not yet computed
+  useEffect(() => {
+    if (!selectedCallcardId || hasRun) return
+    void ensureOriginal(selectedCallcardId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCallcardId, hasRun])
+
+  // Auto-run scenario matching the moment both points are confirmed (no button needed)
+  useEffect(() => {
+    if (!scenarioOrigin || !scenarioDestination || !selectedCallcardId) return
+    if (scenarioStatus !== 'dirty') return
+    void runScenarioMatching()
+    // runScenarioMatching reads fresh state from closure after render; intentional omission
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scenarioOrigin, scenarioDestination, selectedCallcardId, scenarioStatus])
+
   const selectedCallcard = useMemo<MatchingCallcardModel | null>(
     () => callcards.find((callcard) => callcard.id === selectedCallcardId) ?? callcards[0] ?? null,
     [callcards, selectedCallcardId],

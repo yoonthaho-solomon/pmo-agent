@@ -76,7 +76,7 @@
   top: 16px;
   z-index: 6;
   width: 348px;
-  max-height: calc(100% - 100px);
+  max-height: calc(100% - 32px);
   min-height: 0;
   padding: 10px;
   display: grid;
@@ -370,6 +370,16 @@
   filter: grayscale(0.5) brightness(0.7);
 }
 
+.pendingNotice {
+  padding: 8px 12px;
+  color: var(--km-v2-text-muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-align: center;
+  letter-spacing: 0.05em;
+  animation: km-pulse 1.2s ease-in-out infinite;
+}
+
 .centerPane {
   min-width: 0;
   min-height: 0;
@@ -660,18 +670,23 @@
 }
 
 .legend {
-  min-height: 32px;
-  padding: 0 10px;
+  position: absolute;
+  bottom: 24px;
+  right: 58px;
+  z-index: 5;
+  padding: 8px 11px;
   border: 1px solid var(--km-v2-border-subtle);
-  border-radius: var(--km-v2-radius-panel);
-  background: rgba(6, 16, 24, 0.72);
+  border-radius: 10px;
+  background: rgba(6, 16, 24, 0.86);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px;
+  flex-direction: column;
+  gap: 7px;
   color: var(--km-v2-text-secondary);
   font-size: 11px;
   font-weight: 800;
+  pointer-events: none;
 }
 
 .legend i {
@@ -800,7 +815,7 @@
   padding: 0 18px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   color: var(--km-v2-text-primary);
   background: transparent;
   border: 0;

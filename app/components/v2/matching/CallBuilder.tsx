@@ -210,21 +210,14 @@ export function CallBuilder({
                 <button type="button" onClick={onClearScenario}>원본 콜카드로</button>
               </div>
             ) : null}
-            {scenarioStatus === 'dirty' ? <p className={styles.formNotice}>시나리오 재계산이 필요합니다.</p> : null}
-            {hasScenarioInput && !canRunScenario ? <p className={styles.formNotice}>출발지와 도착지를 검색 결과에서 모두 선택해야 계산할 수 있습니다.</p> : null}
             {scenarioError ? <p className={styles.formError}>{scenarioError}</p> : null}
           </>
         ) : null}
       </div>
 
-      <button
-        className={styles.primaryAction}
-        type="button"
-        disabled={!selectedCallcard || isPending || (hasScenarioInput && !canRunScenario)}
-        onClick={hasScenarioInput ? onRunScenario : onRun}
-      >
-        {isPending ? '후보 분석 중' : hasScenarioInput ? '시나리오 Top 10 계산' : '원본 콜카드 Top 10 분석'}
-      </button>
+      {isPending ? (
+        <div className={styles.pendingNotice}>후보 분석 중…</div>
+      ) : null}
     </aside>
   )
 }

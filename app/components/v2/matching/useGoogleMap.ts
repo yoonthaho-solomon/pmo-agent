@@ -95,7 +95,7 @@ export function useGoogleMap({
         if (cancelled || !containerRef.current || mapRef.current) return
         const map = new google.maps.Map(containerRef.current, {
           center: { lat: 36.8151, lng: 127.1139 },
-          zoom: 10,
+          zoom: 12,
           mapId,
           colorScheme: 'DARK',
           mapTypeControl: false,
@@ -144,7 +144,7 @@ export function useGoogleMap({
 
     const tick = () => {
       tRef.current += 0.016
-      const pulse = (Math.sin(tRef.current * 1.2) + 1) / 2
+      const pulse = (Math.sin(tRef.current * 2.4) + 1) / 2
 
       const pathLen = routePathRef.current.length
 
@@ -195,12 +195,12 @@ export function useGoogleMap({
 
       // Glow halo — slow breathe
       const glowAlpha = Math.round(10 + pulse * 45)
-      const glowMinPx = Math.round(8 + pulse * 12)
+      const glowMinPx = Math.round(6 + pulse * 8)   // 6 → 14 px
 
       // Dot beat — slightly faster independent wave so it feels alive
-      const dotPulse = (Math.sin(tRef.current * 1.8) + 1) / 2
+      const dotPulse = (Math.sin(tRef.current * 3.6) + 1) / 2
       const dotAlpha = Math.round(160 + dotPulse * 95)
-      const dotMinPx = Math.round(3 + dotPulse * 4)   // 3 → 7 px
+      const dotMinPx = Math.round(3 + dotPulse * 3)   // 3 → 6 px
 
       const glowLayer = new ScatterplotLayer<RoutePointDatum>({
         id: 'km-v2-route-glow',
@@ -209,7 +209,7 @@ export function useGoogleMap({
         getFillColor: (row) => [row.color[0], row.color[1], row.color[2], glowAlpha] as Color,
         getRadius: 160,
         radiusMinPixels: glowMinPx,
-        radiusMaxPixels: 32,
+        radiusMaxPixels: 24,
         filled: true,
         stroked: false,
       })
@@ -222,7 +222,7 @@ export function useGoogleMap({
         getLineColor: [255, 255, 255, Math.round(80 + dotPulse * 80)] as Color,
         getRadius: 40,
         radiusMinPixels: dotMinPx,
-        radiusMaxPixels: dotMinPx + 4,
+        radiusMaxPixels: dotMinPx + 3,
         stroked: true,
         lineWidthMinPixels: 1,
       })
@@ -259,7 +259,7 @@ export function useGoogleMap({
           mapRef.current?.fitBounds(new google.maps.LatLngBounds(bounds.sw, bounds.ne), 200)
           google.maps.event.addListenerOnce(mapRef.current as never, 'idle', () => {
             const z = mapRef.current?.getZoom() ?? 0
-            if (z > 11) mapRef.current?.setZoom(11)
+            if (z > 13) mapRef.current?.setZoom(13)
           })
         } else if (effectiveOrigin && effectiveDestination) {
           const latLngBounds = new google.maps.LatLngBounds()
@@ -268,7 +268,7 @@ export function useGoogleMap({
           mapRef.current?.fitBounds(latLngBounds, 200)
           google.maps.event.addListenerOnce(mapRef.current as never, 'idle', () => {
             const z = mapRef.current?.getZoom() ?? 0
-            if (z > 11) mapRef.current?.setZoom(11)
+            if (z > 13) mapRef.current?.setZoom(13)
           })
         }
       } else if (!fitKey && effectiveOrigin) {

@@ -27,8 +27,7 @@ export function EvidenceDrawer({
         aria-expanded={open}
         onClick={() => onToggle(!open)}
       >
-        <span>추천 근거 보기</span>
-        <b>{open ? '접기' : '열기'}</b>
+        <b>{open ? '접기' : '추천근거 보기'}</b>
       </button>
       {open ? (
         <div className={styles.drawerGrid}>

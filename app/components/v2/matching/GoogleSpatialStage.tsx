@@ -6,6 +6,7 @@ import type { MatchingCallcardModel, MatchingCandidateModel } from '@/lib/matchi
 import { estimateTaxiFare, VERIFIED_TAXI_FARE_POLICIES } from '@/lib/taxi-fare-estimator'
 import type { ScenarioStatus } from './useMatchingStudio'
 import { SpatialStage } from './SpatialStage'
+import { StudioLegend } from './StudioLegend'
 import { useGoogleMap } from './useGoogleMap'
 import { useRouteSummary } from './useRouteSummary'
 import { formatFare, formatMeter } from './formatters'
@@ -81,6 +82,7 @@ export function GoogleSpatialStage({
   return (
     <section className={styles.stage} aria-label="Google 지도 기반 공간 매칭 스튜디오">
       <div ref={containerRef} className={styles.googleMapCanvas} />
+      <StudioLegend />
       <div className={styles.mapTopBar}>
         <div>
           <span>최고 후보</span>

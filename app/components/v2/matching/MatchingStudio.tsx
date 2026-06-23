@@ -5,7 +5,6 @@ import { CallBuilder } from './CallBuilder'
 import { CandidateDock } from './CandidateDock'
 import { EvidenceDrawer } from './EvidenceDrawer'
 import { GoogleSpatialStage } from './GoogleSpatialStage'
-import { StudioLegend } from './StudioLegend'
 import { StudioStatus } from './StudioStatus'
 import { useGoogleMapsApi } from './useGoogleMapsApi'
 import { useMatchingStudio } from './useMatchingStudio'
@@ -65,7 +64,6 @@ export function MatchingStudio({ model }: { model: MatchingStudioModel }) {
             scenarioMode={state.scenarioMode}
             scenarioStatus={state.scenarioStatus}
           />
-          <StudioLegend />
           {state.hasRun && !state.rankedCandidates.length && state.candidateState === 'original' ? (
             <div className={styles.softNotice}>비교 가능한 후보 기사가 없습니다. 벡터 또는 기사 선호 H3 데이터 상태를 확인해 주세요.</div>
           ) : null}

@@ -35,11 +35,12 @@ function isValidCoordinate(lat: unknown, lng: unknown): lat is number {
 }
 
 function pointToWaypoint(point: RoutePoint): { placeId: string } | { location: { latLng: { latitude: number; longitude: number } } } | null {
-  const placeId = point.placeId?.trim()
-  if (placeId && placeId.length <= 256) return { placeId }
+  // Prefer lat/lng coordinates — more reliable across API keys than placeId
   if (isValidCoordinate(point.lat, point.lng)) {
     return { location: { latLng: { latitude: point.lat, longitude: point.lng as number } } }
   }
+  const placeId = point.placeId?.trim()
+  if (placeId && placeId.length <= 256) return { placeId }
   return null
 }
 
@@ -72,7 +73,7 @@ export async function fetchGoogleRouteSummary(origin: RoutePoint, destination: R
         origin: originWaypoint,
         destination: destinationWaypoint,
         travelMode: 'DRIVE',
-        routingPreference: 'TRAFFIC_AWARE',
+        routingPreference: 'TRAFFIC_UNAWARE',
         languageCode: 'ko-KR',
         units: 'METRIC',
         computeAlternativeRoutes: false,
