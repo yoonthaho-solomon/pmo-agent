@@ -5,6 +5,7 @@ import type { CallcardSliceResponse, OriginalMatchingResponse, ScenarioMatchingR
 import type { MatchingCallcardModel, MatchingCandidateModel, MatchingStudioModel } from '@/lib/matching-studio-model'
 
 export type ScenarioStatus = 'original' | 'dirty' | 'calculating' | 'ready' | 'error'
+export type InputMode = 'callcard' | 'scenario'
 
 function pointLabel(point: ScenarioPointInput | null): string {
   return point?.label ?? ''
@@ -24,6 +25,7 @@ export function useMatchingStudio(model: MatchingStudioModel) {
   const [sliceLoading, setSliceLoading] = useState(false)
   const [selectedCallcardId, setSelectedCallcardId] = useState(model.callcards[0]?.id ?? '')
   const [selectedCandidateId, setSelectedCandidateId] = useState('')
+  const [inputMode, setInputModeState] = useState<InputMode>('callcard')
   const [showEvidence, setShowEvidence] = useState(false)
   const [hasRun, setHasRun] = useState(Boolean(model.callcards[0]))
   // Top 10 per callcard is computed lazily on demand; this cache is seeded with the first
@@ -242,6 +244,14 @@ export function useMatchingStudio(model: MatchingStudioModel) {
     void loadSlice(aspFilter, dateFilter, hourFilter, value)
   }
 
+  // Mode is a hard switch between the two input sources: a real callcard vs a hypothetical
+  // origin/destination. Leaving scenario mode clears the manual points so the map and Top 10
+  // revert to the selected callcard rather than lingering on a half-edited scenario.
+  function setInputMode(mode: InputMode) {
+    setInputModeState(mode)
+    if (mode === 'callcard') clearScenario()
+  }
+
   function clearScenario() {
     abortScenarioRequest()
     setScenarioOriginState(null)
@@ -386,6 +396,8 @@ export function useMatchingStudio(model: MatchingStudioModel) {
     sliceLoading,
     selectedCallcard: activeCallcard,
     originalCallcard: selectedCallcard,
+    inputMode,
+    setInputMode,
     selectedCallcardId,
     selectedCandidate,
     selectedCandidateId,

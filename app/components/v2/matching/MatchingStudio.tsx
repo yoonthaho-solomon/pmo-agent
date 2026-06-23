@@ -52,6 +52,8 @@ export function MatchingStudio({ model }: { model: MatchingStudioModel }) {
           onClearScenario={state.clearScenario}
           onSwapScenario={state.swapScenarioPoints}
           onRunScenario={state.runScenarioMatching}
+          inputMode={state.inputMode}
+          onInputModeChange={state.setInputMode}
           isPending={state.isPending}
         />
         <div className={styles.centerPane}>
@@ -63,6 +65,7 @@ export function MatchingStudio({ model }: { model: MatchingStudioModel }) {
             scenarioDestination={state.scenarioDestination}
             scenarioMode={state.scenarioMode}
             scenarioStatus={state.scenarioStatus}
+            inputMode={state.inputMode}
           />
           {state.hasRun && !state.rankedCandidates.length && state.candidateState === 'original' ? (
             <div className={styles.softNotice}>비교 가능한 후보 기사가 없습니다. 벡터 또는 기사 선호 H3 데이터 상태를 확인해 주세요.</div>

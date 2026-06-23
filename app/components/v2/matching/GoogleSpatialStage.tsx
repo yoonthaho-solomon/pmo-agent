@@ -4,7 +4,7 @@ import type { ScenarioPointInput } from '@/lib/adapters/matching'
 import type { RouteApiState } from '@/lib/google-maps/route-types'
 import type { MatchingCallcardModel, MatchingCandidateModel } from '@/lib/matching-studio-model'
 import { estimateTaxiFare, VERIFIED_TAXI_FARE_POLICIES } from '@/lib/taxi-fare-estimator'
-import type { ScenarioStatus } from './useMatchingStudio'
+import type { InputMode, ScenarioStatus } from './useMatchingStudio'
 import { SpatialStage } from './SpatialStage'
 import { StudioLegend } from './StudioLegend'
 import { useGoogleMap } from './useGoogleMap'
@@ -44,6 +44,7 @@ export function GoogleSpatialStage({
   scenarioDestination,
   scenarioMode,
   scenarioStatus,
+  inputMode,
 }: {
   callcard: MatchingCallcardModel | null
   selectedCandidate: MatchingCandidateModel | null
@@ -52,11 +53,15 @@ export function GoogleSpatialStage({
   scenarioDestination: ScenarioPointInput | null
   scenarioMode: boolean
   scenarioStatus: ScenarioStatus
+  inputMode: InputMode
 }) {
   const originalOrigin = callcard ? pointFromCallcard(callcard.route.pickup, callcard.passengerAddress) : null
   const originalDestination = callcard ? pointFromCallcard(callcard.route.destination, callcard.destinationAddress) : null
-  const effectiveOrigin = scenarioOrigin ?? originalOrigin
-  const effectiveDestination = scenarioDestination ?? originalDestination
+  // Each mode owns a single origin/destination source. Crucially, scenario mode does NOT fall
+  // back to the callcard points — so clearing/editing a field mid-type leaves the map where it is
+  // instead of snapping back to the callcard (which caused the jump-on-delete behavior).
+  const effectiveOrigin = inputMode === 'scenario' ? scenarioOrigin : originalOrigin
+  const effectiveDestination = inputMode === 'scenario' ? scenarioDestination : originalDestination
   const routeState = useRouteSummary(effectiveOrigin, effectiveDestination)
   const showCandidate = scenarioStatus !== 'dirty' && scenarioStatus !== 'calculating' && scenarioStatus !== 'error'
   const { containerRef, state: mapLoadState } = useGoogleMap({

@@ -9,9 +9,14 @@ export type GoogleMapsGlobal = {
   maps: {
     Map: GoogleMapConstructor
     LatLngBounds: GoogleLatLngBoundsConstructor
+    event: GoogleMapsEventNamespace
     importLibrary?: (library: string) => Promise<unknown>
     places?: GooglePlacesNamespace
   }
+}
+
+export type GoogleMapsEventNamespace = {
+  addListenerOnce: (instance: unknown, eventName: string, handler: () => void) => void
 }
 
 export type GoogleMapConstructor = new (
@@ -27,6 +32,8 @@ export type GoogleLatLngBoundsConstructor = new (
 export type GoogleMapInstance = {
   setCenter: (latLng: { lat: number; lng: number }) => void
   fitBounds: (bounds: GoogleLatLngBounds, padding?: number) => void
+  getZoom: () => number | undefined
+  setZoom: (zoom: number) => void
 }
 
 export type GoogleLatLngBounds = {
