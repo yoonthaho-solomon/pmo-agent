@@ -29,14 +29,6 @@ function supportsWebGL() {
   return Boolean(canvas.getContext('webgl2') ?? canvas.getContext('webgl'))
 }
 
-function routeBounds(route: RouteSummary | null) {
-  if (!route?.viewport) return null
-  return {
-    sw: { lat: route.viewport.low.latitude, lng: route.viewport.low.longitude },
-    ne: { lat: route.viewport.high.latitude, lng: route.viewport.high.longitude },
-  }
-}
-
 function pushH3(data: H3LayerDatum[], seen: Set<string>, cell: string | null | undefined, type: H3LayerDatum['type']) {
   const normalized = normalizeH3Cell(cell)
   if (!normalized || seen.has(`${type}:${normalized}`)) return
@@ -55,11 +47,13 @@ function h3Data(candidate: MatchingCandidateModel | null): H3LayerDatum[] {
 export function useGoogleMap({
   effectiveOrigin,
   effectiveDestination,
+  focusPoint,
   candidate,
   route,
 }: {
   effectiveOrigin: ScenarioPointInput | null
   effectiveDestination: ScenarioPointInput | null
+  focusPoint: ScenarioPointInput | null
   candidate: MatchingCandidateModel | null
   route: RouteSummary | null
 }) {
@@ -72,7 +66,7 @@ export function useGoogleMap({
   const pointsRef = useRef<RoutePointDatum[]>([])
   const tRef = useRef(0)
   const animRafRef = useRef<number | null>(null)
-  const lastFitKeyRef = useRef<string | null>(null)
+  const lastCenterKeyRef = useRef<string | null>(null)
   const mapId = process.env.NEXT_PUBLIC_GOOGLE_MAP_ID
   const configMissing = !process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || !mapId
   const [state, setState] = useState<GoogleMapLoadState>(configMissing ? 'missing_config' : 'loading')
@@ -240,42 +234,19 @@ export function useGoogleMap({
     }
   }, [state])
 
+  // Pan-only recentering (user preference): never auto-zoom/fitBounds — just glide the map
+  // to the active focus point (selected callcard pickup, or scenario origin) so changing the
+  // ASP/region visibly moves the map to that area while preserving the current zoom level.
   useEffect(() => {
-    if (state !== 'ready' || !mapRef.current) return
-
-    // Build a stable key for the current "content to fit" so we don't re-zoom
-    // every time the parent re-renders with the same coords.
-    const routeKey = route?.encodedPolyline ?? null
-    const pairKey = effectiveOrigin && effectiveDestination
-      ? `${effectiveOrigin.lat.toFixed(6)},${effectiveOrigin.lng.toFixed(6)}|${effectiveDestination.lat.toFixed(6)},${effectiveDestination.lng.toFixed(6)}`
-      : null
-    const fitKey = routeKey ?? pairKey
-
-    loadGoogleMaps().then((google) => {
-      if (fitKey && fitKey !== lastFitKeyRef.current) {
-        lastFitKeyRef.current = fitKey
-        const bounds = routeBounds(route)
-        if (bounds) {
-          mapRef.current?.fitBounds(new google.maps.LatLngBounds(bounds.sw, bounds.ne), 200)
-          google.maps.event.addListenerOnce(mapRef.current as never, 'idle', () => {
-            const z = mapRef.current?.getZoom() ?? 0
-            if (z > 13) mapRef.current?.setZoom(13)
-          })
-        } else if (effectiveOrigin && effectiveDestination) {
-          const latLngBounds = new google.maps.LatLngBounds()
-          latLngBounds.extend({ lat: effectiveOrigin.lat, lng: effectiveOrigin.lng })
-          latLngBounds.extend({ lat: effectiveDestination.lat, lng: effectiveDestination.lng })
-          mapRef.current?.fitBounds(latLngBounds, 200)
-          google.maps.event.addListenerOnce(mapRef.current as never, 'idle', () => {
-            const z = mapRef.current?.getZoom() ?? 0
-            if (z > 13) mapRef.current?.setZoom(13)
-          })
-        }
-      } else if (!fitKey && effectiveOrigin) {
-        mapRef.current?.setCenter({ lat: effectiveOrigin.lat, lng: effectiveOrigin.lng })
-      }
-    }).catch(() => undefined)
-  }, [effectiveOrigin, effectiveDestination, route, state])
+    if (state !== 'ready' || !mapRef.current || !focusPoint) return
+    const key = `${focusPoint.lat.toFixed(5)},${focusPoint.lng.toFixed(5)}`
+    if (key === lastCenterKeyRef.current) return
+    lastCenterKeyRef.current = key
+    const map = mapRef.current
+    const target = { lat: focusPoint.lat, lng: focusPoint.lng }
+    if (typeof map.panTo === 'function') map.panTo(target)
+    else map.setCenter(target)
+  }, [focusPoint, state])
 
   return { containerRef, state }
 }

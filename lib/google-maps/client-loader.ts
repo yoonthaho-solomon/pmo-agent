@@ -31,6 +31,7 @@ export type GoogleLatLngBoundsConstructor = new (
 
 export type GoogleMapInstance = {
   setCenter: (latLng: { lat: number; lng: number }) => void
+  panTo: (latLng: { lat: number; lng: number }) => void
   fitBounds: (bounds: GoogleLatLngBounds, padding?: number) => void
   getZoom: () => number | undefined
   setZoom: (zoom: number) => void

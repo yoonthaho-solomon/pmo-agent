@@ -62,11 +62,15 @@ export function GoogleSpatialStage({
   // instead of snapping back to the callcard (which caused the jump-on-delete behavior).
   const effectiveOrigin = inputMode === 'scenario' ? scenarioOrigin : originalOrigin
   const effectiveDestination = inputMode === 'scenario' ? scenarioDestination : originalDestination
+  // Map always recenters on a focus point, falling back to the callcard pickup even in scenario
+  // mode (before points are picked) so changing ASP/region still pans the map to that area.
+  const focusPoint = effectiveOrigin ?? originalOrigin
   const routeState = useRouteSummary(effectiveOrigin, effectiveDestination)
   const showCandidate = scenarioStatus !== 'dirty' && scenarioStatus !== 'calculating' && scenarioStatus !== 'error'
   const { containerRef, state: mapLoadState } = useGoogleMap({
     effectiveOrigin,
     effectiveDestination,
+    focusPoint,
     candidate: showCandidate ? selectedCandidate : null,
     route: routeState.route,
   })
