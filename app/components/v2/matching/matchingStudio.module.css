@@ -160,7 +160,7 @@
 .callBuilder,
 .candidateDock {
   position: absolute;
-  top: 112px;
+  top: 124px;
   bottom: 92px;
   z-index: 30;
   width: 332px;
@@ -616,7 +616,7 @@
   position: absolute;
   left: 360px;
   right: 360px;
-  top: 112px;
+  top: 124px;
   z-index: 25;
   display: flex;
   gap: 10px;
