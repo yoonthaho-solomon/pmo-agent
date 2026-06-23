@@ -146,6 +146,11 @@ export function CallBuilder({
         </div>
       </section>
 
+      <section className={styles.builderSection}>
+        <p className={styles.sectionLabel}>기준 콜카드</p>
+        <CallcardSelect callcards={callcards} selectedId={selectedId} onSelect={onSelect} />
+      </section>
+
       <div className={styles.modeToggle} role="tablist" aria-label="입력 모드">
         <button
           type="button"
@@ -167,12 +172,9 @@ export function CallBuilder({
         </button>
       </div>
 
-      <section className={styles.builderSection}>
-        <p className={styles.sectionLabel}>기준 콜카드</p>
-        <CallcardSelect callcards={callcards} selectedId={selectedId} onSelect={onSelect} />
-
-        {inputMode === 'callcard' ? (
-          selectedCallcard ? (
+      {inputMode === 'callcard' ? (
+        <section className={styles.builderSection}>
+          {selectedCallcard ? (
             <div className={styles.callCard}>
               <div className={styles.callHero}>
                 <div className={styles.callHeroMain}>
@@ -192,11 +194,9 @@ export function CallBuilder({
             </div>
           ) : (
             <div className={styles.softNotice}>선택 가능한 콜카드가 없습니다.</div>
-          )
-        ) : (
-          <p className={styles.scenarioCaption}>위 콜카드의 시간·요금·호출 맥락에 가상 출·도착지를 적용해 매칭합니다.</p>
-        )}
-      </section>
+          )}
+        </section>
+      ) : null}
 
       {inputMode === 'scenario' ? (
         <div className={styles.scenarioBox}>
