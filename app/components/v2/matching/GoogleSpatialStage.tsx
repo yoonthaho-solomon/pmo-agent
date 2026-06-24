@@ -3,13 +3,12 @@
 import type { ScenarioPointInput } from '@/lib/adapters/matching'
 import type { RouteApiState } from '@/lib/google-maps/route-types'
 import type { MatchingCallcardModel, MatchingCandidateModel } from '@/lib/matching-studio-model'
-import { estimateTaxiFare, VERIFIED_TAXI_FARE_POLICIES } from '@/lib/taxi-fare-estimator'
 import type { InputMode, ScenarioStatus } from './useMatchingStudio'
 import { SpatialStage } from './SpatialStage'
 import { StudioLegend } from './StudioLegend'
 import { useGoogleMap } from './useGoogleMap'
 import { useRouteSummary } from './useRouteSummary'
-import { formatFare, formatMeter } from './formatters'
+import { formatMeter } from './formatters'
 import styles from './matchingStudio.module.css'
 
 function formatMinutes(seconds: number | null | undefined) {
@@ -74,7 +73,6 @@ export function GoogleSpatialStage({
     candidate: showCandidate ? selectedCandidate : null,
     route: routeState.route,
   })
-  const fare = estimateTaxiFare(routeState.route, callcard?.aspId, VERIFIED_TAXI_FARE_POLICIES)
 
   if (mapLoadState === 'missing_config' || mapLoadState === 'load_error' || mapLoadState === 'unsupported_webgl') {
     return (
@@ -100,10 +98,6 @@ export function GoogleSpatialStage({
               ? `${formatMeter(routeState.route.distanceMeters)} · ${formatMinutes(routeState.route.durationSeconds)}`
               : routeStateLabel(routeState.state)}
           </strong>
-        </div>
-        <div>
-          <span>예상 요금</span>
-          <strong>{fare.status === 'estimated' ? formatFare(fare.fare) : '정책 미설정'}</strong>
         </div>
       </div>
     </section>

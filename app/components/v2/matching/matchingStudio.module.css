@@ -192,7 +192,6 @@
 .candidateDock {
   right: 16px;
   width: 380px;
-  bottom: 236px;
 }
 
 .callBuilder h2,
@@ -982,30 +981,20 @@
 .evidenceDrawer {
   position: absolute;
   bottom: 16px;
-  right: 16px;
-  width: 728px;
-  max-width: calc(100vw - 380px);
+  left: 360px;
+  right: 360px;
   z-index: 30;
-  max-height: 208px;
-  overflow-y: auto;
-  padding: 12px 14px;
+  min-height: 56px;
+  max-height: 56px;
+  overflow: hidden;
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   box-shadow: 0 24px 56px rgba(0, 0, 0, 0.5);
 }
 
-.drawerHead {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-
-.drawerHead span {
-  color: var(--km-v2-cyan);
-  font-size: 12px;
-  font-weight: 800;
+.evidenceDrawer[data-open="true"] {
+  max-height: 62vh;
+  overflow: auto;
 }
 
 .drawerToggle {
@@ -1028,9 +1017,10 @@
 }
 
 .drawerGrid {
+  padding: 0 16px 16px;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  gap: 12px;
 }
 
 .evidenceSection {

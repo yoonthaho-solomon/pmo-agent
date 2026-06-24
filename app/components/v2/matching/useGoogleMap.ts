@@ -89,7 +89,7 @@ export function useGoogleMap({
         if (cancelled || !containerRef.current || mapRef.current) return
         const map = new google.maps.Map(containerRef.current, {
           center: { lat: 36.8151, lng: 127.1139 },
-          zoom: 12,
+          zoom: 14,
           mapId,
           colorScheme: 'DARK',
           mapTypeControl: false,
