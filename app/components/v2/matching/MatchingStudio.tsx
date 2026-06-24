@@ -79,13 +79,13 @@ export function MatchingStudio({ model }: { model: MatchingStudioModel }) {
           selectedId={state.selectedCandidate?.driver.id ?? ''}
           onSelect={state.selectCandidate}
         />
-      <EvidenceDrawer
-        open={state.showEvidence && canShowEvidence}
-        onToggle={state.setShowEvidence}
-        callcard={state.selectedCallcard}
-        candidate={state.selectedCandidate}
-        formula={model.formula}
-      />
+      {canShowEvidence && state.selectedCandidate ? (
+        <EvidenceDrawer
+          callcard={state.selectedCallcard}
+          candidate={state.selectedCandidate}
+          formula={model.formula}
+        />
+      ) : null}
     </div>
   )
 }
