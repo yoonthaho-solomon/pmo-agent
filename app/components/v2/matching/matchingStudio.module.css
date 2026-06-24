@@ -192,6 +192,8 @@
 .candidateDock {
   right: 16px;
   width: 380px;
+  bottom: auto;
+  max-height: calc(100% - 124px - 96px);
 }
 
 .callBuilder h2,
@@ -982,7 +984,7 @@
   position: absolute;
   bottom: 16px;
   left: 360px;
-  right: 360px;
+  right: 404px;
   z-index: 30;
   min-height: 56px;
   max-height: 56px;
@@ -1003,7 +1005,7 @@
   padding: 0 18px;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: center;
   color: var(--km-v2-text-primary);
   background: transparent;
   border: 0;
