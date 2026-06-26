@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { VectorSampleData, VectorSampleAxis, VectorSampleDim } from '@/app/api/vector-workbench/sample/route'
 
 // ---- Helpers ----
@@ -27,7 +27,7 @@ function contribOf(dim: VectorSampleDim): number {
 }
 
 // ---- Canvas drawing ----
-function drawVectorCanvas(canvas: HTMLCanvasElement, axes: VectorSampleAxis[], similarity: number) {
+function drawVectorCanvas(canvas: HTMLCanvasElement, axes: VectorSampleAxis[], similarity: number, t: number) {
   const dpr = Math.min(window.devicePixelRatio || 1, 2)
   const W = canvas.clientWidth
   const H = canvas.clientHeight
@@ -38,6 +38,9 @@ function drawVectorCanvas(canvas: HTMLCanvasElement, axes: VectorSampleAxis[], s
   if (!ctx) return
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
   ctx.clearRect(0, 0, W, H)
+
+  // Gentle breathing pulse drives the glow + wedge so the lens feels alive.
+  const pulse = (Math.sin(t * 2.2) + 1) / 2
 
   // ===== LEFT: radar pentagon =====
   const rcx = W * 0.27, rcy = H * 0.52
@@ -91,7 +94,7 @@ function drawVectorCanvas(canvas: HTMLCanvasElement, axes: VectorSampleAxis[], s
     ctx.strokeStyle = stroke
     ctx.lineWidth = 2
     ctx.shadowColor = glow
-    ctx.shadowBlur = 12
+    ctx.shadowBlur = 8 + pulse * 10
     ctx.stroke()
     ctx.restore()
     for (let i = 0; i < n; i++) {
@@ -124,7 +127,7 @@ function drawVectorCanvas(canvas: HTMLCanvasElement, axes: VectorSampleAxis[], s
   ctx.arc(ox, oy, L * 0.42, aCall, aDrv)
   ctx.closePath()
   const gg = ctx.createRadialGradient(ox, oy, 0, ox, oy, L * 0.42)
-  gg.addColorStop(0, 'rgba(120,160,255,.28)')
+  gg.addColorStop(0, `rgba(120,160,255,${(0.18 + pulse * 0.22).toFixed(3)})`)
   gg.addColorStop(1, 'rgba(120,160,255,0)')
   ctx.fillStyle = gg
   ctx.fill()
@@ -140,7 +143,7 @@ function drawVectorCanvas(canvas: HTMLCanvasElement, axes: VectorSampleAxis[], s
     ctx.strokeStyle = col
     ctx.lineWidth = 2.5
     ctx.shadowColor = glow
-    ctx.shadowBlur = 14
+    ctx.shadowBlur = 10 + pulse * 12
     ctx.stroke()
     ctx.beginPath()
     ctx.arc(x, y, 4.5, 0, 7)
@@ -188,8 +191,12 @@ export function VectorWorkbenchView() {
   const [data, setData] = useState<VectorSampleData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [selected, setSelected] = useState(0)
+  const [selected, setSelected] = useState(0) // selected factor (0..21)
+  const [driverIdx, setDriverIdx] = useState(0) // selected candidate driver
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  // RAF reads the latest selected-driver radar via refs so the loop never goes stale.
+  const axesRef = useRef<VectorSampleAxis[] | null>(null)
+  const cosRef = useRef(0)
 
   useEffect(() => {
     fetch('/api/vector-workbench/sample')
@@ -202,18 +209,26 @@ export function VectorWorkbenchView() {
       .finally(() => setLoading(false))
   }, [])
 
-  const draw = useCallback(() => {
-    const canvas = canvasRef.current
-    if (!canvas || !data) return
-    drawVectorCanvas(canvas, data.axes, data.cosineSimilarity)
-  }, [data])
+  const selDriver = data && data.drivers.length ? data.drivers[Math.min(driverIdx, data.drivers.length - 1)] : null
 
   useEffect(() => {
-    draw()
-    const ro = new ResizeObserver(draw)
-    if (canvasRef.current) ro.observe(canvasRef.current)
-    return () => ro.disconnect()
-  }, [draw])
+    axesRef.current = selDriver?.axes ?? null
+    cosRef.current = selDriver?.cosineSimilarity ?? 0
+  }, [selDriver])
+
+  // Single animation loop: redraws the radar + cosine wedge each frame for a live glow.
+  useEffect(() => {
+    let raf = 0
+    let t = 0
+    const loop = () => {
+      const canvas = canvasRef.current
+      if (canvas && axesRef.current) drawVectorCanvas(canvas, axesRef.current, cosRef.current, t)
+      t += 0.016
+      raf = requestAnimationFrame(loop)
+    }
+    raf = requestAnimationFrame(loop)
+    return () => cancelAnimationFrame(raf)
+  }, [])
 
   if (loading) {
     return (
@@ -223,7 +238,7 @@ export function VectorWorkbenchView() {
     )
   }
 
-  if (error || !data) {
+  if (error || !data || !selDriver) {
     return (
       <div style={{ maxWidth: '1560px', margin: '0 auto', padding: '22px', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '400px' }}>
         <span style={{ fontSize: '14px', color: '#f87171' }}>{error ?? '데이터 없음'}</span>
@@ -231,13 +246,13 @@ export function VectorWorkbenchView() {
     )
   }
 
-  const dims = data.dims
+  const dims = selDriver.dims
   const f = dims[selected] ?? dims[0]
   const diff = f.drv - f.call
   const contrib = contribOf(f)
   const cc = data.callcard
-  const drvLabel = `기사 ${driverShortId(data.driver.id)}`
-  const cosDisp = data.cosineSimilarity.toFixed(3)
+  const drvLabel = `기사 ${driverShortId(selDriver.id)}`
+  const cosDisp = selDriver.cosineSimilarity.toFixed(3)
 
   return (
     <div style={{ maxWidth: '1560px', margin: '0 auto', padding: '22px 22px 32px' }}>
@@ -267,9 +282,9 @@ export function VectorWorkbenchView() {
           <span style={{ fontSize: '11px', color: '#8b98ae', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cc.passengerAddr ?? cc.callDate}</span>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', padding: '15px 18px', borderRadius: '16px', background: 'rgba(10,15,25,.7)', border: '1px solid rgba(148,163,184,.13)', boxShadow: '0 18px 44px rgba(0,0,0,.4)' }}>
-          <span style={{ fontSize: '11px', fontWeight: 600, color: '#7c89a0', letterSpacing: '.04em', textTransform: 'uppercase' }}>최고 매칭 기사</span>
-          <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '18px', fontWeight: 700, lineHeight: 1.2, fontVariantNumeric: 'tabular-nums', marginTop: '4px' }}>{driverShortId(data.driver.id)}</span>
-          <span style={{ fontSize: '11px', color: '#8b98ae' }}>rank #{data.driver.rank} · score {data.driver.cosineScore.toFixed(3)}</span>
+          <span style={{ fontSize: '11px', fontWeight: 600, color: '#7c89a0', letterSpacing: '.04em', textTransform: 'uppercase' }}>선택 기사</span>
+          <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '18px', fontWeight: 700, lineHeight: 1.2, fontVariantNumeric: 'tabular-nums', marginTop: '4px' }}>{driverShortId(selDriver.id)}</span>
+          <span style={{ fontSize: '11px', color: '#8b98ae' }}>rank #{selDriver.rank} · score {selDriver.cosineScore.toFixed(3)}</span>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', padding: '15px 18px', borderRadius: '16px', background: 'linear-gradient(160deg, rgba(28,24,46,.7), rgba(10,15,25,.66))', border: '1px solid rgba(167,139,250,.32)', boxShadow: '0 18px 44px rgba(0,0,0,.4),0 0 26px rgba(167,139,250,.1)' }}>
           <span style={{ fontSize: '11px', fontWeight: 600, color: '#b79bff', letterSpacing: '.04em', textTransform: 'uppercase' }}>코사인 유사도</span>
@@ -280,6 +295,43 @@ export function VectorWorkbenchView() {
           <span style={{ fontSize: '11px', fontWeight: 600, color: '#7c89a0', letterSpacing: '.04em', textTransform: 'uppercase' }}>선택 팩터</span>
           <span style={{ fontSize: '18px', fontWeight: 700, color: '#5ce0f0' }}>{f.label}</span>
           <span style={{ fontSize: '11px', color: '#8b98ae' }}>기여도 +{contrib.toFixed(3)} · {f.group}</span>
+        </div>
+      </div>
+
+      {/* Candidate driver ranking — this callcard vs top-N drivers by cosine */}
+      <div style={{ borderRadius: '16px', background: 'rgba(9,14,23,.72)', border: '1px solid rgba(148,163,184,.13)', boxShadow: '0 18px 44px rgba(0,0,0,.4)', padding: '13px 16px', marginBottom: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+          <h2 style={{ fontSize: '14px', fontWeight: 700, margin: 0 }}>기사 후보 랭킹 <span style={{ fontSize: '11px', fontWeight: 500, color: '#8b98ae' }}>· 코사인 유사도순 · 클릭하여 비교</span></h2>
+          <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '11px', color: '#7c89a0' }}>{data.drivers.length}명</span>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${data.drivers.length}, 1fr)`, gap: '8px' }}>
+          {data.drivers.map((drv, i) => {
+            const isSel = i === driverIdx
+            const pct = Math.round(Math.max(0, drv.cosineSimilarity) * 100)
+            return (
+              <button
+                key={drv.id}
+                onClick={() => setDriverIdx(i)}
+                title={`${driverShortId(drv.id)} · cos ${drv.cosineSimilarity.toFixed(3)}`}
+                style={{
+                  textAlign: 'left', fontFamily: 'inherit', cursor: 'pointer',
+                  display: 'flex', flexDirection: 'column', gap: '6px', minWidth: 0,
+                  padding: '9px 10px', borderRadius: '11px',
+                  background: isSel ? 'linear-gradient(150deg, rgba(28,24,46,.92), rgba(16,22,38,.9))' : 'rgba(16,22,35,.5)',
+                  border: isSel ? '1px solid rgba(167,139,250,.55)' : '1px solid rgba(148,163,184,.1)',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: '6px', minWidth: 0 }}>
+                  <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '10px', color: isSel ? '#c3acff' : '#6b778d', flexShrink: 0 }}>#{drv.rank}</span>
+                  <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '13px', fontWeight: 700, color: isSel ? '#c3acff' : '#cdd6e6', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{driverShortId(drv.id)}</span>
+                </div>
+                <span style={{ width: '100%', height: '5px', borderRadius: '3px', background: 'rgba(148,163,184,.14)', overflow: 'hidden', display: 'block' }}>
+                  <span style={{ display: 'block', height: '100%', width: `${pct}%`, background: isSel ? 'linear-gradient(90deg,#a78bfa,#c3acff)' : 'rgba(120,150,190,.5)' }} />
+                </span>
+                <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: '11px', fontWeight: 700, color: isSel ? '#c3acff' : '#8b98ae' }}>{drv.cosineSimilarity.toFixed(3)}</span>
+              </button>
+            )
+          })}
         </div>
       </div>
 

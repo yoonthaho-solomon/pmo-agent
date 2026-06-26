@@ -28,6 +28,16 @@ export type VectorSampleAxis = {
   drv: number
 }
 
+export type VectorSampleDriver = {
+  id: string
+  rank: number
+  cosineScore: number
+  dims: VectorSampleDim[]
+  axes: VectorSampleAxis[]
+  cosineSimilarity: number
+  cosineForMatching: number
+}
+
 export type VectorSampleData = {
   callcard: {
     id: string
@@ -41,16 +51,11 @@ export type VectorSampleData = {
     passengerAddr: string | null
     destAddr: string | null
   }
-  driver: {
-    id: string
-    rank: number
-    cosineScore: number
-  }
-  dims: VectorSampleDim[]
-  axes: VectorSampleAxis[]
-  cosineSimilarity: number
-  cosineForMatching: number
+  // Top-N candidate drivers for this callcard, ranked by match order. drivers[0] is best.
+  drivers: VectorSampleDriver[]
 }
+
+const SAMPLE_TOP_N = 8
 
 export async function GET() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -74,35 +79,33 @@ export async function GET() {
 
   const cc = callcards[0]
 
-  // 2. Top-ranked match for this callcard
+  // 2. Top-N ranked matches for this callcard
   const { data: matches, error: matchError } = await supabase
     .from('matching_scores')
     .select('driver_id,rank_in_call,cosine_score')
     .eq('call_id', cc.callcard_id)
     .order('rank_in_call', { ascending: true })
-    .limit(1)
+    .limit(SAMPLE_TOP_N)
 
   if (matchError || !matches?.length) {
     return NextResponse.json({ ok: false, message: matchError?.message ?? 'No match found for callcard' }, { status: 502 })
   }
 
-  const match = matches[0]
-
-  // 3. Driver MBTI vector
+  // 3. Driver MBTI vectors for all ranked candidates
   const driverSelect = ['driver_id', ...VECTOR_DIMENSIONS.map((d) => d.key)].join(',')
-  const { data: drivers, error: drvError } = await supabase
+  const driverIds = matches.map((m) => m.driver_id)
+  const { data: driverRows, error: drvError } = await supabase
     .from('driver_mbti')
     .select(driverSelect)
-    .eq('driver_id', match.driver_id)
-    .limit(1)
+    .in('driver_id', driverIds)
 
-  if (drvError || !drivers?.length) {
-    return NextResponse.json({ ok: false, message: drvError?.message ?? 'Driver not found' }, { status: 502 })
+  if (drvError || !driverRows?.length) {
+    return NextResponse.json({ ok: false, message: drvError?.message ?? 'Drivers not found' }, { status: 502 })
   }
 
-  const drv = drivers[0]
+  const driverById = new Map(driverRows.map((row) => [(row as unknown as { driver_id: string }).driver_id, row]))
 
-  // 4. Compute vectors
+  // 4. Callcard vector (computed once, shared across candidates)
   const callInput: CallVectorInput = {
     hour_slot: Number(cc.hour_slot ?? 0),
     weekday: Number(cc.weekday ?? 0),
@@ -114,32 +117,43 @@ export async function GET() {
     s_hexagon: cc.s_hexagon ?? null,
     d_hexagon: cc.d_hexagon ?? null,
   }
-
   const callVec = callToVector(callInput)
-  const drvVec = driverToVector(drv as unknown as DriverVectorRow)
-
-  // 5. 22D factor array
-  const dims: VectorSampleDim[] = VECTOR_DIMENSIONS.map((dim, i) => ({
-    key: dim.key,
-    label: dim.label,
-    group: dim.group,
-    call: callVec[i],
-    drv: drvVec[i],
-  }))
-
-  // 6. 5-axis radar array (vectorToDisplayAxisBundle returns 0-100, normalize to 0-1)
   const callBundle = vectorToDisplayAxisBundle(callVec)
-  const drvBundle = vectorToDisplayAxisBundle(drvVec)
-  const axes: VectorSampleAxis[] = DISPLAY_AXES.map((axis, i) => ({
-    key: axis.key,
-    label: axis.name,
-    call: callBundle.axis[i] / 100,
-    drv: drvBundle.axis[i] / 100,
-  }))
 
-  // 7. Similarity scores
-  const cosineAll = cosineSimilarity(callVec, drvVec)
-  const cosineMatching = cosineSimilarityForMatching(callVec, drvVec)
+  // 5. Build a per-driver bundle (22D dims + 5-axis radar + cosine) in rank order
+  const driversOut: VectorSampleData['drivers'] = []
+  for (const match of matches) {
+    const drv = driverById.get(match.driver_id)
+    if (!drv) continue
+    const drvVec = driverToVector(drv as unknown as DriverVectorRow)
+    const dims: VectorSampleDim[] = VECTOR_DIMENSIONS.map((dim, i) => ({
+      key: dim.key,
+      label: dim.label,
+      group: dim.group,
+      call: callVec[i],
+      drv: drvVec[i],
+    }))
+    const drvBundle = vectorToDisplayAxisBundle(drvVec)
+    const axes: VectorSampleAxis[] = DISPLAY_AXES.map((axis, i) => ({
+      key: axis.key,
+      label: axis.name,
+      call: callBundle.axis[i] / 100,
+      drv: drvBundle.axis[i] / 100,
+    }))
+    driversOut.push({
+      id: match.driver_id,
+      rank: match.rank_in_call,
+      cosineScore: match.cosine_score,
+      dims,
+      axes,
+      cosineSimilarity: cosineSimilarity(callVec, drvVec),
+      cosineForMatching: cosineSimilarityForMatching(callVec, drvVec),
+    })
+  }
+
+  if (!driversOut.length) {
+    return NextResponse.json({ ok: false, message: 'No driver vectors available for matches' }, { status: 502 })
+  }
 
   const data: VectorSampleData = {
     callcard: {
@@ -154,15 +168,7 @@ export async function GET() {
       passengerAddr: cc.passenger_addr ?? null,
       destAddr: cc.dest_addr ?? null,
     },
-    driver: {
-      id: match.driver_id,
-      rank: match.rank_in_call,
-      cosineScore: match.cosine_score,
-    },
-    dims,
-    axes,
-    cosineSimilarity: cosineAll,
-    cosineForMatching: cosineMatching,
+    drivers: driversOut,
   }
 
   return NextResponse.json({ ok: true, data })
