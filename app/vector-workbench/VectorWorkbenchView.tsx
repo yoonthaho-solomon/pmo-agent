@@ -2,6 +2,55 @@
 
 import { useEffect, useRef, useState } from 'react'
 import type { VectorSampleData, VectorSampleAxis, VectorSampleDim } from '@/app/api/vector-workbench/sample/route'
+import type { EmbeddingData } from '@/app/api/vector-workbench/embedding/route'
+
+// ---- PCA (top-2 components via power iteration) for the embedding scatter ----
+function dot(a: number[], b: number[]): number {
+  let s = 0
+  for (let i = 0; i < a.length; i++) s += a[i] * b[i]
+  return s
+}
+
+function powerIteration(C: number[][], d: number): number[] {
+  let v = new Array(d).fill(0).map((_, i) => Math.sin(i + 1)) // deterministic seed
+  let norm = Math.sqrt(dot(v, v))
+  v = v.map((x) => x / norm)
+  for (let iter = 0; iter < 120; iter++) {
+    const w = new Array(d).fill(0)
+    for (let i = 0; i < d; i++) {
+      let s = 0
+      const Ci = C[i]
+      for (let j = 0; j < d; j++) s += Ci[j] * v[j]
+      w[i] = s
+    }
+    norm = Math.sqrt(dot(w, w))
+    if (norm < 1e-9) break
+    v = w.map((x) => x / norm)
+  }
+  return v
+}
+
+function pca2(rows: number[][]): [number, number][] {
+  const n = rows.length
+  if (!n) return []
+  const d = rows[0].length
+  const mean = new Array(d).fill(0)
+  for (const r of rows) for (let j = 0; j < d; j++) mean[j] += r[j]
+  for (let j = 0; j < d; j++) mean[j] /= n
+  const X = rows.map((r) => r.map((v, j) => v - mean[j]))
+  const C = Array.from({ length: d }, () => new Array(d).fill(0))
+  for (const r of X) for (let i = 0; i < d; i++) {
+    const ri = r[i]
+    if (ri === 0) continue
+    for (let j = 0; j < d; j++) C[i][j] += ri * r[j]
+  }
+  for (let i = 0; i < d; i++) for (let j = 0; j < d; j++) C[i][j] /= n
+  const v1 = powerIteration(C, d)
+  const l1 = dot(v1, C.map((row) => dot(row, v1))) // Rayleigh quotient ≈ λ1
+  for (let i = 0; i < d; i++) for (let j = 0; j < d; j++) C[i][j] -= l1 * v1[i] * v1[j]
+  const v2 = powerIteration(C, d)
+  return X.map((r) => [dot(r, v1), dot(r, v2)])
+}
 
 // ---- Helpers ----
 function hourSlotLabel(h: number): string {
@@ -193,6 +242,9 @@ export function VectorWorkbenchView() {
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState(0) // selected factor (0..21)
   const [driverIdx, setDriverIdx] = useState(0) // selected candidate driver
+  const [proj, setProj] = useState<{ coords: [number, number][]; points: EmbeddingData['points'] } | null>(null)
+  const [projLoading, setProjLoading] = useState(false)
+  const [projError, setProjError] = useState<string | null>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   // RAF reads the latest selected-driver radar via refs so the loop never goes stale.
   const axesRef = useRef<VectorSampleAxis[] | null>(null)
@@ -253,6 +305,22 @@ export function VectorWorkbenchView() {
   const cc = data.callcard
   const drvLabel = `기사 ${driverShortId(selDriver.id)}`
   const cosDisp = selDriver.cosineSimilarity.toFixed(3)
+
+  const loadProjection = () => {
+    if (projLoading) return
+    setProjLoading(true)
+    setProjError(null)
+    fetch('/api/vector-workbench/embedding')
+      .then((r) => r.json())
+      .then((json) => {
+        if (!json.ok) { setProjError(json.message ?? 'API 오류'); return }
+        const d = json.data as EmbeddingData
+        const rows = [d.callcardVector, ...d.points.map((p) => p.vector)]
+        setProj({ coords: pca2(rows), points: d.points })
+      })
+      .catch((e) => setProjError(String(e)))
+      .finally(() => setProjLoading(false))
+  }
 
   return (
     <div style={{ maxWidth: '1560px', margin: '0 auto', padding: '22px 22px 32px' }}>
@@ -478,6 +546,55 @@ export function VectorWorkbenchView() {
           </section>
         </aside>
       </div>
+
+      {/* Embedding projection (PCA 2D) — opt-in / lazy to keep the page light */}
+      <section style={{ marginTop: '16px', borderRadius: '18px', background: 'rgba(9,14,23,.72)', border: '1px solid rgba(148,163,184,.13)', boxShadow: '0 22px 52px rgba(0,0,0,.45)', padding: '16px 20px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+            <h2 style={{ fontSize: '16px', fontWeight: 700, margin: 0 }}>임베딩 투영 · PCA 2D</h2>
+            <span style={{ fontSize: '12px', color: '#8b98ae' }}>22D 벡터를 주성분 2축으로 투영 — 가까이 모일수록 성향이 비슷</span>
+          </div>
+          <button
+            onClick={loadProjection}
+            disabled={projLoading}
+            style={{ fontFamily: 'inherit', cursor: projLoading ? 'default' : 'pointer', padding: '8px 14px', borderRadius: '10px', background: proj ? 'rgba(16,22,35,.6)' : 'linear-gradient(150deg, rgba(28,24,46,.92), rgba(16,22,38,.9))', border: '1px solid rgba(167,139,250,.4)', color: '#c3acff', fontSize: '12px', fontWeight: 700 }}
+          >
+            {projLoading ? '계산 중…' : proj ? '다시 계산' : 'PCA 투영 계산'}
+          </button>
+        </div>
+        {projError ? <p style={{ fontSize: '12px', color: '#f87171', margin: '8px 0 0' }}>{projError}</p> : null}
+        {proj ? (() => {
+          const W = 1000, H = 320, pad = 34
+          const xs = proj.coords.map((c) => c[0])
+          const ys = proj.coords.map((c) => c[1])
+          const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys)
+          const sx = (x: number) => pad + ((x - minX) / ((maxX - minX) || 1)) * (W - 2 * pad)
+          const sy = (y: number) => H - pad - ((y - minY) / ((maxY - minY) || 1)) * (H - 2 * pad)
+          const callX = sx(proj.coords[0][0]), callY = sy(proj.coords[0][1])
+          return (
+            <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: '320px', display: 'block', marginTop: '10px' }} role="img" aria-label="PCA 임베딩 산점도">
+              {proj.points.map((p, i) => {
+                const [x, y] = proj.coords[i + 1]
+                const cx = sx(x), cy = sy(y)
+                if (p.id === selDriver.id) return <circle key={p.id} cx={cx} cy={cy} r={6} fill="#c3acff" stroke="#ffb454" strokeWidth={2.5} />
+                if (p.isCandidate) return <circle key={p.id} cx={cx} cy={cy} r={4.5} fill="#a78bfa" stroke="rgba(195,172,255,.9)" strokeWidth={1.4} />
+                return <circle key={p.id} cx={cx} cy={cy} r={2.6} fill="rgba(124,99,200,.5)" />
+              })}
+              <rect x={callX - 6} y={callY - 6} width={12} height={12} fill="#34d8ee" stroke="#0a1420" strokeWidth={1.5} transform={`rotate(45 ${callX} ${callY})`} />
+            </svg>
+          )
+        })() : (projLoading
+          ? <p style={{ fontSize: '12px', color: '#8b98ae', margin: '12px 0 0' }}>투영 계산 중…</p>
+          : <p style={{ fontSize: '12px', color: '#7c89a0', margin: '10px 0 0' }}>버튼을 눌러 전체 기사 표본을 2D로 투영합니다 (지연 로드).</p>)}
+        {proj ? (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', marginTop: '8px', fontSize: '11px', color: '#9aa7bd' }}>
+            <span style={{ color: '#34d8ee' }}>◆ 콜카드</span>
+            <span style={{ color: '#c3acff' }}>● 후보 기사</span>
+            <span style={{ color: '#ffb454' }}>◉ 선택 기사</span>
+            <span>배경 점 = 표본 기사 {proj.points.length}명</span>
+          </div>
+        ) : null}
+      </section>
     </div>
   )
 }
