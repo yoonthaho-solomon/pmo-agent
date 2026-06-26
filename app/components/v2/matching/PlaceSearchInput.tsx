@@ -153,7 +153,7 @@ export function PlaceSearchInput({
             <div
               className={styles.placeSuggestions}
               role="listbox"
-              aria-label={`${label} 검색 결과`}
+              aria-label={`${label} 결과`}
               style={{
                 position: 'fixed',
                 top: dropdownRect.top,
