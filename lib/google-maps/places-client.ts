@@ -1,10 +1,32 @@
-﻿import type { GoogleMapsGlobal, GooglePlace, GooglePlaceSessionToken } from './client-loader'
+﻿import type { GoogleFormattableText, GoogleMapsGlobal, GooglePlace, GooglePlaceSessionToken } from './client-loader'
+
+export type PlaceTextMatch = { start: number; end: number }
 
 export type PlaceSuggestion = {
   id: string
+  /** Full combined text — kept for resolve fallback and accessibility labels. */
   label: string
+  /** Primary line: place name (e.g. 천안역). Falls back to the full text. */
+  mainText: string
+  /** Secondary line: address context (e.g. 충청남도 천안시 동남구). */
   secondaryText: string | null
+  /** Matched ranges within mainText so the typed substring can be highlighted. */
+  mainTextMatches: PlaceTextMatch[]
+  /** Google place types, used to pick a leading icon (역/버스/상가/길 …). */
+  types: string[]
   place: GooglePlace
+}
+
+function normalizeMatches(raw: GoogleFormattableText['matches'], text: string): PlaceTextMatch[] {
+  if (!raw?.length) return []
+  const out: PlaceTextMatch[] = []
+  for (const match of raw) {
+    const start = match.startOffset ?? 0
+    const end = match.endOffset ?? (match.length != null ? start + match.length : null)
+    if (end == null || end <= start) continue
+    out.push({ start: Math.max(0, start), end: Math.min(text.length, end) })
+  }
+  return out
 }
 
 export type ResolvedPlace = {
@@ -52,13 +74,24 @@ export async function fetchPlaceSuggestions(options: {
     const prediction = suggestion.placePrediction
     const place = prediction?.toPlace?.()
     const id = prediction?.placeId
-    const label = prediction?.text?.text
-    if (!prediction || !place || !id || !label) continue
+    const fullText = prediction?.text?.text
+    if (!prediction || !place || !id || !fullText) continue
+
+    // Places API (New) exposes mainText/secondaryText either directly on the prediction
+    // or nested under structuredFormat depending on SDK version — read both defensively.
+    const structured = prediction.structuredFormat
+    const mainFt = prediction.mainText ?? structured?.mainText
+    const secondaryFt = prediction.secondaryText ?? structured?.secondaryText
+    const mainText = mainFt?.text ?? fullText
+    const secondaryText = secondaryFt?.text ?? null
 
     suggestions.push({
       id,
-      label,
-      secondaryText: null,
+      label: fullText,
+      mainText,
+      secondaryText,
+      mainTextMatches: normalizeMatches(mainFt?.matches ?? prediction.text?.matches, mainText),
+      types: prediction.types ?? [],
       place,
     })
   }

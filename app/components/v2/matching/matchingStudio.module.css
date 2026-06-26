@@ -277,12 +277,35 @@
   box-shadow: 0 18px 46px rgba(0, 0, 0, 0.45);
 }
 
+.placeSuggestionsHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px 8px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.placeSuggestionsHeader span:first-child {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--km-v2-text-secondary);
+}
+
+.placeSuggestionsHeader span:last-child {
+  font-size: 10px;
+  font-weight: 850;
+  color: var(--km-v2-cyan);
+}
+
 .placeSuggestions button {
   width: 100%;
   min-height: 50px;
-  padding: 10px;
-  display: grid;
-  gap: 3px;
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
   color: var(--km-v2-text-primary);
   text-align: left;
   background: transparent;
@@ -291,9 +314,45 @@
   cursor: pointer;
 }
 
+.placeSuggestionIcon {
+  flex: none;
+  color: var(--km-v2-text-secondary);
+}
+
+.placeSuggestionText {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.placeSuggestionText b {
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.placeSuggestionText small {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.placeMatch {
+  background: transparent;
+  color: var(--km-v2-cyan);
+  font-weight: 800;
+}
+
 .placeSuggestions button[data-active="true"],
 .placeSuggestions button:hover {
   background: rgba(67, 214, 239, 0.12);
+}
+
+.placeSuggestions button[data-active="true"] .placeSuggestionIcon,
+.placeSuggestions button:hover .placeSuggestionIcon {
+  color: var(--km-v2-cyan);
 }
 
 .placeSuggestions small,
@@ -696,7 +755,11 @@
   content: '';
   position: absolute;
   inset: 0;
-  background: rgba(0, 5, 12, 0.28);
+  /* Light overall tint for glass-card legibility + edge vignette so the eye is drawn
+     to the active matching area in the center. */
+  background:
+    radial-gradient(ellipse 80% 82% at 50% 46%, transparent 46%, rgba(2, 8, 14, 0.58) 100%),
+    rgba(0, 5, 12, 0.16);
   pointer-events: none;
   z-index: 1;
 }

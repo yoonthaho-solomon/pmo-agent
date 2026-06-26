@@ -1,4 +1,5 @@
 import {
+  cellToLatLng,
   getResolution,
   gridDistance,
   isValidCell,
@@ -86,6 +87,18 @@ export function getH3GridDistance(originH3: string | null | undefined, destinati
 
   try {
     return gridDistance(origin, destination)
+  } catch {
+    return null
+  }
+}
+
+// Center of an H3 cell as a deck.gl-style [lng, lat] position (null when invalid).
+export function h3CellCenterLngLat(cell: string | null | undefined): [number, number] | null {
+  const normalized = normalizeH3Cell(cell)
+  if (!normalized) return null
+  try {
+    const [lat, lng] = cellToLatLng(normalized)
+    return [lng, lat]
   } catch {
     return null
   }

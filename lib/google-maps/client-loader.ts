@@ -50,9 +50,19 @@ export type GooglePlacesNamespace = {
   }
 }
 
+export type GoogleFormattableText = {
+  text?: string
+  // Places API (New) returns matched ranges so the typed substring can be highlighted.
+  matches?: Array<{ startOffset?: number; endOffset?: number; length?: number }>
+}
+
 export type GoogleAutocompleteSuggestion = {
   placePrediction?: {
-    text?: { text?: string }
+    text?: GoogleFormattableText
+    mainText?: GoogleFormattableText
+    secondaryText?: GoogleFormattableText
+    structuredFormat?: { mainText?: GoogleFormattableText; secondaryText?: GoogleFormattableText }
+    types?: string[]
     placeId?: string
     toPlace?: () => GooglePlace
   }

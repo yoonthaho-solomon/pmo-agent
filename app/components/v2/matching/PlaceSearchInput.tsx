@@ -1,12 +1,38 @@
 ﻿'use client'
 
-import type { KeyboardEvent } from 'react'
+import type { KeyboardEvent, ReactNode } from 'react'
 import { useRef, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { GoogleMapsGlobal } from '@/lib/google-maps/client-loader'
 import type { ScenarioPointInput } from '@/lib/adapters/matching'
+import type { PlaceTextMatch } from '@/lib/google-maps/places-client'
+import { PlaceIcon } from './PlaceIcon'
 import { usePlaceAutocomplete } from './usePlaceAutocomplete'
 import styles from './matchingStudio.module.css'
+
+// Bold the part of the place name that matches what the user typed. Prefer Google's
+// match offsets; fall back to a case-insensitive substring scan when they're absent.
+function highlightMatches(text: string, matches: PlaceTextMatch[] | undefined, query: string): ReactNode {
+  let ranges = matches ?? []
+  const trimmed = query.trim()
+  if (!ranges.length && trimmed) {
+    const index = text.toLowerCase().indexOf(trimmed.toLowerCase())
+    if (index >= 0) ranges = [{ start: index, end: index + trimmed.length }]
+  }
+  if (!ranges.length) return text
+
+  const sorted = [...ranges].sort((a, b) => a.start - b.start)
+  const parts: ReactNode[] = []
+  let cursor = 0
+  sorted.forEach((range, i) => {
+    if (range.start < cursor) return
+    if (range.start > cursor) parts.push(text.slice(cursor, range.start))
+    parts.push(<mark key={i} className={styles.placeMatch}>{text.slice(range.start, range.end)}</mark>)
+    cursor = range.end
+  })
+  if (cursor < text.length) parts.push(text.slice(cursor))
+  return parts
+}
 
 export function PlaceSearchInput({
   google,
@@ -138,6 +164,10 @@ export function PlaceSearchInput({
                 right: 'auto',
               }}
             >
+              <div className={styles.placeSuggestionsHeader} aria-hidden>
+                <span>장소 검색</span>
+                <span>{autocomplete.suggestions.length}건</span>
+              </div>
               {autocomplete.suggestions.map((suggestion, index) => (
                 <button
                   key={suggestion.id}
@@ -148,8 +178,11 @@ export function PlaceSearchInput({
                   onMouseEnter={() => autocomplete.setActiveIndex(index)}
                   onClick={() => void choose(index)}
                 >
-                  <b>{suggestion.label}</b>
-                  {suggestion.secondaryText ? <small>{suggestion.secondaryText}</small> : null}
+                  <PlaceIcon types={suggestion.types} className={styles.placeSuggestionIcon} />
+                  <span className={styles.placeSuggestionText}>
+                    <b>{highlightMatches(suggestion.mainText, suggestion.mainTextMatches, autocomplete.query)}</b>
+                    {suggestion.secondaryText ? <small>{suggestion.secondaryText}</small> : null}
+                  </span>
                 </button>
               ))}
             </div>
